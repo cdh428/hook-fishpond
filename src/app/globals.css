@@ -1,0 +1,107 @@
+@import "tailwindcss";
+
+@theme {
+  /* ===== 字体族 ===== */
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --font-zh: "Noto Sans SC", "Inter", sans-serif;
+  --font-th: "Sarabun", "Noto Sans Thai", "Inter", sans-serif;
+  --font-display: "Inter", "Noto Sans SC", "Sarabun", sans-serif;
+
+  /* ===== Primary 深湖青蓝 ===== */
+  --color-primary-50: #ECFBFC;
+  --color-primary-100: #CFF5F7;
+  --color-primary-200: #9EEBEE;
+  --color-primary-300: #5FD9DD;
+  --color-primary-400: #2BBFC6;
+  --color-primary-500: #1FA6A8;
+  --color-primary-600: #178A8C;
+  --color-primary-700: #155E75;
+  --color-primary-800: #0F4A5C;
+  --color-primary-900: #0A3747;
+  --color-primary-950: #05222B;
+
+  /* ===== Accent 暖琥珀金 ===== */
+  --color-accent-50: #FFFBEB;
+  --color-accent-100: #FEF3C7;
+  --color-accent-200: #FDE68A;
+  --color-accent-300: #FCD34D;
+  --color-accent-400: #FBBF24;
+  --color-accent-500: #F59E0B;
+  --color-accent-600: #D97706;
+  --color-accent-700: #B45309;
+  --color-accent-800: #92400E;
+  --color-accent-900: #78350F;
+
+  /* ===== Neutral 冷调灰蓝 ===== */
+  --color-neutral-50: #F8FAFC;
+  --color-neutral-100: #F1F5F9;
+  --color-neutral-200: #E2E8F0;
+  --color-neutral-300: #CBD5E1;
+  --color-neutral-400: #94A3B8;
+  --color-neutral-500: #64748B;
+  --color-neutral-600: #475569;
+  --color-neutral-700: #334155;
+  --color-neutral-800: #1E293B;
+  --color-neutral-900: #0F172A;
+  --color-neutral-950: #020617;
+
+  /* ===== 语义功能色 ===== */
+  --color-success-50: #F0FDF4;
+  --color-success-100: #DCFCE7;
+  --color-success-500: #22C55E;
+  --color-success-600: #16A34A;
+  --color-success-700: #15803D;
+
+  --color-warning-50: #FFFBEB;
+  --color-warning-100: #FEF3C7;
+  --color-warning-500: #F59E0B;
+  --color-warning-600: #D97706;
+
+  --color-error-50: #FEF2F2;
+  --color-error-100: #FEE2E2;
+  --color-error-500: #EF4444;
+  --color-error-600: #DC2626;
+  --color-error-700: #B91C1C;
+
+  /* ===== 语义角色色 ===== */
+  --color-bg-page: #EAF6F5;
+  --color-bg-card: #FFFFFF;
+  --color-bg-subtle: #F1F8F8;
+
+  /* ===== 阴影层级 ===== */
+  --shadow-brand: 0 4px 14px 0 rgba(21, 94, 117, 0.25);
+  --shadow-cta: 0 4px 14px 0 rgba(245, 158, 11, 0.35);
+}
+
+/* ===== 泰文专项优化 ===== */
+[lang="th"] {
+  font-family: var(--font-th);
+  line-height: 1.6;
+}
+[lang="th"] button,
+[lang="th"] input,
+[lang="th"] textarea {
+  padding-top: 0.625rem;
+  padding-bottom: 0.625rem;
+}
+
+/* ===== 关键帧动画 ===== */
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes bounce-cart {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
