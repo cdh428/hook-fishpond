@@ -9,7 +9,7 @@ const navItems = [
   { href: '/booking', labelKey: 'booking', icon: 'fishing' },
   { href: '/menu', labelKey: 'menu', icon: 'food' },
   { href: '/cart', labelKey: 'cart', icon: 'cart' },
-  { href: '/orders', labelKey: 'orders', icon: 'user' },
+  { href: '/profile', labelKey: 'profile', icon: 'user' },
 ] as const;
 
 const icons: Record<string, React.ReactElement> = {

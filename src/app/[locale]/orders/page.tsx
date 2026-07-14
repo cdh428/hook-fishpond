@@ -4,8 +4,33 @@ import { useTranslations, useLocale } from 'next-intl';
 import { useState } from 'react';
 import { Link } from '@/i18n/routing';
 
-// Demo orders data
-const demoOrders = [
+interface OrderItem {
+  name_zh: string;
+  name_en: string;
+  name_th: string;
+  qty: number;
+  price: number;
+}
+
+interface BookingInfo {
+  pondName_zh: string;
+  pondName_en: string;
+  pondName_th: string;
+  spotNumber: number | null;
+  date: string;
+  timeSlot: string;
+}
+
+interface Order {
+  id: string;
+  items: OrderItem[];
+  total: number;
+  status: string;
+  date: string;
+  booking: BookingInfo | null;
+}
+
+const demoOrders: Order[] = [
   {
     id: 'FP-20260320-001',
     items: [
@@ -13,8 +38,16 @@ const demoOrders = [
       { name_zh: '烤鸡翅', name_en: 'Grilled Wings', name_th: 'ปีกไก่ย่าง', qty: 1, price: 120 },
     ],
     total: 480,
-    status: 'PREPARING' as const,
+    status: 'PREPARING',
     date: '2026-03-20 14:30',
+    booking: {
+      pondName_zh: '休闲塘',
+      pondName_en: 'Leisure Pond',
+      pondName_th: 'บ่อพักผ่อน',
+      spotNumber: 12,
+      date: '2026-03-20',
+      timeSlot: '上午',
+    },
   },
   {
     id: 'FP-20260320-002',
@@ -22,8 +55,27 @@ const demoOrders = [
       { name_zh: '泰式奶茶', name_en: 'Thai Iced Tea', name_th: 'ชาเย็น', qty: 3, price: 50 },
     ],
     total: 150,
-    status: 'PAID' as const,
+    status: 'PAID',
     date: '2026-03-20 15:00',
+    booking: null,
+  },
+  {
+    id: 'FP-20260319-003',
+    items: [
+      { name_zh: '清蒸鲈鱼', name_en: 'Steamed Sea Bass', name_th: 'ปลากะพงนึ่งมะนาว', qty: 1, price: 350 },
+      { name_zh: '白米饭', name_en: 'Steamed Rice', name_th: 'ข้าวสวย', qty: 2, price: 20 },
+    ],
+    total: 390,
+    status: 'READY',
+    date: '2026-03-19 19:45',
+    booking: {
+      pondName_zh: '竞赛塘',
+      pondName_en: 'Competition Pond',
+      pondName_th: 'บ่อแข่งขัน',
+      spotNumber: null,
+      date: '2026-03-19',
+      timeSlot: '全天',
+    },
   },
 ];
 
@@ -35,7 +87,7 @@ const statusColors: Record<string, string> = {
   CANCELLED: 'bg-error-100 text-error-600',
 };
 
-const statusKeys: Record<string, string> = {
+const statusI18n: Record<string, string> = {
   PENDING: 'orders.pending',
   PAID: 'orders.paid',
   PREPARING: 'orders.preparing',
@@ -43,7 +95,7 @@ const statusKeys: Record<string, string> = {
   CANCELLED: 'orders.cancelled',
 };
 
-type FilterTab = 'all' | 'active' | 'done';
+type FilterTab = 'all' | 'active' | 'completed';
 
 export default function OrdersPage() {
   const t = useTranslations();
@@ -58,15 +110,19 @@ export default function OrdersPage() {
 
   const filteredOrders = demoOrders.filter((order) => {
     if (filter === 'active') return ['PENDING', 'PAID', 'PREPARING'].includes(order.status);
-    if (filter === 'done') return ['READY', 'CANCELLED'].includes(order.status);
+    if (filter === 'completed') return ['READY', 'CANCELLED'].includes(order.status);
     return true;
   });
 
-  const filterTabs: { key: FilterTab; label: string }[] = [
-    { key: 'all', label: t('orders.title') },
-    { key: 'active', label: t('orders.preparing') },
-    { key: 'done', label: t('orders.ready') },
+  const filterTabs: { key: FilterTab; labelKey: string }[] = [
+    { key: 'all', labelKey: 'orders.all' },
+    { key: 'active', labelKey: 'orders.active' },
+    { key: 'completed', labelKey: 'orders.completed' },
   ];
+
+  const getBookingLocale = (b: BookingInfo) => ({
+    pondName: locale === 'en' ? b.pondName_en : locale === 'th' ? b.pondName_th : b.pondName_zh,
+  });
 
   return (
     <div className="mx-auto max-w-lg px-4 py-6">
@@ -84,13 +140,12 @@ export default function OrdersPage() {
                 : 'text-neutral-500 hover:text-neutral-700'
             }`}
           >
-            {tab.label}
+            {t(tab.labelKey)}
           </button>
         ))}
       </div>
 
       {filteredOrders.length === 0 ? (
-        /* Empty State */
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-neutral-100">
             <svg className="h-10 w-10 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -109,28 +164,47 @@ export default function OrdersPage() {
         <div className="space-y-4">
           {filteredOrders.map((order) => (
             <div key={order.id} className="rounded-xl bg-white p-4 shadow-md">
+              {/* Header */}
               <div className="mb-3 flex items-center justify-between">
-                <span className="text-xs text-neutral-500">
+                <span className="text-xs text-neutral-400">
                   {t('orders.orderNumber')}: {order.id}
                 </span>
-                <span
-                  className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${statusColors[order.status]}`}
-                >
-                  {t(statusKeys[order.status])}
+                <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${statusColors[order.status]}`}>
+                  {t(statusI18n[order.status])}
                 </span>
               </div>
 
+              {/* Booking Info */}
+              {order.booking && (
+                <div className="mb-3 flex items-center gap-2 rounded-lg bg-primary-50 px-3 py-2">
+                  <svg className="h-4 w-4 shrink-0 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z" />
+                  </svg>
+                  <div className="text-xs">
+                    <span className="font-medium text-primary-700">
+                      {getBookingLocale(order.booking).pondName}
+                    </span>
+                    <span className="ml-2 text-primary-500">
+                      {order.booking.date} | {order.booking.timeSlot}
+                      {order.booking.spotNumber !== null && ` | #${order.booking.spotNumber}`}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Items */}
               <div className="space-y-1">
                 {order.items.map((item, idx) => (
                   <div key={idx} className="flex justify-between text-sm">
                     <span className="text-neutral-700">
                       {getLocaleName(item)} × {item.qty}
                     </span>
-                    <span className="text-neutral-600">฿{item.price * item.qty}</span>
+                    <span className="text-neutral-500">฿{item.price * item.qty}</span>
                   </div>
                 ))}
               </div>
 
+              {/* Footer */}
               <div className="mt-3 flex items-center justify-between border-t border-neutral-100 pt-3">
                 <span className="text-xs text-neutral-400">{order.date}</span>
                 <span className="font-bold text-accent-600">฿{order.total}</span>

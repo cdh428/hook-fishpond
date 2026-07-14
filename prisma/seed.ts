@@ -3,6 +3,7 @@ dotenv.config({ path: ".env.local" });
 
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
+import bcrypt from "bcryptjs";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
@@ -12,78 +13,78 @@ const prisma = new PrismaClient({ adapter });
 async function main() {
   console.log("🌱 Seeding database...\n");
 
-  // ===== 1. Zones (鱼塘区域) =====
-  console.log("Creating zones...");
-  const zoneA = await prisma.zone.upsert({
-    where: { id: "zone-a" },
+  // ===== 1. Ponds =====
+  console.log("Creating ponds...");
+  const leisurePond = await prisma.pond.upsert({
+    where: { id: "pond-leisure" },
     update: {},
     create: {
-      id: "zone-a",
-      name_zh: "A区 休闲塘",
-      name_en: "Zone A - Leisure Pond",
-      name_th: "โซน A - บ่อพักผ่อน",
-      description: "适合家庭休闲，环境优美",
-      sortOrder: 1,
+      id: "pond-leisure",
+      type: "LEISURE",
+      name_zh: "休闲塘",
+      name_en: "Leisure Pond",
+      name_th: "บ่อพักผ่อน",
+      description_zh: "适合家庭休闲，环境优美，按时间段预订",
+      description_en: "Perfect for family leisure, book by time slot",
+      description_th: "เหมาะสำหรับครอบครัว จองตามช่วงเวลา",
+      price: 100,
+      priceUnit: "SLOT",
+      maxSpots: 30,
+      isActive: true,
     },
   });
 
-  const zoneB = await prisma.zone.upsert({
-    where: { id: "zone-b" },
+  const competitionPond = await prisma.pond.upsert({
+    where: { id: "pond-competition" },
     update: {},
     create: {
-      id: "zone-b",
-      name_zh: "B区 竞技塘",
-      name_en: "Zone B - Competition Pond",
-      name_th: "โซน B - บ่อแข่งขัน",
-      description: "专业钓友首选，鱼种丰富",
-      sortOrder: 2,
+      id: "pond-competition",
+      type: "COMPETITION",
+      name_zh: "竞赛塘",
+      name_en: "Competition Pond",
+      name_th: "บ่อแข่งขัน",
+      description_zh: "专业钓友首选，全天竞赛，最少10人起订",
+      description_en: "For competitive anglers, full-day events, min 10 participants",
+      description_th: "สำหรับนักตกปลามืออาชีพ จองเต็มวัน ขั้นต่ำ 10 คน",
+      price: 500,
+      priceUnit: "DAY",
+      minParticipants: 10,
+      maxSpots: 40,
+      isActive: true,
     },
   });
+  console.log(`  ✅ ${leisurePond.name_zh} (${leisurePond.maxSpots} spots, ${leisurePond.price} THB/${leisurePond.priceUnit})`);
+  console.log(`  ✅ ${competitionPond.name_zh} (${competitionPond.maxSpots} spots, ${competitionPond.price} THB/${competitionPond.priceUnit}, min ${competitionPond.minParticipants} participants)`);
 
-  const zoneC = await prisma.zone.upsert({
-    where: { id: "zone-c" },
-    update: {},
-    create: {
-      id: "zone-c",
-      name_zh: "C区 VIP塘",
-      name_en: "Zone C - VIP Pond",
-      name_th: "โซน C - บ่อ VIP",
-      description: "私密空间，高端体验",
-      sortOrder: 3,
-    },
-  });
-  console.log(`  ✅ ${zoneA.name_zh}, ${zoneB.name_zh}, ${zoneC.name_zh}`);
-
-  // ===== 2. Spots (钓位) =====
+  // ===== 2. Spots =====
   console.log("Creating spots...");
-  const spotData = [
-    { zone: "zone-a", number: 1, priceHalf: 150, priceFull: 250 },
-    { zone: "zone-a", number: 2, priceHalf: 150, priceFull: 250 },
-    { zone: "zone-a", number: 3, priceHalf: 150, priceFull: 250 },
-    { zone: "zone-a", number: 4, priceHalf: 150, priceFull: 250 },
-    { zone: "zone-a", number: 5, priceHalf: 150, priceFull: 250 },
-    { zone: "zone-a", number: 6, priceHalf: 150, priceFull: 250 },
-    { zone: "zone-b", number: 1, priceHalf: 200, priceFull: 350 },
-    { zone: "zone-b", number: 2, priceHalf: 200, priceFull: 350 },
-    { zone: "zone-b", number: 3, priceHalf: 200, priceFull: 350 },
-    { zone: "zone-b", number: 4, priceHalf: 200, priceFull: 350 },
-    { zone: "zone-c", number: 1, priceHalf: 300, priceFull: 500 },
-    { zone: "zone-c", number: 2, priceHalf: 300, priceFull: 500 },
-  ];
 
-  for (const s of spotData) {
+  // Leisure spots (1-30)
+  for (let i = 1; i <= 30; i++) {
     await prisma.spot.upsert({
-      where: { zoneId_number: { zoneId: s.zone, number: s.number } },
+      where: { pondId_number: { pondId: "pond-leisure", number: i } },
       update: {},
       create: {
-        zoneId: s.zone,
-        number: s.number,
-        priceHalf: s.priceHalf,
-        priceFull: s.priceFull,
+        pondId: "pond-leisure",
+        number: i,
+        isActive: true,
       },
     });
   }
-  console.log(`  ✅ ${spotData.length} spots created`);
+
+  // Competition spots (1-40)
+  for (let i = 1; i <= 40; i++) {
+    await prisma.spot.upsert({
+      where: { pondId_number: { pondId: "pond-competition", number: i } },
+      update: {},
+      create: {
+        pondId: "pond-competition",
+        number: i,
+        isActive: true,
+      },
+    });
+  }
+  console.log(`  ✅ 30 Leisure spots + 40 Competition spots = 70 total`);
 
   // ===== 3. Menu Categories =====
   console.log("Creating menu categories...");
@@ -151,7 +152,7 @@ async function main() {
       sortOrder: 5,
     },
   });
-  console.log(`  ✅ ${[catRice, catGrill, catSnack, catDrink, catBeer].length} categories`);
+  console.log(`  ✅ 5 categories`);
 
   // ===== 4. Menu Items =====
   console.log("Creating menu items...");
@@ -208,18 +209,36 @@ async function main() {
   }
   console.log(`  ✅ ${itemCount} menu items`);
 
+  // ===== 5. Admin User =====
+  console.log("Creating admin user...");
+  const hashedPassword = await bcrypt.hash("Admin@2026", 10);
+  await prisma.adminUser.upsert({
+    where: { username: "admin" },
+    update: {},
+    create: {
+      username: "admin",
+      password: hashedPassword,
+      role: "SUPER_ADMIN",
+      isActive: true,
+    },
+  });
+  console.log(`  ✅ Admin user (username: admin, role: SUPER_ADMIN)`);
+
   console.log("\n🎉 Seed completed successfully!");
-  
-  // Verify
-  const zoneCount = await prisma.zone.count();
+
+  // ===== Verify =====
+  const pondCount = await prisma.pond.count();
   const spotCount = await prisma.spot.count();
   const catCount = await prisma.menuCategory.count();
   const menuItemCount = await prisma.menuItem.count();
+  const adminCount = await prisma.adminUser.count();
+
   console.log(`\n📊 Database summary:`);
-  console.log(`   Zones: ${zoneCount}`);
+  console.log(`   Ponds: ${pondCount}`);
   console.log(`   Spots: ${spotCount}`);
   console.log(`   Categories: ${catCount}`);
   console.log(`   Menu Items: ${menuItemCount}`);
+  console.log(`   Admin Users: ${adminCount}`);
 }
 
 main()

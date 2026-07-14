@@ -3,116 +3,163 @@
 import { useTranslations, useLocale } from 'next-intl';
 import { useState } from 'react';
 
-// Demo data - in production this comes from the database
-const zones = [
-  { id: '1', name_zh: 'A区 - 大鱼塘', name_en: 'Zone A - Main Pond', name_th: 'โซน A - บ่อใหญ่' },
-  { id: '2', name_zh: 'B区 - 休闲塘', name_en: 'Zone B - Leisure Pond', name_th: 'โซน B - บ่อพักผ่อน' },
-  { id: '3', name_zh: 'C区 - VIP塘', name_en: 'Zone C - VIP Pond', name_th: 'โซน C - บ่อ VIP' },
+type PondType = 'LEISURE' | 'COMPETITION';
+type TimeSlotKey = 'MORNING' | 'AFTERNOON' | 'EVENING' | 'FULL_DAY';
+
+interface Pond {
+  id: string;
+  type: PondType;
+  name_zh: string;
+  name_en: string;
+  name_th: string;
+  price: number;
+  minParticipants: number | null;
+  maxSpots: number;
+}
+
+interface Spot {
+  id: string;
+  number: number;
+  booked: boolean;
+}
+
+const pondData: Pond[] = [
+  {
+    id: '1',
+    type: 'LEISURE',
+    name_zh: '休闲塘',
+    name_en: 'Leisure Pond',
+    name_th: 'บ่อพักผ่อน',
+    price: 100,
+    minParticipants: null,
+    maxSpots: 30,
+  },
+  {
+    id: '2',
+    type: 'COMPETITION',
+    name_zh: '竞赛塘',
+    name_en: 'Competition Pond',
+    name_th: 'บ่อแข่งขัน',
+    price: 500,
+    minParticipants: 10,
+    maxSpots: 40,
+  },
 ];
 
-const spotsPerZone: Record<string, Array<{ id: string; number: number; priceHalf: number; priceFull: number; booked: boolean }>> = {
-  '1': Array.from({ length: 40 }, (_, i) => ({
-    id: `a${i + 1}`,
+const generateSpots = (count: number, booked: number[]): Spot[] =>
+  Array.from({ length: count }, (_, i) => ({
+    id: `spot-${i + 1}`,
     number: i + 1,
-    priceHalf: 200,
-    priceFull: 350,
-    booked: [3, 7, 12, 15, 28].includes(i + 1),
-  })),
-  '2': Array.from({ length: 30 }, (_, i) => ({
-    id: `b${i + 1}`,
-    number: i + 1,
-    priceHalf: 150,
-    priceFull: 250,
-    booked: [5, 10, 20].includes(i + 1),
-  })),
-  '3': Array.from({ length: 20 }, (_, i) => ({
-    id: `c${i + 1}`,
-    number: i + 1,
-    priceHalf: 500,
-    priceFull: 800,
-    booked: [2, 8].includes(i + 1),
-  })),
-};
-
-type TimeSlotKey = 'MORNING' | 'AFTERNOON' | 'EVENING' | 'FULL_DAY';
+    booked: booked.includes(i + 1),
+  }));
 
 export default function BookingPage() {
   const t = useTranslations();
   const locale = useLocale();
-  const [selectedZone, setSelectedZone] = useState('1');
-  const [selectedSpot, setSelectedSpot] = useState<string | null>(null);
+
+  const [pondType, setPondType] = useState<PondType>('LEISURE');
   const [selectedDate, setSelectedDate] = useState('');
-  const [selectedTime, setSelectedTime] = useState<TimeSlotKey>('MORNING');
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [showConfirm, setShowConfirm] = useState(false);
+  const [selectedTimeSlot, setSelectedTimeSlot] = useState<TimeSlotKey>('MORNING');
+  const [selectedSpot, setSelectedSpot] = useState<string | null>(null);
+  const [customerName, setCustomerName] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [groupName, setGroupName] = useState('');
+  const [participantCount, setParticipantCount] = useState<number>(10);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [showParticipantError, setShowParticipantError] = useState(false);
 
-  const spots = spotsPerZone[selectedZone] || [];
-  const selectedSpotData = spots.find((s) => s.id === selectedSpot);
+  const activePond = pondData.find((p) => p.type === pondType)!;
 
-  const timeSlots: { key: TimeSlotKey; label: string }[] = [
-    { key: 'MORNING', label: t('booking.morning') },
-    { key: 'AFTERNOON', label: t('booking.afternoon') },
-    { key: 'EVENING', label: t('booking.evening') },
-    { key: 'FULL_DAY', label: t('booking.fullDay') },
+  const spots = generateSpots(
+    activePond.maxSpots,
+    activePond.type === 'LEISURE'
+      ? [3, 7, 12, 15, 22, 28]
+      : [5, 10, 15, 20, 25, 30, 35, 38]
+  );
+
+  const isLeisure = pondType === 'LEISURE';
+
+  const timeSlots: { key: TimeSlotKey; labelKey: string }[] = [
+    { key: 'MORNING', labelKey: 'booking.morning' },
+    { key: 'AFTERNOON', labelKey: 'booking.afternoon' },
+    { key: 'EVENING', labelKey: 'booking.evening' },
+    { key: 'FULL_DAY', labelKey: 'booking.fullDay' },
   ];
 
-  const getZoneName = (zone: typeof zones[0]) => {
-    if (locale === 'en') return zone.name_en;
-    if (locale === 'th') return zone.name_th;
-    return zone.name_zh;
+  const price = isLeisure ? activePond.price : activePond.price * participantCount;
+  const selectedSpotData = spots.find((s) => s.id === selectedSpot);
+
+  const canConfirm = isLeisure
+    ? selectedDate && selectedSpot && customerName && customerPhone
+    : selectedDate && customerName && customerPhone && participantCount >= 10;
+
+  const handleConfirm = () => {
+    if (!isLeisure && participantCount < activePond.minParticipants!) {
+      setShowParticipantError(true);
+      return;
+    }
+    setShowSuccess(true);
   };
 
-  const price =
-    selectedSpotData
-      ? selectedTime === 'FULL_DAY'
-        ? selectedSpotData.priceFull
-        : selectedSpotData.priceHalf
-      : 0;
+  const handleReset = () => {
+    setShowSuccess(false);
+    setSelectedSpot(null);
+    setCustomerName('');
+    setCustomerPhone('');
+    setGroupName('');
+    setParticipantCount(10);
+    setShowParticipantError(false);
+  };
 
-  const steps = [t('booking.selectZone'), t('booking.selectDate'), t('booking.selectSpot'), t('common.confirm')];
+  const getPondName = (pond: Pond) => {
+    if (locale === 'en') return pond.name_en;
+    if (locale === 'th') return pond.name_th;
+    return pond.name_zh;
+  };
 
   return (
     <div className="mx-auto max-w-lg px-4 py-6">
       <h2 className="mb-4 text-2xl font-bold text-neutral-900">{t('booking.title')}</h2>
 
-      {/* Step Indicator */}
-      <div className="mb-6 flex items-center gap-2">
-        {steps.map((step, idx) => (
-          <div key={idx} className="flex flex-1 items-center gap-2">
-            <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
-              idx === 0 ? 'bg-primary-700 text-white' : 'bg-neutral-200 text-neutral-500'
-            }`}>
-              {idx + 1}
-            </div>
-            {idx < steps.length - 1 && <div className="h-0.5 flex-1 bg-neutral-200" />}
-          </div>
-        ))}
-      </div>
-
-      {/* Zone Selection */}
-      <div className="mb-4">
+      {/* Pond Type Selector */}
+      <div className="mb-6">
         <label className="mb-2 block text-sm font-medium text-neutral-700">
-          {t('booking.selectZone')}
+          {t('booking.selectPond')}
         </label>
-        <div className="flex gap-2 overflow-x-auto pb-2">
-          {zones.map((zone) => (
-            <button
-              key={zone.id}
-              onClick={() => {
-                setSelectedZone(zone.id);
-                setSelectedSpot(null);
-              }}
-              className={`shrink-0 rounded-xl px-4 py-3 text-sm font-medium transition ${
-                selectedZone === zone.id
-                  ? 'bg-primary-700 text-white shadow-brand'
-                  : 'bg-white text-neutral-700 shadow-sm hover:bg-primary-50'
-              }`}
-            >
-              {getZoneName(zone)}
-            </button>
-          ))}
+        <div className="flex gap-2">
+          <button
+            onClick={() => {
+              setPondType('LEISURE');
+              setSelectedSpot(null);
+              setParticipantCount(10);
+            }}
+            className={`flex-1 rounded-xl px-4 py-3 text-sm font-semibold transition ${
+              isLeisure
+                ? 'bg-primary-700 text-white shadow-brand'
+                : 'bg-white text-neutral-700 shadow-sm hover:bg-primary-50'
+            }`}
+          >
+            <span className="block">{t('pond.leisure')}</span>
+            <span className="block text-xs opacity-80">100 ฿/{t('common.perSpot')}</span>
+          </button>
+          <button
+            onClick={() => {
+              setPondType('COMPETITION');
+              setSelectedSpot(null);
+            }}
+            className={`flex-1 rounded-xl px-4 py-3 text-sm font-semibold transition ${
+              !isLeisure
+                ? 'bg-accent-500 text-white shadow-brand'
+                : 'bg-white text-neutral-700 shadow-sm hover:bg-accent-50'
+            }`}
+          >
+            <span className="block">{t('pond.competition')}</span>
+            <span className="block text-xs opacity-80">500 ฿/{t('common.perSpot')}/{t('common.perDay')}</span>
+          </button>
         </div>
+        <p className="mt-2 text-xs text-neutral-500">
+          {isLeisure ? t('booking.leisureMode') : t('booking.competitionMode')}
+        </p>
       </div>
 
       {/* Date Selection */}
@@ -129,103 +176,214 @@ export default function BookingPage() {
         />
       </div>
 
-      {/* Time Slot Selection */}
-      <div className="mb-4">
-        <label className="mb-2 block text-sm font-medium text-neutral-700">
-          {t('booking.selectTime')}
-        </label>
-        <div className="grid grid-cols-2 gap-2">
-          {timeSlots.map((slot) => (
-            <button
-              key={slot.key}
-              onClick={() => setSelectedTime(slot.key)}
-              className={`rounded-xl px-3 py-2.5 text-sm font-medium transition ${
-                selectedTime === slot.key
-                  ? 'bg-primary-700 text-white shadow-brand'
-                  : 'bg-white text-neutral-700 shadow-sm hover:bg-primary-50'
-              }`}
-            >
-              {slot.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Spot Grid */}
-      <div className="mb-4">
-        <label className="mb-2 block text-sm font-medium text-neutral-700">
-          {t('booking.selectSpot')}
-        </label>
-        <div className="mb-2 flex items-center gap-4 text-xs text-neutral-500">
-          <span className="flex items-center gap-1">
-            <span className="inline-block h-3 w-3 rounded bg-primary-50 border border-primary-200" />
-            {t('booking.available')}
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="inline-block h-3 w-3 rounded bg-error-100 border border-error-500/30" />
-            {t('booking.booked')}
-          </span>
-        </div>
-        <div className="grid grid-cols-6 gap-2">
-          {spots.map((spot) => (
-            <button
-              key={spot.id}
-              disabled={spot.booked}
-              onClick={() => setSelectedSpot(spot.id)}
-              className={`flex h-12 w-full items-center justify-center rounded-lg text-sm font-medium transition ${
-                spot.booked
-                  ? 'cursor-not-allowed bg-error-100 text-error-400'
-                  : selectedSpot === spot.id
+      {/* Time Slot Selection — Leisure only */}
+      {isLeisure && (
+        <div className="mb-4">
+          <label className="mb-2 block text-sm font-medium text-neutral-700">
+            {t('booking.selectTime')}
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            {timeSlots.map((slot) => (
+              <button
+                key={slot.key}
+                onClick={() => setSelectedTimeSlot(slot.key)}
+                className={`rounded-xl px-3 py-2.5 text-sm font-medium transition ${
+                  selectedTimeSlot === slot.key
                     ? 'bg-primary-700 text-white shadow-brand'
-                    : 'bg-primary-50 text-primary-700 hover:bg-primary-100'
-              }`}
-            >
-              {spot.number}
-            </button>
-          ))}
+                    : 'bg-white text-neutral-700 shadow-sm hover:bg-primary-50'
+                }`}
+              >
+                {t(slot.labelKey)}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Selected Spot Info & Form */}
-      {selectedSpot && selectedSpotData && (
-        <div className="mt-4 rounded-xl bg-white p-4 shadow-md">
+      {!isLeisure && (
+        <div className="mb-4 rounded-xl bg-neutral-50 p-3 text-center text-sm text-neutral-500">
+          <svg className="mx-auto mb-1 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          {t('booking.onlyFullDay')}
+        </div>
+      )}
+
+      {/* Spot Grid — Leisure only */}
+      {isLeisure && (
+        <div className="mb-4">
+          <div className="mb-2 flex items-center justify-between">
+            <label className="text-sm font-medium text-neutral-700">
+              {t('booking.selectSpot')}
+            </label>
+            <span className="text-xs text-neutral-400">
+              {spots.filter((s) => !s.booked).length}/{spots.length} {t('booking.available')}
+            </span>
+          </div>
+          <div className="mb-2 flex items-center gap-4 text-xs text-neutral-500">
+            <span className="flex items-center gap-1">
+              <span className="inline-block h-3 w-3 rounded border border-primary-200 bg-primary-50" />
+              {t('booking.available')}
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="inline-block h-3 w-3 rounded border border-error-500/30 bg-error-100" />
+              {t('booking.booked')}
+            </span>
+          </div>
+          <div className="grid grid-cols-6 gap-2 md:grid-cols-8">
+            {spots.map((spot) => (
+              <button
+                key={spot.id}
+                disabled={spot.booked}
+                onClick={() => setSelectedSpot(spot.id)}
+                className={`flex h-11 w-full items-center justify-center rounded-lg text-sm font-medium transition ${
+                  spot.booked
+                    ? 'cursor-not-allowed bg-error-100 text-error-400'
+                    : selectedSpot === spot.id
+                      ? 'bg-primary-700 text-white shadow-brand'
+                      : 'bg-primary-50 text-primary-700 hover:bg-primary-100'
+                }`}
+              >
+                {spot.number}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Leisure Form */}
+      {isLeisure && selectedSpot && selectedSpotData && (
+        <div className="mb-4 rounded-xl bg-white p-4 shadow-md">
           <div className="mb-3 flex items-center justify-between">
             <span className="text-sm text-neutral-600">
-              {t('booking.spotNumber')}: <strong className="text-neutral-900">{selectedSpotData.number}</strong>
+              {t('booking.spotNumber')}: <strong className="text-neutral-900">#{selectedSpotData.number}</strong>
             </span>
             <span className="text-lg font-bold text-accent-600">฿{price}</span>
           </div>
-
-          <div className="mb-3 space-y-2">
+          <div className="space-y-2">
             <input
               type="text"
               placeholder={t('booking.yourName')}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
+              value={customerName}
+              onChange={(e) => setCustomerName(e.target.value)}
               className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
             />
             <input
               type="tel"
               placeholder={t('booking.yourPhone')}
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
+              value={customerPhone}
+              onChange={(e) => setCustomerPhone(e.target.value)}
               className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
             />
           </div>
         </div>
       )}
 
+      {/* Competition Form */}
+      {!isLeisure && (
+        <div className="mb-4 rounded-xl bg-white p-4 shadow-md">
+          <h4 className="mb-3 text-sm font-semibold text-neutral-900">{t('booking.groupBooking')}</h4>
+          <div className="space-y-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-neutral-500">
+                {t('booking.groupName')}
+              </label>
+              <input
+                type="text"
+                placeholder={t('booking.groupName')}
+                value={groupName}
+                onChange={(e) => setGroupName(e.target.value)}
+                className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-neutral-500">
+                {t('booking.participantCount')}
+              </label>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    const next = Math.max(10, participantCount - 1);
+                    setParticipantCount(next);
+                    if (next >= 10) setShowParticipantError(false);
+                  }}
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-neutral-100 text-lg font-medium text-neutral-600 hover:bg-neutral-200"
+                >
+                  −
+                </button>
+                <input
+                  type="number"
+                  min={10}
+                  value={participantCount}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value) || 0;
+                    setParticipantCount(val);
+                    if (val >= 10) setShowParticipantError(false);
+                  }}
+                  className="w-20 rounded-xl border border-neutral-200 px-3 py-2.5 text-center text-sm font-semibold focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                />
+                <button
+                  onClick={() => {
+                    const next = participantCount + 1;
+                    setParticipantCount(next);
+                    if (next >= 10) setShowParticipantError(false);
+                  }}
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent-50 text-lg font-medium text-accent-700 hover:bg-accent-100"
+                >
+                  +
+                </button>
+              </div>
+              {showParticipantError && (
+                <p className="mt-1 text-xs text-error-600">{t('booking.participantCountError')}</p>
+              )}
+              <p className="mt-1 text-xs text-neutral-400">{t('booking.minParticipants')}</p>
+            </div>
+            <div className="border-t border-neutral-100 pt-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-neutral-500">{t('booking.price')}</span>
+                <span className="text-lg font-bold text-accent-600">
+                  ฿{price.toLocaleString()}
+                </span>
+              </div>
+              <p className="mt-0.5 text-xs text-neutral-400">
+                {activePond.price} × {participantCount} = ฿{price.toLocaleString()}
+              </p>
+            </div>
+            <div className="space-y-2 pt-2">
+              <input
+                type="text"
+                placeholder={t('booking.yourName')}
+                value={customerName}
+                onChange={(e) => setCustomerName(e.target.value)}
+                className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              />
+              <input
+                type="tel"
+                placeholder={t('booking.yourPhone')}
+                value={customerPhone}
+                onChange={(e) => setCustomerPhone(e.target.value)}
+                className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Sticky CTA */}
-      {selectedSpot && selectedSpotData && (
+      {(isLeisure ? selectedSpot : true) && (
         <div className="fixed bottom-16 left-0 right-0 z-40 border-t border-neutral-200 bg-white/95 px-4 py-3 backdrop-blur-md">
           <div className="mx-auto flex max-w-lg items-center justify-between gap-4">
             <div>
-              <p className="text-xs text-neutral-500">{t('booking.spotNumber')}: {selectedSpotData.number}</p>
-              <p className="text-lg font-bold text-neutral-900">฿{price}</p>
+              <p className="text-xs text-neutral-500">
+                {isLeisure
+                  ? `${t('booking.spotNumber')}: ${selectedSpotData?.number ? `#${selectedSpotData.number}` : '—'}`
+                  : getPondName(activePond)}
+              </p>
+              <p className="text-lg font-bold text-neutral-900">฿{price.toLocaleString()}</p>
             </div>
             <button
-              onClick={() => setShowConfirm(true)}
-              disabled={!selectedDate || !name || !phone}
+              onClick={handleConfirm}
+              disabled={!canConfirm}
               className="flex-1 rounded-xl bg-accent-500 py-3 text-sm font-semibold text-white shadow-cta transition hover:bg-accent-600 disabled:cursor-not-allowed disabled:bg-neutral-300"
             >
               {t('booking.confirmBooking')}
@@ -234,8 +392,8 @@ export default function BookingPage() {
         </div>
       )}
 
-      {/* Confirmation Modal */}
-      {showConfirm && (
+      {/* Success Modal */}
+      {showSuccess && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-xl">
             <div className="mb-4 flex justify-center">
@@ -246,17 +404,14 @@ export default function BookingPage() {
               </div>
             </div>
             <h3 className="text-lg font-bold text-neutral-900">{t('booking.bookingSuccess')}</h3>
-            <p className="mt-2 text-sm text-neutral-500">
-              {t('booking.spotNumber')}: {selectedSpotData?.number} | ฿{price}
-            </p>
+            <div className="mt-2 space-y-1 text-sm text-neutral-500">
+              {!isLeisure && groupName && <p>{t('booking.groupName')}: {groupName}</p>}
+              {!isLeisure && <p>{participantCount} {t('booking.participantCount')}</p>}
+              <p className="text-lg font-bold text-accent-600">฿{price.toLocaleString()}</p>
+            </div>
             <button
-              onClick={() => {
-                setShowConfirm(false);
-                setSelectedSpot(null);
-                setName('');
-                setPhone('');
-              }}
-              className="mt-4 w-full rounded-xl bg-primary-700 py-2.5 text-sm font-semibold text-white"
+              onClick={handleReset}
+              className="mt-4 w-full rounded-xl bg-primary-700 py-2.5 text-sm font-semibold text-white transition hover:bg-primary-800"
             >
               {t('common.confirm')}
             </button>

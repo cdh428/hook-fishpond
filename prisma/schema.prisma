@@ -6,60 +6,111 @@ datasource db {
   provider = "postgresql"
 }
 
-// ==================== 鱼塘区域与钓位 ====================
-
-model Zone {
-  id          String   @id @default(cuid())
-  name_zh     String
-  name_en     String
-  name_th     String
-  description String?
-  imageUrl    String?
-  sortOrder   Int      @default(0)
-  isActive    Boolean  @default(true)
-  spots       Spot[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+// ===== POND (replaces Zone) =====
+model Pond {
+  id              String     @id @default(cuid())
+  type            PondType   @unique
+  name_zh         String
+  name_en         String
+  name_th         String
+  description_zh  String?
+  description_en  String?
+  description_th  String?
+  price           Float
+  priceUnit       PriceUnit
+  minParticipants Int?
+  maxSpots        Int
+  imageUrl        String?
+  isActive        Boolean    @default(true)
+  spots           Spot[]
+  bookings        Booking[]
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
 }
 
+enum PondType {
+  LEISURE
+  COMPETITION
+}
+
+enum PriceUnit {
+  SLOT
+  DAY
+}
+
+// ===== SPOT =====
 model Spot {
   id        String    @id @default(cuid())
-  zoneId    String
-  zone      Zone      @relation(fields: [zoneId], references: [id])
-  number    Int       // 钓位编号
-  priceHalf Float     // 半天价格 (THB)
-  priceFull Float     // 全天价格 (THB)
+  pondId    String
+  pond      Pond      @relation(fields: [pondId], references: [id])
+  number    Int
   isActive  Boolean   @default(true)
   bookings  Booking[]
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  @@unique([zoneId, number])
+  @@unique([pondId, number])
 }
 
+// ===== USER =====
+model User {
+  id               String     @id @default(cuid())
+  phone            String     @unique
+  name             String
+  language         String     @default("zh")
+  marketingConsent Boolean    @default(false)
+  bookings         Booking[]
+  orders           Order[]
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+}
+
+// ===== ADMIN USER =====
+model AdminUser {
+  id        String    @id @default(cuid())
+  username  String    @unique
+  password  String
+  role      AdminRole @default(MANAGER)
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+enum AdminRole {
+  SUPER_ADMIN
+  MANAGER
+}
+
+// ===== BOOKING =====
 model Booking {
-  id          String        @id @default(cuid())
-  spotId      String
-  spot        Spot          @relation(fields: [spotId], references: [id])
-  date        DateTime      @db.Date
-  timeSlot    TimeSlot
-  customerName  String
-  customerPhone String
-  totalPrice  Float
-  status      BookingStatus @default(PENDING)
-  orderId     String?
-  order       Order?        @relation(fields: [orderId], references: [id])
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id               String        @id @default(cuid())
+  userId           String?
+  user             User?         @relation(fields: [userId], references: [id])
+  pondId           String
+  pond             Pond          @relation(fields: [pondId], references: [id])
+  spotId           String?
+  spot             Spot?         @relation(fields: [spotId], references: [id])
+  date             DateTime      @db.Date
+  timeSlot         TimeSlot?
+  participantCount Int?
+  groupName        String?
+  customerName     String
+  customerPhone    String
+  totalPrice       Float
+  status           BookingStatus @default(PENDING)
+  orderId          String?
+  order            Order?        @relation(fields: [orderId], references: [id])
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
 
   @@unique([spotId, date, timeSlot])
 }
 
 enum TimeSlot {
-  MORNING    // 06:00-12:00
-  AFTERNOON  // 12:00-18:00
-  EVENING    // 18:00-22:00
-  FULL_DAY   // 06:00-22:00
+  MORNING
+  AFTERNOON
+  EVENING
+  FULL_DAY
 }
 
 enum BookingStatus {
@@ -68,14 +119,13 @@ enum BookingStatus {
   CANCELLED
 }
 
-// ==================== 菜单与餐饮 ====================
-
+// ===== MENU =====
 model MenuCategory {
   id       String     @id @default(cuid())
   name_zh  String
   name_en  String
   name_th  String
-  type     MenuType   // FOOD or DRINK
+  type     MenuType
   imageUrl String?
   sortOrder Int       @default(0)
   isActive Boolean    @default(true)
@@ -85,25 +135,25 @@ model MenuCategory {
 }
 
 model MenuItem {
-  id          String       @id @default(cuid())
-  categoryId  String
-  category    MenuCategory @relation(fields: [categoryId], references: [id])
-  name_zh     String
-  name_en     String
-  name_th     String
+  id             String       @id @default(cuid())
+  categoryId     String
+  category       MenuCategory @relation(fields: [categoryId], references: [id])
+  name_zh        String
+  name_en        String
+  name_th        String
   description_zh String?
   description_en String?
   description_th String?
-  price       Float        // THB
-  imageUrl    String?
-  isPopular   Boolean      @default(false)
-  isVegetarian Boolean     @default(false)
-  spiceLevel  Int          @default(0) // 0-3
-  isActive    Boolean      @default(true)
-  sortOrder   Int          @default(0)
-  orderItems  OrderItem[]
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  price          Float
+  imageUrl       String?
+  isPopular      Boolean      @default(false)
+  isVegetarian   Boolean      @default(false)
+  spiceLevel     Int          @default(0)
+  isActive       Boolean      @default(true)
+  sortOrder      Int          @default(0)
+  orderItems     OrderItem[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 }
 
 enum MenuType {
@@ -111,11 +161,12 @@ enum MenuType {
   DRINK
 }
 
-// ==================== 订单与支付 ====================
-
+// ===== ORDER & PAYMENT =====
 model Order {
   id            String        @id @default(cuid())
-  orderNumber   String        @unique // 可读订单号 e.g. FP-20260320-001
+  orderNumber   String        @unique
+  userId        String?
+  user          User?         @relation(fields: [userId], references: [id])
   customerName  String
   customerPhone String
   items         OrderItem[]
@@ -143,27 +194,27 @@ model OrderItem {
 }
 
 enum OrderStatus {
-  PENDING     // 待支付
-  PAID        // 已支付
-  PREPARING   // 准备中
-  READY       // 已完成
-  CANCELLED   // 已取消
+  PENDING
+  PAID
+  PREPARING
+  READY
+  CANCELLED
 }
 
 model Payment {
-  id              String        @id @default(cuid())
-  orderId         String        @unique
-  order           Order         @relation(fields: [orderId], references: [id])
-  method          PaymentMethod
-  amount          Float
-  currency        String        @default("THB")
-  omiseChargeId   String?       // Omise charge ID
-  omiseSourceId   String?       // Omise source ID
-  status          PaymentStatus @default(PENDING)
-  paidAt          DateTime?
-  metadata        Json?         // 额外支付信息
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  id            String        @id @default(cuid())
+  orderId       String        @unique
+  order         Order         @relation(fields: [orderId], references: [id])
+  method        PaymentMethod
+  amount        Float
+  currency      String        @default("THB")
+  omiseChargeId String?
+  omiseSourceId String?
+  status        PaymentStatus @default(PENDING)
+  paidAt        DateTime?
+  metadata      Json?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 }
 
 enum PaymentMethod {
