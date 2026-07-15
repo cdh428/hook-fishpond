@@ -1,116 +1,189 @@
 'use client';
 
-import { useTranslations, useLocale } from 'next-intl';
+import { useTranslations } from 'next-intl';
 import { useState } from 'react';
+import { Link } from '@/i18n/routing';
 
 interface Booking {
   id: string;
-  pondType: 'LEISURE' | 'COMPETITION';
-  pondName: string;
-  spotNumber: number | null;
+  customer: string;
+  phone: string;
+  pond: string;
+  spot: number | null;
   date: string;
-  timeSlot: string | null;
-  customerName: string;
-  customerPhone: string;
-  participantCount: number | null;
+  time: string;
+  participants: number | null;
   groupName: string | null;
-  totalPrice: number;
+  price: number;
   status: 'PENDING' | 'CONFIRMED' | 'CANCELLED';
 }
 
 const demoBookings: Booking[] = [
-  { id: '1', pondType: 'LEISURE', pondName: '休闲塘', spotNumber: 12, date: '2026-07-14', timeSlot: 'MORNING', customerName: '张先生', customerPhone: '+66-081-234-567', participantCount: null, groupName: null, totalPrice: 100, status: 'CONFIRMED' },
-  { id: '2', pondType: 'COMPETITION', pondName: '竞赛塘', spotNumber: null, date: '2026-07-14', timeSlot: null, customerName: 'สมชาย', customerPhone: '+66-089-111-222', participantCount: 15, groupName: 'สมชาย Team', totalPrice: 7500, status: 'PENDING' },
-  { id: '3', pondType: 'LEISURE', pondName: '休闲塘', spotNumber: 5, date: '2026-07-15', timeSlot: 'FULL_DAY', customerName: 'John Smith', customerPhone: '+66-085-333-444', participantCount: null, groupName: null, totalPrice: 100, status: 'PENDING' },
-  { id: '4', pondType: 'COMPETITION', pondName: '竞赛塘', spotNumber: null, date: '2026-07-16', timeSlot: null, customerName: '李经理', customerPhone: '+66-087-555-666', participantCount: 20, groupName: '公司团建', totalPrice: 10000, status: 'CONFIRMED' },
+  { id: 'BK-001', customer: '张三', phone: '+86 13800138000', pond: '休闲塘', spot: 12, date: '2026-03-20', time: '上午', participants: null, groupName: null, price: 100, status: 'PENDING' },
+  { id: 'BK-002', customer: 'John', phone: '+66 812345678', pond: '竞赛塘', spot: null, date: '2026-03-20', time: '全天', participants: 15, groupName: 'Team Alpha', price: 7500, status: 'CONFIRMED' },
+  { id: 'BK-003', customer: 'สมชาย', phone: '+66 998765432', pond: '休闲塘', spot: 8, date: '2026-03-20', time: '下午', participants: null, groupName: null, price: 100, status: 'PENDING' },
+  { id: 'BK-004', customer: '李四', phone: '+86 13900139000', pond: '竞赛塘', spot: null, date: '2026-03-21', time: '全天', participants: 12, groupName: '钓鱼小队', price: 6000, status: 'CANCELLED' },
+  { id: 'BK-005', customer: 'Peter', phone: '+66 855556789', pond: '休闲塘', spot: 25, date: '2026-03-21', time: '全天', participants: null, groupName: null, price: 100, status: 'PENDING' },
 ];
+
+const statusColors: Record<string, string> = {
+  PENDING: 'bg-warning-100 text-warning-600',
+  CONFIRMED: 'bg-success-100 text-success-600',
+  CANCELLED: 'bg-error-100 text-error-600',
+};
+
+const statusI18n: Record<string, string> = {
+  PENDING: 'orders.pending',
+  CONFIRMED: 'common.confirm',
+  CANCELLED: 'orders.cancelled',
+};
+
+const pondColors: Record<string, string> = {
+  '休闲塘': 'bg-primary-50 text-primary-700',
+  '竞赛塘': 'bg-accent-50 text-accent-700',
+};
 
 export default function AdminBookingsPage() {
   const t = useTranslations();
   const [bookings, setBookings] = useState(demoBookings);
+  const [dateFilter, setDateFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
 
-  const updateStatus = (id: string, status: 'CONFIRMED' | 'CANCELLED') => {
-    setBookings(prev => prev.map(b => b.id === id ? { ...b, status } : b));
+  const filtered = bookings.filter((b) => {
+    if (dateFilter && b.date !== dateFilter) return false;
+    if (statusFilter !== 'all' && b.status !== statusFilter) return false;
+    return true;
+  });
+
+  const confirmBooking = (id: string) => {
+    setBookings((prev) =>
+      prev.map((b) => (b.id === id ? { ...b, status: 'CONFIRMED' as const } : b))
+    );
+  };
+
+  const cancelBooking = (id: string) => {
+    setBookings((prev) =>
+      prev.map((b) => (b.id === id ? { ...b, status: 'CANCELLED' as const } : b))
+    );
   };
 
   return (
     <div className="mx-auto max-w-lg px-4 py-6">
-      <h2 className="mb-4 text-2xl font-bold text-neutral-900">{t('admin.bookings')}</h2>
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-2xl font-bold text-neutral-900">{t('admin.bookings')}</h2>
+        <Link
+          href="/admin"
+          className="rounded-lg bg-neutral-100 px-3 py-1.5 text-xs font-medium text-neutral-600 hover:bg-neutral-200"
+        >
+          {t('common.back')}
+        </Link>
+      </div>
 
-      {/* Date Filter */}
-      <div className="mb-4 flex gap-2">
+      {/* Filters */}
+      <div className="mb-4 space-y-3">
         <input
           type="date"
-          className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm focus:border-primary-500 focus:outline-none"
+          value={dateFilter}
+          onChange={(e) => setDateFilter(e.target.value)}
+          className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
         />
-        <button className="rounded-xl bg-primary-700 px-4 py-2 text-sm font-semibold text-white shadow-brand">
-          {t('common.filter')}
-        </button>
+        <div className="flex gap-2">
+          {[
+            { key: 'all', label: t('orders.all') },
+            { key: 'PENDING', label: t('orders.pending') },
+            { key: 'CONFIRMED', label: t('common.confirm') },
+            { key: 'CANCELLED', label: t('orders.cancelled') },
+          ].map((f) => (
+            <button
+              key={f.key}
+              onClick={() => setStatusFilter(f.key)}
+              className={`flex-1 rounded-lg py-2 text-xs font-medium transition ${
+                statusFilter === f.key
+                  ? 'bg-primary-700 text-white'
+                  : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Booking List */}
-      <div className="space-y-3">
-        {bookings.map((booking) => (
-          <div key={booking.id} className="rounded-xl bg-white p-4 shadow-md">
-            {/* Pond type badge */}
-            <div className="mb-2 flex items-center justify-between">
-              <span className={`inline-block rounded-full px-2.5 py-1 text-xs font-semibold ${
-                booking.pondType === 'LEISURE'
-                  ? 'bg-primary-50 text-primary-700'
-                  : 'bg-accent-50 text-accent-700'
-              }`}>
-                {booking.pondType === 'LEISURE' ? t('admin.leisurePond') : t('admin.competitionPond')}
-              </span>
-              <span className={`inline-block rounded-full px-2.5 py-1 text-xs font-semibold ${
-                booking.status === 'CONFIRMED' ? 'bg-success-50 text-success-700' :
-                booking.status === 'PENDING' ? 'bg-warning-50 text-warning-700' :
-                'bg-error-50 text-error-700'
-              }`}>
-                {t(`orders.${booking.status.toLowerCase()}`)}
-              </span>
-            </div>
-
-            {/* Booking details */}
-            <div className="mb-2 space-y-1 text-sm text-neutral-600">
-              <p>{t('booking.selectDate')}: {booking.date}</p>
-              {booking.spotNumber && <p>{t('booking.spotNumber')}: {booking.spotNumber}</p>}
-              {booking.timeSlot && <p>{t('booking.selectTime')}: {booking.timeSlot}</p>}
-              {booking.participantCount && (
-                <p className="font-medium text-accent-700">
-                  {t('booking.participantCount')}: {booking.participantCount} | {t('booking.groupName')}: {booking.groupName}
-                </p>
-              )}
-            </div>
-
-            {/* Customer info */}
-            <div className="flex items-center justify-between text-sm">
-              <div>
-                <p className="font-medium text-neutral-900">{booking.customerName}</p>
-                <p className="text-xs text-neutral-500">{booking.customerPhone}</p>
+      {/* Bookings List */}
+      {filtered.length === 0 ? (
+        <div className="py-20 text-center text-sm text-neutral-400">
+          {t('common.noData')}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {filtered.map((booking) => (
+            <div key={booking.id} className="rounded-xl bg-white p-4 shadow-md">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-xs text-neutral-400">{booking.id}</span>
+                <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${statusColors[booking.status]}`}>
+                  {t(statusI18n[booking.status])}
+                </span>
               </div>
-              <p className="text-lg font-bold text-accent-600">฿{booking.totalPrice.toLocaleString()}</p>
-            </div>
 
-            {/* Action buttons */}
-            {booking.status === 'PENDING' && (
-              <div className="mt-3 flex gap-2">
-                <button
-                  onClick={() => updateStatus(booking.id, 'CONFIRMED')}
-                  className="flex-1 rounded-xl bg-success-600 py-2 text-xs font-semibold text-white hover:bg-success-700"
-                >
-                  {t('common.confirm')}
-                </button>
-                <button
-                  onClick={() => updateStatus(booking.id, 'CANCELLED')}
-                  className="flex-1 rounded-xl bg-error-500 py-2 text-xs font-semibold text-white hover:bg-error-600"
-                >
-                  {t('common.cancel')}
-                </button>
+              <div className="mb-2 flex items-center gap-2">
+                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${pondColors[booking.pond] || 'bg-neutral-100 text-neutral-600'}`}>
+                  {booking.pond}
+                </span>
+                {booking.spot !== null && (
+                  <span className="text-xs text-neutral-500">#{booking.spot}</span>
+                )}
               </div>
-            )}
-          </div>
-        ))}
-      </div>
+
+              <div className="space-y-1 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-neutral-500">{t('admin.customer')}</span>
+                  <span className="font-medium text-neutral-900">{booking.customer}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-neutral-500">{t('profile.phone')}</span>
+                  <span className="text-xs text-neutral-600">{booking.phone}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-neutral-500">{t('orders.date')}</span>
+                  <span className="text-neutral-900">{booking.date} | {booking.time}</span>
+                </div>
+                {booking.groupName && (
+                  <div className="flex justify-between">
+                    <span className="text-neutral-500">{t('booking.groupName')}</span>
+                    <span className="text-neutral-900">{booking.groupName}</span>
+                  </div>
+                )}
+                {booking.participants && (
+                  <div className="flex justify-between">
+                    <span className="text-neutral-500">{t('booking.participantCount')}</span>
+                    <span className="text-neutral-900">{booking.participants}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-3 flex items-center justify-between border-t border-neutral-100 pt-3">
+                <span className="font-bold text-accent-600">฿{booking.price.toLocaleString()}</span>
+                {booking.status === 'PENDING' && (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => cancelBooking(booking.id)}
+                      className="rounded-lg border border-error-200 px-3 py-1.5 text-xs font-medium text-error-600 hover:bg-error-50"
+                    >
+                      {t('common.cancel')}
+                    </button>
+                    <button
+                      onClick={() => confirmBooking(booking.id)}
+                      className="rounded-lg bg-success-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-success-700"
+                    >
+                      {t('common.confirm')}
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -2,123 +2,180 @@
 
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
+import { Link } from '@/i18n/routing';
 
 interface Transaction {
   id: string;
-  orderNumber: string;
-  customerName: string;
-  amount: number;
+  orderId: string;
+  customer: string;
+  type: 'booking' | 'order';
   method: string;
-  pondType: 'LEISURE' | 'COMPETITION' | 'food';
+  amount: number;
   date: string;
   status: 'SUCCESSFUL' | 'PENDING' | 'REFUNDED';
 }
 
 const demoTransactions: Transaction[] = [
-  { id: '1', orderNumber: 'FP-20260714-001', customerName: '张先生', amount: 100, method: 'PromptPay', pondType: 'LEISURE', date: '2026-07-14', status: 'SUCCESSFUL' },
-  { id: '2', orderNumber: 'FP-20260714-002', customerName: 'สมชาย Team', amount: 7500, method: 'Credit Card', pondType: 'COMPETITION', date: '2026-07-14', status: 'SUCCESSFUL' },
-  { id: '3', orderNumber: 'FP-20260714-003', customerName: 'John Smith', amount: 280, method: 'TrueMoney', pondType: 'food', date: '2026-07-14', status: 'SUCCESSFUL' },
-  { id: '4', orderNumber: 'FP-20260713-004', customerName: '李经理', amount: 10000, method: 'Alipay', pondType: 'COMPETITION', date: '2026-07-13', status: 'SUCCESSFUL' },
-  { id: '5', orderNumber: 'FP-20260713-005', customerName: '小王', amount: 100, method: 'Bank Transfer', pondType: 'LEISURE', date: '2026-07-13', status: 'PENDING' },
+  { id: 'T-001', orderId: 'FP-001', customer: '张三', type: 'order', method: 'PROMPTPAY', amount: 480, date: '2026-03-20', status: 'SUCCESSFUL' },
+  { id: 'T-002', orderId: 'BK-002', customer: 'John', type: 'booking', method: 'BANK_TRANSFER', amount: 7500, date: '2026-03-20', status: 'SUCCESSFUL' },
+  { id: 'T-003', orderId: 'FP-002', customer: 'John', type: 'order', method: 'TRUEMONEY', amount: 150, date: '2026-03-20', status: 'SUCCESSFUL' },
+  { id: 'T-004', orderId: 'BK-003', customer: 'สมชาย', type: 'booking', method: 'PROMPTPAY', amount: 100, date: '2026-03-20', status: 'PENDING' },
+  { id: 'T-005', orderId: 'FP-003', customer: 'สมชาย', type: 'order', method: 'ALIPAY', amount: 320, date: '2026-03-19', status: 'SUCCESSFUL' },
+  { id: 'T-006', orderId: 'BK-004', customer: '李四', type: 'booking', method: 'CREDIT_CARD', amount: 6000, date: '2026-03-19', status: 'REFUNDED' },
+  { id: 'T-007', orderId: 'FP-004', customer: '张三', type: 'order', method: 'WECHAT_PAY', amount: 250, date: '2026-03-19', status: 'SUCCESSFUL' },
+  { id: 'T-008', orderId: 'BK-001', customer: '张三', type: 'booking', method: 'PROMPTPAY', amount: 100, date: '2026-03-18', status: 'SUCCESSFUL' },
 ];
+
+const methodI18n: Record<string, string> = {
+  PROMPTPAY: 'payment.promptpay',
+  TRUEMONEY: 'payment.truemoney',
+  BANK_TRANSFER: 'payment.bankTransfer',
+  CREDIT_CARD: 'payment.creditCard',
+  ALIPAY: 'payment.alipay',
+  WECHAT_PAY: 'payment.wechatPay',
+};
+
+const statusColors: Record<string, string> = {
+  SUCCESSFUL: 'bg-success-100 text-success-600',
+  PENDING: 'bg-warning-100 text-warning-600',
+  REFUNDED: 'bg-error-100 text-error-600',
+};
 
 export default function AdminTransactionsPage() {
   const t = useTranslations();
+  const [startDate, setStartDate] = useState('2026-03-01');
+  const [endDate, setEndDate] = useState('2026-03-31');
 
-  const totalRevenue = demoTransactions.filter(t => t.status === 'SUCCESSFUL').reduce((s, t) => s + t.amount, 0);
-  const leisureRevenue = demoTransactions.filter(t => t.pondType === 'LEISURE' && t.status === 'SUCCESSFUL').reduce((s, t) => s + t.amount, 0);
-  const competitionRevenue = demoTransactions.filter(t => t.pondType === 'COMPETITION' && t.status === 'SUCCESSFUL').reduce((s, t) => s + t.amount, 0);
-  const foodRevenue = demoTransactions.filter(t => t.pondType === 'food' && t.status === 'SUCCESSFUL').reduce((s, t) => s + t.amount, 0);
+  const filtered = demoTransactions.filter((tx) => {
+    if (startDate && tx.date < startDate) return false;
+    if (endDate && tx.date > endDate) return false;
+    return true;
+  });
+
+  const totalRevenue = filtered
+    .filter((tx) => tx.status === 'SUCCESSFUL')
+    .reduce((sum, tx) => sum + tx.amount, 0);
+
+  const bookingRevenue = filtered
+    .filter((tx) => tx.type === 'booking' && tx.status === 'SUCCESSFUL')
+    .reduce((sum, tx) => sum + tx.amount, 0);
+
+  const foodRevenue = filtered
+    .filter((tx) => tx.type === 'order' && tx.status === 'SUCCESSFUL')
+    .reduce((sum, tx) => sum + tx.amount, 0);
+
+  const totalOrders = filtered.length;
+  const successCount = filtered.filter((tx) => tx.status === 'SUCCESSFUL').length;
+
+  // Revenue by method
+  const methodRevenue: Record<string, number> = {};
+  filtered
+    .filter((tx) => tx.status === 'SUCCESSFUL')
+    .forEach((tx) => {
+      methodRevenue[tx.method] = (methodRevenue[tx.method] || 0) + tx.amount;
+    });
 
   return (
     <div className="mx-auto max-w-lg px-4 py-6">
-      <h2 className="mb-4 text-2xl font-bold text-neutral-900">{t('admin.transactions')}</h2>
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-2xl font-bold text-neutral-900">{t('admin.transactions')}</h2>
+        <Link
+          href="/admin"
+          className="rounded-lg bg-neutral-100 px-3 py-1.5 text-xs font-medium text-neutral-600 hover:bg-neutral-200"
+        >
+          {t('common.back')}
+        </Link>
+      </div>
 
       {/* Date Range */}
       <div className="mb-4 flex gap-2">
-        <input
-          type="date"
-          className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm focus:border-primary-500 focus:outline-none"
-        />
-        <input
-          type="date"
-          className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm focus:border-primary-500 focus:outline-none"
-        />
-        <button className="rounded-xl bg-primary-700 px-4 py-2 text-sm font-semibold text-white shadow-brand">
-          {t('common.filter')}
-        </button>
-      </div>
-
-      {/* Revenue Summary */}
-      <div className="grid grid-cols-2 gap-3 mb-6">
-        <div className="rounded-xl bg-accent-50 p-4 shadow-md">
-          <p className="text-xs font-medium text-accent-700">{t('admin.totalRevenue')}</p>
-          <p className="text-2xl font-bold text-accent-800">฿{totalRevenue.toLocaleString()}</p>
+        <div className="flex-1">
+          <label className="mb-1 block text-xs text-neutral-500">{t('admin.startDate')}</label>
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm"
+          />
         </div>
-        <div className="rounded-xl bg-primary-50 p-4 shadow-md">
-          <p className="text-xs font-medium text-primary-700">{t('admin.totalOrders')}</p>
-          <p className="text-2xl font-bold text-primary-800">{demoTransactions.length}</p>
+        <div className="flex-1">
+          <label className="mb-1 block text-xs text-neutral-500">{t('admin.endDate')}</label>
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm"
+          />
         </div>
       </div>
 
-      {/* Revenue by Pond */}
+      {/* Revenue KPI Cards */}
+      <div className="mb-6 grid grid-cols-2 gap-3">
+        <div className="rounded-xl bg-success-50 p-4">
+          <p className="text-xs text-success-600 opacity-70">{t('admin.totalRevenue')}</p>
+          <p className="mt-1 text-2xl font-bold text-success-700">฿{totalRevenue.toLocaleString()}</p>
+        </div>
+        <div className="rounded-xl bg-primary-50 p-4">
+          <p className="text-xs text-primary-600 opacity-70">{t('admin.totalOrders')}</p>
+          <p className="mt-1 text-2xl font-bold text-primary-700">{successCount}/{totalOrders}</p>
+        </div>
+      </div>
+
+      {/* Revenue Breakdown */}
+      <div className="mb-6 grid grid-cols-2 gap-3">
+        <div className="rounded-xl bg-accent-50 p-4">
+          <p className="text-xs text-accent-600 opacity-70">{t('admin.bookings')}</p>
+          <p className="mt-1 text-xl font-bold text-accent-700">฿{bookingRevenue.toLocaleString()}</p>
+        </div>
+        <div className="rounded-xl bg-neutral-100 p-4">
+          <p className="text-xs text-neutral-600 opacity-70">{t('menu.food')} & {t('menu.drinks')}</p>
+          <p className="mt-1 text-xl font-bold text-neutral-700">฿{foodRevenue.toLocaleString()}</p>
+        </div>
+      </div>
+
+      {/* Revenue by Payment Method */}
       <div className="mb-6 rounded-xl bg-white p-4 shadow-md">
-        <h3 className="mb-3 text-sm font-semibold text-neutral-700">{t('admin.revenueByPond')}</h3>
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-neutral-600">{t('admin.leisurePond')}</span>
-            <span className="text-sm font-semibold text-neutral-900">฿{leisureRevenue.toLocaleString()}</span>
+        <h3 className="mb-3 font-semibold text-neutral-900">{t('admin.revenueByMethod')}</h3>
+        {Object.keys(methodRevenue).length === 0 ? (
+          <p className="text-sm text-neutral-400">{t('common.noData')}</p>
+        ) : (
+          <div className="space-y-2">
+            {Object.entries(methodRevenue).map(([method, amount]) => (
+              <div key={method} className="flex items-center justify-between rounded-lg bg-neutral-50 px-3 py-2">
+                <span className="text-sm font-medium text-neutral-700">
+                  {t(methodI18n[method] || method)}
+                </span>
+                <span className="text-sm font-bold text-neutral-900">฿{amount.toLocaleString()}</span>
+              </div>
+            ))}
           </div>
-          <div className="h-2 rounded-full bg-bg-page">
-            <div className="h-2 rounded-full bg-primary-500" style={{ width: `${(leisureRevenue / totalRevenue) * 100}%` }} />
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-neutral-600">{t('admin.competitionPond')}</span>
-            <span className="text-sm font-semibold text-neutral-900">฿{competitionRevenue.toLocaleString()}</span>
-          </div>
-          <div className="h-2 rounded-full bg-bg-page">
-            <div className="h-2 rounded-full bg-accent-500" style={{ width: `${(competitionRevenue / totalRevenue) * 100}%` }} />
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-neutral-600">{t('menu.food')}</span>
-            <span className="text-sm font-semibold text-neutral-900">฿{foodRevenue.toLocaleString()}</span>
-          </div>
-          <div className="h-2 rounded-full bg-bg-page">
-            <div className="h-2 rounded-full bg-success-500" style={{ width: `${(foodRevenue / totalRevenue) * 100}%` }} />
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Transaction List */}
       <div className="rounded-xl bg-white p-4 shadow-md">
-        <h3 className="mb-3 text-sm font-semibold text-neutral-700">{t('admin.recentOrders')}</h3>
+        <h3 className="mb-3 font-semibold text-neutral-900">{t('admin.recentOrders')}</h3>
         <div className="space-y-2">
-          {demoTransactions.map((txn) => (
-            <div key={txn.id} className="flex items-center justify-between rounded-lg bg-bg-page px-3 py-2">
-              <div>
-                <p className="text-sm font-medium text-neutral-900">{txn.orderNumber}</p>
-                <p className="text-xs text-neutral-500">{txn.customerName} · {txn.date}</p>
+          {filtered.map((tx) => (
+            <div key={tx.id} className="flex items-center justify-between rounded-lg bg-neutral-50 px-3 py-2">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-neutral-900">
+                  {tx.orderId} — {tx.customer}
+                </p>
+                <p className="text-xs text-neutral-500">
+                  {tx.date} | {t(methodI18n[tx.method] || tx.method)} | {tx.type === 'booking' ? t('common.booking') : t('menu.food')}
+                </p>
               </div>
-              <div className="text-right">
-                <p className="text-sm font-semibold text-neutral-900">฿{txn.amount.toLocaleString()}</p>
-                <span className={`inline-block rounded-full px-2 py-0.5 text-xs ${
-                  txn.status === 'SUCCESSFUL' ? 'bg-success-50 text-success-700' :
-                  txn.status === 'PENDING' ? 'bg-warning-50 text-warning-700' :
-                  'bg-error-50 text-error-700'
-                }`}>
-                  {txn.status === 'SUCCESSFUL' ? t('orders.paid') :
-                   txn.status === 'PENDING' ? t('orders.pending') : t('orders.cancelled')}
+              <div className="ml-2 text-right shrink-0">
+                <p className="text-sm font-bold text-neutral-900">฿{tx.amount.toLocaleString()}</p>
+                <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${statusColors[tx.status]}`}>
+                  {tx.status === 'SUCCESSFUL' ? t('common.success') : tx.status === 'PENDING' ? t('orders.pending') : t('orders.cancelled')}
                 </span>
               </div>
             </div>
           ))}
         </div>
       </div>
-
-      {/* Export */}
-      <button className="mt-4 w-full rounded-xl border border-primary-200 py-3 text-sm font-medium text-primary-700 transition hover:bg-primary-50">
-        {t('admin.exportData')}
-      </button>
     </div>
   );
 }
