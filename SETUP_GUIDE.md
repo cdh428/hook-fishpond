@@ -153,11 +153,14 @@ npm run dev
 
 ```bash
 git add -A
-git commit -m "Remove unused Supabase client keys, update env config"
+git commit -m "Fix PrismaPg SSL config, update setup guide"
 git push
 ```
 
 > 这会把代码推送到 GitHub (cdh428/hook-fishpond)，Vercel 会自动触发重新部署。
+> ⚠️ 如果 git push 要求输入 GitHub 用户名/密码，你可能需要：
+> 1. 打开 GitHub Desktop 或 Git Bash 手动推送
+> 2. 或使用 `gh auth login` 配置 GitHub CLI
 
 ---
 
@@ -171,7 +174,7 @@ git push
 
 | Key | Value | 说明 |
 |-----|-------|------|
-| `DATABASE_URL` | `postgresql://postgres:Fishpond%402026@db.ehsmsjmmccliysxnkgpv.supabase.co:6543/postgres?pgbouncer=true` | 数据库连接池 |
+| `DATABASE_URL` | `postgresql://postgres:Fishpond%402026@db.ehsmsjmmccliysxnkgpv.supabase.co:6543/postgres` | 数据库连接池（⚠️ 注意：不含 ?pgbouncer=true，因为 PrismaPg 用 pg 驱动不支持 prepared statements 模式） |
 | `DIRECT_URL` | `postgresql://postgres:Fishpond%402026@db.ehsmsjmmccliysxnkgpv.supabase.co:5432/postgres` | 数据库直连 |
 | `NEXT_PUBLIC_BASE_URL` | `https://hook-fishpond-xi15.vercel.app` | 网站正式地址 |
 | `OMISE_PUBLIC_KEY` | (第 1 步获取的 pkey_test_...) | Omise 公钥（没有就暂不加） |
