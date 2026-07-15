@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { supabase, genId } from "@/lib/supabase-server";
 import { requireAdmin } from "@/lib/auth";
 
 export async function POST(request: NextRequest) {
@@ -33,8 +33,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const item = await prisma.menuItem.create({
-      data: {
+    const { data: item, error } = await supabase
+      .from("MenuItem")
+      .insert({
+        id: genId(),
         categoryId,
         name_zh,
         name_en,
@@ -48,9 +50,11 @@ export async function POST(request: NextRequest) {
         isVegetarian: isVegetarian || false,
         spiceLevel: spiceLevel || 0,
         sortOrder: sortOrder || 0,
-      },
-      include: { category: true },
-    });
+      })
+      .select("*, category:MenuCategory(*)")
+      .single();
+
+    if (error) throw error;
 
     return NextResponse.json(item, { status: 201 });
   } catch (error: any) {

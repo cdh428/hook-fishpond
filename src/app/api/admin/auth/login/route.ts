@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { supabase } from "@/lib/supabase-server";
 import bcrypt from "bcryptjs";
 
 export async function POST(request: NextRequest) {
@@ -13,8 +13,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const admin = await prisma.adminUser.findUnique({ where: { username } });
-    if (!admin || !admin.isActive) {
+    const { data: admin, error } = await supabase
+      .from("AdminUser")
+      .select("*")
+      .eq("username", username)
+      .single();
+
+    if (error || !admin || !admin.isActive) {
       return NextResponse.json(
         { error: "Invalid credentials" },
         { status: 401 },

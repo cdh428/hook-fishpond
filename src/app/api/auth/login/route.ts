@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { supabase } from "@/lib/supabase-server";
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,8 +12,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const user = await prisma.user.findUnique({ where: { phone } });
-    if (!user) {
+    const { data: user, error } = await supabase
+      .from("User")
+      .select("*")
+      .eq("phone", phone)
+      .single();
+
+    if (error || !user) {
       return NextResponse.json(
         { error: "User not found. Please register first." },
         { status: 404 },

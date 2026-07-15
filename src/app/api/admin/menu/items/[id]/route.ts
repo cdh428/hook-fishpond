@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { supabase } from "@/lib/supabase-server";
 import { requireAdmin } from "@/lib/auth";
 
 export async function PUT(
@@ -31,26 +31,30 @@ export async function PUT(
       isActive,
     } = body;
 
-    const item = await prisma.menuItem.update({
-      where: { id },
-      data: {
-        ...(categoryId !== undefined && { categoryId }),
-        ...(name_zh !== undefined && { name_zh }),
-        ...(name_en !== undefined && { name_en }),
-        ...(name_th !== undefined && { name_th }),
-        ...(description_zh !== undefined && { description_zh }),
-        ...(description_en !== undefined && { description_en }),
-        ...(description_th !== undefined && { description_th }),
-        ...(price !== undefined && { price }),
-        ...(imageUrl !== undefined && { imageUrl }),
-        ...(isPopular !== undefined && { isPopular }),
-        ...(isVegetarian !== undefined && { isVegetarian }),
-        ...(spiceLevel !== undefined && { spiceLevel }),
-        ...(sortOrder !== undefined && { sortOrder }),
-        ...(isActive !== undefined && { isActive }),
-      },
-      include: { category: true },
-    });
+    const updateData: Record<string, any> = {};
+    if (categoryId !== undefined) updateData.categoryId = categoryId;
+    if (name_zh !== undefined) updateData.name_zh = name_zh;
+    if (name_en !== undefined) updateData.name_en = name_en;
+    if (name_th !== undefined) updateData.name_th = name_th;
+    if (description_zh !== undefined) updateData.description_zh = description_zh;
+    if (description_en !== undefined) updateData.description_en = description_en;
+    if (description_th !== undefined) updateData.description_th = description_th;
+    if (price !== undefined) updateData.price = price;
+    if (imageUrl !== undefined) updateData.imageUrl = imageUrl;
+    if (isPopular !== undefined) updateData.isPopular = isPopular;
+    if (isVegetarian !== undefined) updateData.isVegetarian = isVegetarian;
+    if (spiceLevel !== undefined) updateData.spiceLevel = spiceLevel;
+    if (sortOrder !== undefined) updateData.sortOrder = sortOrder;
+    if (isActive !== undefined) updateData.isActive = isActive;
+
+    const { data: item, error } = await supabase
+      .from("MenuItem")
+      .update(updateData)
+      .eq("id", id)
+      .select("*, category:MenuCategory(*)")
+      .single();
+
+    if (error) throw error;
 
     return NextResponse.json(item);
   } catch (error: any) {
@@ -75,20 +79,27 @@ export async function DELETE(
     const { id } = await params;
 
     // Check if item has been ordered
-    const orderItemCount = await prisma.orderItem.count({
-      where: { menuItemId: id },
-    });
+    const { count: orderItemCount } = await supabase
+      .from("OrderItem")
+      .select("*", { count: "exact", head: true })
+      .eq("menuItemId", id);
 
-    if (orderItemCount > 0) {
+    if (orderItemCount && orderItemCount > 0) {
       // Soft delete
-      await prisma.menuItem.update({
-        where: { id },
-        data: { isActive: false },
-      });
+      await supabase
+        .from("MenuItem")
+        .update({ isActive: false })
+        .eq("id", id);
       return NextResponse.json({ message: "Item deactivated (has order history)", deactivated: true });
     }
 
-    await prisma.menuItem.delete({ where: { id } });
+    const { error } = await supabase
+      .from("MenuItem")
+      .delete()
+      .eq("id", id);
+
+    if (error) throw error;
+
     return NextResponse.json({ message: "Item deleted" });
   } catch (error: any) {
     console.error("Delete menu item error:", error);

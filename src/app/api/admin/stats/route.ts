@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { supabase } from "@/lib/supabase-server";
 import { requireAdmin } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
@@ -12,47 +12,52 @@ export async function GET(request: NextRequest) {
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    const todayStartStr = todayStart.toISOString();
+    const todayEndStr = todayEnd.toISOString();
 
-    // Today's bookings count
-    const todayBookings = await prisma.booking.count({
-      where: {
-        createdAt: { gte: todayStart, lt: todayEnd },
-        status: { not: "CANCELLED" },
-      },
-    });
+    // Today's bookings count (non-cancelled)
+    const { count: todayBookings } = await supabase
+      .from("Booking")
+      .select("*", { count: "exact", head: true })
+      .gte("createdAt", todayStartStr)
+      .lt("createdAt", todayEndStr)
+      .neq("status", "CANCELLED");
 
-    // Today's revenue (from paid orders)
-    const todayRevenueResult = await prisma.payment.aggregate({
-      where: {
-        status: "SUCCESSFUL",
-        paidAt: { gte: todayStart, lt: todayEnd },
-      },
-      _sum: { amount: true },
-    });
+    // Today's revenue (from successful payments)
+    const { data: payments } = await supabase
+      .from("Payment")
+      .select("amount")
+      .eq("status", "SUCCESSFUL")
+      .gte("paidAt", todayStartStr)
+      .lt("paidAt", todayEndStr);
+
+    const todayRevenue = (payments || []).reduce((sum, p) => sum + p.amount, 0);
 
     // Pending orders count
-    const pendingOrders = await prisma.order.count({
-      where: { status: "PENDING" },
-    });
+    const { count: pendingOrders } = await supabase
+      .from("Order")
+      .select("*", { count: "exact", head: true })
+      .eq("status", "PENDING");
 
     // Active spots count
-    const activeSpots = await prisma.spot.count({
-      where: { isActive: true },
-    });
+    const { count: activeSpots } = await supabase
+      .from("Spot")
+      .select("*", { count: "exact", head: true })
+      .eq("isActive", true);
 
-    // Total bookings today (including cancelled for reference)
-    const totalTodayBookings = await prisma.booking.count({
-      where: {
-        createdAt: { gte: todayStart, lt: todayEnd },
-      },
-    });
+    // Total bookings today (including cancelled)
+    const { count: totalTodayBookings } = await supabase
+      .from("Booking")
+      .select("*", { count: "exact", head: true })
+      .gte("createdAt", todayStartStr)
+      .lt("createdAt", todayEndStr);
 
     return NextResponse.json({
-      todayBookings,
-      todayRevenue: todayRevenueResult._sum.amount || 0,
-      pendingOrders,
-      activeSpots,
-      totalTodayBookings,
+      todayBookings: todayBookings || 0,
+      todayRevenue,
+      pendingOrders: pendingOrders || 0,
+      activeSpots: activeSpots || 0,
+      totalTodayBookings: totalTodayBookings || 0,
     });
   } catch (error: any) {
     console.error("Admin stats error:", error);

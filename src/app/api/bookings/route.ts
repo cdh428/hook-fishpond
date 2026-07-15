@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { supabase, genId } from "@/lib/supabase-server";
 
 export async function POST(request: NextRequest) {
   try {
@@ -23,8 +23,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const pond = await prisma.pond.findUnique({ where: { id: pondId } });
-    if (!pond || !pond.isActive) {
+    const { data: pond, error: pondError } = await supabase
+      .from("Pond")
+      .select("*")
+      .eq("id", pondId)
+      .single();
+
+    if (pondError || !pond || !pond.isActive) {
       return NextResponse.json({ error: "Pond not found" }, { status: 404 });
     }
 
@@ -34,7 +39,6 @@ export async function POST(request: NextRequest) {
     }
 
     if (pond.type === "LEISURE") {
-      // Individual booking — requires spotId and timeSlot
       if (!spotId || !timeSlot) {
         return NextResponse.json(
           { error: "Leisure booking requires spotId and timeSlot" },
@@ -43,36 +47,54 @@ export async function POST(request: NextRequest) {
       }
 
       // Check spot is not already booked for this date+timeSlot
-      const existing = await prisma.booking.findUnique({
-        where: {
-          spotId_date_timeSlot: { spotId, date: bookingDate, timeSlot },
-        },
-      });
-      if (existing && existing.status !== "CANCELLED") {
+      const dateStr = bookingDate.toISOString().slice(0, 10);
+      const { data: existing } = await supabase
+        .from("Booking")
+        .select("*")
+        .eq("spotId", spotId)
+        .eq("timeSlot", timeSlot)
+        .gte("date", dateStr + "T00:00:00")
+        .lt("date", dateStr + "T23:59:59")
+        .neq("status", "CANCELLED")
+        .maybeSingle();
+
+      if (existing) {
         return NextResponse.json(
           { error: "This spot is already booked for the selected time slot" },
           { status: 409 },
         );
       }
 
-      const booking = await prisma.booking.create({
-        data: {
+      const bookingId = genId();
+      const { data: booking, error: createError } = await supabase
+        .from("Booking")
+        .insert({
+          id: bookingId,
           userId: userId || null,
           pondId,
           spotId,
-          date: bookingDate,
+          date: bookingDate.toISOString(),
           timeSlot,
           customerName,
           customerPhone,
           totalPrice: pond.price,
           status: "PENDING",
-        },
-        include: { pond: true, spot: true },
-      });
+        })
+        .select("*")
+        .single();
 
-      return NextResponse.json(booking, { status: 201 });
+      if (createError) throw createError;
+
+      // Fetch with relations
+      const { data: fullBooking } = await supabase
+        .from("Booking")
+        .select("*, pond:Pond(*), spot:Spot(*)")
+        .eq("id", bookingId)
+        .single();
+
+      return NextResponse.json(fullBooking || booking, { status: 201 });
     } else {
-      // Competition group booking — requires participantCount and groupName
+      // Competition group booking
       if (!participantCount || !groupName) {
         return NextResponse.json(
           { error: "Competition booking requires participantCount and groupName" },
@@ -88,12 +110,15 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const booking = await prisma.booking.create({
-        data: {
+      const bookingId = genId();
+      const { data: booking, error: createError } = await supabase
+        .from("Booking")
+        .insert({
+          id: bookingId,
           userId: userId || null,
           pondId,
           spotId: spotId || null,
-          date: bookingDate,
+          date: bookingDate.toISOString(),
           timeSlot: "FULL_DAY",
           participantCount,
           groupName,
@@ -101,14 +126,29 @@ export async function POST(request: NextRequest) {
           customerPhone,
           totalPrice: pond.price * participantCount,
           status: "PENDING",
-        },
-        include: { pond: true, spot: true },
-      });
+        })
+        .select("*")
+        .single();
 
-      return NextResponse.json(booking, { status: 201 });
+      if (createError) throw createError;
+
+      const { data: fullBooking } = await supabase
+        .from("Booking")
+        .select("*, pond:Pond(*), spot:Spot(*)")
+        .eq("id", bookingId)
+        .single();
+
+      return NextResponse.json(fullBooking || booking, { status: 201 });
     }
   } catch (error: any) {
     console.error("Create booking error:", error);
+    // Handle unique constraint violation (double-booking)
+    if (error?.message?.includes("unique constraint") || error?.code === "23505") {
+      return NextResponse.json(
+        { error: "This spot is already booked for the selected time slot" },
+        { status: 409 },
+      );
+    }
     return NextResponse.json(
       { error: error.message || "Failed to create booking" },
       { status: 500 },
@@ -129,21 +169,22 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const where = userId
-      ? { userId }
-      : { customerPhone: phone! };
+    let query = supabase
+      .from("Booking")
+      .select("*, pond:Pond(*), spot:Spot(*), order:Order(*)")
+      .order("createdAt", { ascending: false });
 
-    const bookings = await prisma.booking.findMany({
-      where,
-      include: {
-        pond: true,
-        spot: true,
-        order: true,
-      },
-      orderBy: { createdAt: "desc" },
-    });
+    if (userId) {
+      query = query.eq("userId", userId);
+    } else {
+      query = query.eq("customerPhone", phone!);
+    }
 
-    return NextResponse.json(bookings);
+    const { data: bookings, error } = await query;
+
+    if (error) throw error;
+
+    return NextResponse.json(bookings || []);
   } catch (error: any) {
     console.error("List bookings error:", error);
     return NextResponse.json(

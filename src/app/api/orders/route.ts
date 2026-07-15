@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { supabase, genId } from "@/lib/supabase-server";
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,11 +15,14 @@ export async function POST(request: NextRequest) {
 
     // Fetch menu items to calculate prices
     const menuItemIds = items.map((i: any) => i.menuItemId);
-    const menuItems = await prisma.menuItem.findMany({
-      where: { id: { in: menuItemIds } },
-    });
+    const { data: menuItems, error: menuError } = await supabase
+      .from("MenuItem")
+      .select("*")
+      .in("id", menuItemIds);
 
-    const menuItemMap = new Map(menuItems.map((m) => [m.id, m]));
+    if (menuError) throw menuError;
+
+    const menuItemMap = new Map((menuItems || []).map((m: any) => [m.id, m]));
 
     // Build order items and calculate subtotal
     let subtotal = 0;
@@ -32,6 +35,7 @@ export async function POST(request: NextRequest) {
       const totalPrice = unitPrice * i.quantity;
       subtotal += totalPrice;
       return {
+        id: genId(),
         menuItemId: i.menuItemId,
         quantity: i.quantity,
         unitPrice,
@@ -48,16 +52,22 @@ export async function POST(request: NextRequest) {
     // Find today's orders to get next sequence
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-    const todayCount = await prisma.order.count({
-      where: {
-        createdAt: { gte: todayStart, lt: todayEnd },
-      },
-    });
-    const seq = String(todayCount + 1).padStart(3, "0");
+    const { count: todayCount } = await supabase
+      .from("Order")
+      .select("*", { count: "exact", head: true })
+      .gte("createdAt", todayStart.toISOString())
+      .lt("createdAt", todayEnd.toISOString());
+
+    const seq = String((todayCount || 0) + 1).padStart(3, "0");
     const orderNumber = `${prefix}${seq}`;
 
-    const order = await prisma.order.create({
-      data: {
+    const orderId = genId();
+
+    // Create the order
+    const { data: order, error: orderError } = await supabase
+      .from("Order")
+      .insert({
+        id: orderId,
         orderNumber,
         userId: userId || null,
         customerName,
@@ -66,20 +76,40 @@ export async function POST(request: NextRequest) {
         totalPrice: subtotal,
         note: note || null,
         status: "PENDING",
-        items: {
-          create: orderItemsData,
-        },
-        ...(bookingId && {
-          bookings: { connect: { id: bookingId } },
-        }),
-      },
-      include: {
-        items: { include: { menuItem: true } },
-        bookings: true,
-      },
-    });
+      })
+      .select("*")
+      .single();
 
-    return NextResponse.json(order, { status: 201 });
+    if (orderError) throw orderError;
+
+    // Create order items
+    const orderItemsWithOrderId = orderItemsData.map((item) => ({
+      ...item,
+      orderId,
+    }));
+
+    const { error: itemsError } = await supabase
+      .from("OrderItem")
+      .insert(orderItemsWithOrderId);
+
+    if (itemsError) throw itemsError;
+
+    // Link booking to order if bookingId provided
+    if (bookingId) {
+      await supabase
+        .from("Booking")
+        .update({ orderId })
+        .eq("id", bookingId);
+    }
+
+    // Fetch complete order with relations
+    const { data: fullOrder } = await supabase
+      .from("Order")
+      .select("*, items:OrderItem(*, menuItem:MenuItem(*)), bookings:Booking(*)")
+      .eq("id", orderId)
+      .single();
+
+    return NextResponse.json(fullOrder || order, { status: 201 });
   } catch (error: any) {
     console.error("Create order error:", error);
     return NextResponse.json(
@@ -102,19 +132,22 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const where = userId ? { userId } : { customerPhone: phone! };
+    let query = supabase
+      .from("Order")
+      .select("*, items:OrderItem(*, menuItem:MenuItem(*)), payment:Payment(*), bookings:Booking(*)")
+      .order("createdAt", { ascending: false });
 
-    const orders = await prisma.order.findMany({
-      where,
-      include: {
-        items: { include: { menuItem: true } },
-        payment: true,
-        bookings: true,
-      },
-      orderBy: { createdAt: "desc" },
-    });
+    if (userId) {
+      query = query.eq("userId", userId);
+    } else {
+      query = query.eq("customerPhone", phone!);
+    }
 
-    return NextResponse.json(orders);
+    const { data: orders, error } = await query;
+
+    if (error) throw error;
+
+    return NextResponse.json(orders || []);
   } catch (error: any) {
     console.error("List orders error:", error);
     return NextResponse.json(

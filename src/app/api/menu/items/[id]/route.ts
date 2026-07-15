@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { supabase } from "@/lib/supabase-server";
 
 export async function GET(
   request: NextRequest,
@@ -8,12 +8,13 @@ export async function GET(
   try {
     const { id } = await params;
 
-    const item = await prisma.menuItem.findUnique({
-      where: { id },
-      include: { category: true },
-    });
+    const { data: item, error } = await supabase
+      .from("MenuItem")
+      .select("*, category:MenuCategory(*)")
+      .eq("id", id)
+      .single();
 
-    if (!item) {
+    if (error || !item) {
       return NextResponse.json({ error: "Menu item not found" }, { status: 404 });
     }
 

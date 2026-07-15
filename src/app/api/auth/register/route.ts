@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { supabase, genId } from "@/lib/supabase-server";
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,18 +13,28 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user already exists
-    const existing = await prisma.user.findUnique({ where: { phone } });
+    const { data: existing } = await supabase
+      .from("User")
+      .select("*")
+      .eq("phone", phone)
+      .single();
+
     if (existing) {
       return NextResponse.json(existing);
     }
 
-    const user = await prisma.user.create({
-      data: {
+    const { data: user, error } = await supabase
+      .from("User")
+      .insert({
+        id: genId(),
         phone,
         name,
         language: language || "zh",
-      },
-    });
+      })
+      .select("*")
+      .single();
+
+    if (error) throw error;
 
     return NextResponse.json(user, { status: 201 });
   } catch (error: any) {

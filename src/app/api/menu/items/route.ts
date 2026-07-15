@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { supabase } from "@/lib/supabase-server";
 
 export async function GET(request: NextRequest) {
   try {
@@ -8,31 +8,32 @@ export async function GET(request: NextRequest) {
     const popular = searchParams.get("popular");
 
     if (popular === "true") {
-      const items = await prisma.menuItem.findMany({
-        where: { isPopular: true, isActive: true },
-        include: { category: true },
-        orderBy: { sortOrder: "asc" },
-      });
-      return NextResponse.json(items);
+      const { data: items, error } = await supabase
+        .from("MenuItem")
+        .select("*, category:MenuCategory(*)")
+        .eq("isPopular", true)
+        .eq("isActive", true)
+        .order("sortOrder", { ascending: true });
+
+      if (error) throw error;
+      return NextResponse.json(items || []);
     }
 
-    if (!categoryId) {
-      // Return all active items
-      const items = await prisma.menuItem.findMany({
-        where: { isActive: true },
-        include: { category: true },
-        orderBy: { sortOrder: "asc" },
-      });
-      return NextResponse.json(items);
+    let query = supabase
+      .from("MenuItem")
+      .select("*, category:MenuCategory(*)")
+      .eq("isActive", true)
+      .order("sortOrder", { ascending: true });
+
+    if (categoryId) {
+      query = query.eq("categoryId", categoryId);
     }
 
-    const items = await prisma.menuItem.findMany({
-      where: { categoryId, isActive: true },
-      include: { category: true },
-      orderBy: { sortOrder: "asc" },
-    });
+    const { data: items, error } = await query;
 
-    return NextResponse.json(items);
+    if (error) throw error;
+
+    return NextResponse.json(items || []);
   } catch (error: any) {
     console.error("List menu items error:", error);
     return NextResponse.json(

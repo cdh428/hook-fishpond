@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { supabase } from "@/lib/supabase-server";
 import { requireAdmin } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
@@ -14,28 +14,26 @@ export async function GET(request: NextRequest) {
     const endDate = searchParams.get("endDate");
     const status = searchParams.get("status");
 
-    const where: any = {};
-    if (startDate || endDate) {
-      where.date = {};
-      if (startDate) where.date.gte = new Date(startDate);
-      if (endDate) where.date.lte = new Date(endDate);
+    let query = supabase
+      .from("Booking")
+      .select("*, pond:Pond(*), spot:Spot(*), user:User(*), order:Order(*)")
+      .order("createdAt", { ascending: false });
+
+    if (startDate) {
+      query = query.gte("date", new Date(startDate).toISOString());
+    }
+    if (endDate) {
+      query = query.lte("date", new Date(endDate).toISOString());
     }
     if (status) {
-      where.status = status;
+      query = query.eq("status", status);
     }
 
-    const bookings = await prisma.booking.findMany({
-      where,
-      include: {
-        pond: true,
-        spot: true,
-        user: true,
-        order: true,
-      },
-      orderBy: { createdAt: "desc" },
-    });
+    const { data: bookings, error } = await query;
 
-    return NextResponse.json(bookings);
+    if (error) throw error;
+
+    return NextResponse.json(bookings || []);
   } catch (error: any) {
     console.error("Admin list bookings error:", error);
     return NextResponse.json(

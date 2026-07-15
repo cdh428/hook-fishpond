@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { supabase } from "@/lib/supabase-server";
 
 export async function GET(
   request: NextRequest,
@@ -8,16 +8,13 @@ export async function GET(
   try {
     const { id } = await params;
 
-    const booking = await prisma.booking.findUnique({
-      where: { id },
-      include: {
-        pond: true,
-        spot: true,
-        order: { include: { items: { include: { menuItem: true } } } },
-      },
-    });
+    const { data: booking, error } = await supabase
+      .from("Booking")
+      .select("*, pond:Pond(*), spot:Spot(*), order:Order(*, items:OrderItem(*, menuItem:MenuItem(*)))")
+      .eq("id", id)
+      .single();
 
-    if (!booking) {
+    if (error || !booking) {
       return NextResponse.json({ error: "Booking not found" }, { status: 404 });
     }
 
@@ -46,11 +43,14 @@ export async function PUT(
       );
     }
 
-    const booking = await prisma.booking.update({
-      where: { id },
-      data: { status },
-      include: { pond: true, spot: true },
-    });
+    const { data: booking, error } = await supabase
+      .from("Booking")
+      .update({ status })
+      .eq("id", id)
+      .select("*, pond:Pond(*), spot:Spot(*)")
+      .single();
+
+    if (error) throw error;
 
     return NextResponse.json(booking);
   } catch (error: any) {

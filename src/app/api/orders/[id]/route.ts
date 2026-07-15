@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { supabase } from "@/lib/supabase-server";
 
 export async function GET(
   request: NextRequest,
@@ -8,16 +8,13 @@ export async function GET(
   try {
     const { id } = await params;
 
-    const order = await prisma.order.findUnique({
-      where: { id },
-      include: {
-        items: { include: { menuItem: true } },
-        payment: true,
-        bookings: { include: { pond: true, spot: true } },
-      },
-    });
+    const { data: order, error } = await supabase
+      .from("Order")
+      .select("*, items:OrderItem(*, menuItem:MenuItem(*)), payment:Payment(*), bookings:Booking(*, pond:Pond(*), spot:Spot(*))")
+      .eq("id", id)
+      .single();
 
-    if (!order) {
+    if (error || !order) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
@@ -47,14 +44,14 @@ export async function PUT(
       );
     }
 
-    const order = await prisma.order.update({
-      where: { id },
-      data: { status },
-      include: {
-        items: { include: { menuItem: true } },
-        payment: true,
-      },
-    });
+    const { data: order, error } = await supabase
+      .from("Order")
+      .update({ status })
+      .eq("id", id)
+      .select("*, items:OrderItem(*, menuItem:MenuItem(*)), payment:Payment(*)")
+      .single();
+
+    if (error) throw error;
 
     return NextResponse.json(order);
   } catch (error: any) {

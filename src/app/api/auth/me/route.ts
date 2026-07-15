@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { supabase } from "@/lib/supabase-server";
 import { getUserFromRequest } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
@@ -33,14 +33,19 @@ export async function PUT(request: NextRequest) {
 
     const { name, language, marketingConsent } = await request.json();
 
-    const updated = await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        ...(name !== undefined && { name }),
-        ...(language !== undefined && { language }),
-        ...(marketingConsent !== undefined && { marketingConsent }),
-      },
-    });
+    const updateData: Record<string, any> = {};
+    if (name !== undefined) updateData.name = name;
+    if (language !== undefined) updateData.language = language;
+    if (marketingConsent !== undefined) updateData.marketingConsent = marketingConsent;
+
+    const { data: updated, error } = await supabase
+      .from("User")
+      .update(updateData)
+      .eq("id", user.id)
+      .select("*")
+      .single();
+
+    if (error) throw error;
 
     return NextResponse.json(updated);
   } catch (error: any) {
