@@ -220,6 +220,20 @@
     "confirmAction": "Confirm Action",
     "cancelAction": "Cancel Action",
     "leisurePond": "Leisure Pond",
-    "competitionPond": "Competition Pond"
+    "competitionPond": "Competition Pond",
+    "viewSite": "View Site",
+    "collectPayment": "Collect",
+    "paymentSettings": "Payment Settings",
+    "paymentAmount": "Amount to Collect",
+    "generateQR": "Generate QR to Collect",
+    "promptpayPhone": "PromptPay Phone Number",
+    "promptpayPhoneHint": "Enter the Thai phone number registered with PromptPay (e.g. 0812345678)",
+    "uploadImage": "Upload Image",
+    "imageTooLarge": "Image must be under 2MB",
+    "setPromptPayPhone": "Please set your PromptPay phone number in Settings first",
+    "uploadAlipayQr": "Please upload your Alipay QR code in Settings first",
+    "uploadWechatQr": "Please upload your WeChat Pay QR code in Settings first",
+    "scanAndPayHint": "Customer scans and enters the amount to pay",
+    "promptpayDynamicHint": "Amount is pre-filled, customer confirms to pay"
   }
 }

@@ -220,6 +220,20 @@
     "confirmAction": "ยืนยันการดำเนินการ",
     "cancelAction": "ยกเลิกการดำเนินการ",
     "leisurePond": "บ่อพักผ่อน",
-    "competitionPond": "บ่อแข่งขัน"
+    "competitionPond": "บ่อแข่งขัน",
+    "viewSite": "ดูเว็บไซต์",
+    "collectPayment": "เก็บเงิน",
+    "paymentSettings": "ตั้งค่าการชำระเงิน",
+    "paymentAmount": "จำนวนเงินที่เก็บ",
+    "generateQR": "สร้าง QR เก็บเงิน",
+    "promptpayPhone": "เบอร์โทร PromptPay",
+    "promptpayPhoneHint": "กรอกเบอร์โทรศัพท์ไทยที่ลงทะเบียน PromptPay (เช่น 0812345678)",
+    "uploadImage": "อัปโหลดรูป",
+    "imageTooLarge": "รูปต้องไม่เกิน 2MB",
+    "setPromptPayPhone": "กรุณาตั้งค่าเบอร์ PromptPay ก่อน",
+    "uploadAlipayQr": "กรุณาอัปโหลด QR Alipay ในการตั้งค่าก่อน",
+    "uploadWechatQr": "กรุณาอัปโหลด QR WeChat Pay ในการตั้งค่าก่อน",
+    "scanAndPayHint": "ลูกค้าสแกนแล้วใส่จำนวนเงินเอง",
+    "promptpayDynamicHint": "จำนวนเงินถูกกรอกอัตโนมัติ ลูกค้ายืนยันเพื่อชำระ"
   }
 }

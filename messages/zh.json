@@ -220,6 +220,20 @@
     "confirmAction": "确认操作",
     "cancelAction": "取消操作",
     "leisurePond": "休闲塘",
-    "competitionPond": "竞赛塘"
+    "competitionPond": "竞赛塘",
+    "viewSite": "查看网站",
+    "collectPayment": "收款",
+    "paymentSettings": "支付设置",
+    "paymentAmount": "收款金额",
+    "generateQR": "生成二维码收款",
+    "promptpayPhone": "PromptPay 手机号",
+    "promptpayPhoneHint": "输入注册 PromptPay 的泰国手机号（如 0812345678）",
+    "uploadImage": "上传图片",
+    "imageTooLarge": "图片大小不能超过 2MB",
+    "setPromptPayPhone": "请先在设置中填写 PromptPay 手机号",
+    "uploadAlipayQr": "请先在设置中上传支付宝收款码",
+    "uploadWechatQr": "请先在设置中上传微信收款码",
+    "scanAndPayHint": "请客户扫码后输入金额支付",
+    "promptpayDynamicHint": "扫码后自动显示金额，客户确认即可支付"
   }
 }

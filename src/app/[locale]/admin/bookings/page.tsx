@@ -71,12 +71,23 @@ export default function AdminBookingsPage() {
     <div className="mx-auto max-w-lg px-4 py-6">
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-2xl font-bold text-neutral-900">{t('admin.bookings')}</h2>
-        <Link
-          href="/admin"
-          className="rounded-lg bg-neutral-100 px-3 py-1.5 text-xs font-medium text-neutral-600 hover:bg-neutral-200"
-        >
-          {t('common.back')}
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/"
+            className="flex items-center gap-1 rounded-lg bg-primary-50 px-3 py-1.5 text-xs font-medium text-primary-700 hover:bg-primary-100"
+          >
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12H3m0 0l4-4m-4 4l4 4m12-4a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            {t('admin.viewSite')}
+          </Link>
+          <Link
+            href="/admin"
+            className="rounded-lg bg-neutral-100 px-3 py-1.5 text-xs font-medium text-neutral-600 hover:bg-neutral-200"
+          >
+            {t('common.back')}
+          </Link>
+        </div>
       </div>
 
       {/* Filters */}
