@@ -1,7 +1,8 @@
 'use client';
 
 import { useTranslations, useLocale } from 'next-intl';
-import { Link } from '@/i18n/routing';
+import { useState } from 'react';
+import { Link, useRouter } from '@/i18n/routing';
 
 const ponds = [
   {
@@ -117,6 +118,23 @@ const features = [
 export default function HomePage() {
   const t = useTranslations();
   const locale = useLocale();
+  const router = useRouter();
+  const [showAdminModal, setShowAdminModal] = useState(false);
+  const [adminUsername, setAdminUsername] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
+  const [adminError, setAdminError] = useState('');
+
+  const handleAdminAccess = () => {
+    if (adminUsername === 'hook' && adminPassword === 'Happy@2026') {
+      setShowAdminModal(false);
+      setAdminUsername('');
+      setAdminPassword('');
+      setAdminError('');
+      router.push('/admin');
+    } else {
+      setAdminError(t('admin.loginFailed'));
+    }
+  };
 
   return (
     <div className="mx-auto max-w-lg">
@@ -245,6 +263,74 @@ export default function HomePage() {
           ))}
         </div>
       </section>
+
+      {/* Admin Access */}
+      <section className="px-4 pb-6">
+        <button
+          onClick={() => setShowAdminModal(true)}
+          className="mx-auto flex items-center gap-1.5 text-xs text-neutral-400 transition hover:text-neutral-600"
+        >
+          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+          </svg>
+          {t('common.admin')}
+        </button>
+      </section>
+
+      {/* Admin Login Modal */}
+      {showAdminModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4" onClick={() => setShowAdminModal(false)}>
+          <div
+            className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-bold text-neutral-900">{t('admin.loginTitle')}</h2>
+              <button
+                onClick={() => setShowAdminModal(false)}
+                className="rounded-lg p-1 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600"
+              >
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-neutral-700">
+                  {t('admin.loginUsername')}
+                </label>
+                <input
+                  type="text"
+                  value={adminUsername}
+                  onChange={(e) => setAdminUsername(e.target.value)}
+                  className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  onKeyDown={(e) => e.key === 'Enter' && handleAdminAccess()}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-neutral-700">
+                  {t('admin.loginPassword')}
+                </label>
+                <input
+                  type="password"
+                  value={adminPassword}
+                  onChange={(e) => setAdminPassword(e.target.value)}
+                  className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  onKeyDown={(e) => e.key === 'Enter' && handleAdminAccess()}
+                />
+              </div>
+              {adminError && <p className="text-xs text-error-600">{adminError}</p>}
+              <button
+                onClick={handleAdminAccess}
+                className="w-full rounded-xl bg-primary-700 py-3 text-sm font-semibold text-white shadow-brand transition hover:bg-primary-800"
+              >
+                {t('common.login')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

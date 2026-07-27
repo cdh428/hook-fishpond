@@ -86,7 +86,7 @@ const adminTabs = [
 
 export default function AdminDashboard() {
   const t = useTranslations();
-  const [isLoggedIn, setIsLoggedIn] = useState(true); // Initially logged in for demo
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -97,8 +97,8 @@ export default function AdminDashboard() {
       setLoginError(t('admin.loginFailed'));
       return;
     }
-    // Demo auth - accept admin/admin
-    if (username === 'admin' && password === 'admin') {
+    // Auth - accept hook/Happy@2026
+    if (username === 'hook' && password === 'Happy@2026') {
       setIsLoggedIn(true);
       setShowLogin(false);
       setLoginError('');
@@ -146,9 +146,6 @@ export default function AdminDashboard() {
               {t('common.login')}
             </button>
           </div>
-          <p className="mt-4 text-center text-xs text-neutral-400">
-            Demo: admin / admin
-          </p>
         </div>
       </div>
     );
