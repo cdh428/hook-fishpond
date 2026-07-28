@@ -147,6 +147,9 @@
     "preparing": "กำลังเตรียม",
     "ready": "พร้อมแล้ว",
     "cancelled": "ยกเลิกแล้ว",
+    "confirmed": "ยืนยันแล้ว",
+    "refunded": "คืนเงินแล้ว",
+    "successful": "สำเร็จ",
     "date": "วันที่สั่ง",
     "details": "รายละเอียด",
     "all": "ทั้งหมด",
@@ -197,6 +200,10 @@
     "itemPrice": "ราคา",
     "itemDescription": "รายละเอียด",
     "itemImage": "รูปภาพรายการ",
+    "nameZhPlaceholder": "ชื่อภาษาจีน",
+    "nameEnPlaceholder": "ชื่อภาษาอังกฤษ",
+    "nameThPlaceholder": "ชื่อภาษาไทย",
+    "imageUploadHint": "สูงสุด 500KB, รูปแบบ WebP",
     "uploadImage": "อัปโหลดรูปภาพ",
     "isPopular": "ยอดนิยม",
     "isVegetarian": "มังสวิรัติ",
@@ -234,6 +241,7 @@
     "uploadAlipayQr": "กรุณาอัปโหลด QR Alipay ในการตั้งค่าก่อน",
     "uploadWechatQr": "กรุณาอัปโหลด QR WeChat Pay ในการตั้งค่าก่อน",
     "scanAndPayHint": "ลูกค้าสแกนแล้วใส่จำนวนเงินเอง",
-    "promptpayDynamicHint": "จำนวนเงินถูกกรอกอัตโนมัติ ลูกค้ายืนยันเพื่อชำระ"
+    "promptpayDynamicHint": "จำนวนเงินถูกกรอกอัตโนมัติ ลูกค้ายืนยันเพื่อชำระ",
+    "enterAmountFirst": "กรุณาใส่จำนวนเงินก่อน"
   }
 }

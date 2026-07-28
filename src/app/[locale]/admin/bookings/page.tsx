@@ -8,10 +8,10 @@ interface Booking {
   id: string;
   customer: string;
   phone: string;
-  pond: string;
+  pondKey: 'admin.leisurePond' | 'admin.competitionPond';
   spot: number | null;
   date: string;
-  time: string;
+  timeKey: 'booking.morning' | 'booking.afternoon' | 'booking.evening' | 'booking.fullDay';
   participants: number | null;
   groupName: string | null;
   price: number;
@@ -19,11 +19,11 @@ interface Booking {
 }
 
 const demoBookings: Booking[] = [
-  { id: 'BK-001', customer: '张三', phone: '+86 13800138000', pond: '休闲塘', spot: 12, date: '2026-03-20', time: '上午', participants: null, groupName: null, price: 100, status: 'PENDING' },
-  { id: 'BK-002', customer: 'John', phone: '+66 812345678', pond: '竞赛塘', spot: null, date: '2026-03-20', time: '全天', participants: 15, groupName: 'Team Alpha', price: 7500, status: 'CONFIRMED' },
-  { id: 'BK-003', customer: 'สมชาย', phone: '+66 998765432', pond: '休闲塘', spot: 8, date: '2026-03-20', time: '下午', participants: null, groupName: null, price: 100, status: 'PENDING' },
-  { id: 'BK-004', customer: '李四', phone: '+86 13900139000', pond: '竞赛塘', spot: null, date: '2026-03-21', time: '全天', participants: 12, groupName: '钓鱼小队', price: 6000, status: 'CANCELLED' },
-  { id: 'BK-005', customer: 'Peter', phone: '+66 855556789', pond: '休闲塘', spot: 25, date: '2026-03-21', time: '全天', participants: null, groupName: null, price: 100, status: 'PENDING' },
+  { id: 'BK-001', customer: '张三', phone: '+86 13800138000', pondKey: 'admin.leisurePond', spot: 12, date: '2026-03-20', timeKey: 'booking.morning', participants: null, groupName: null, price: 100, status: 'PENDING' },
+  { id: 'BK-002', customer: 'John', phone: '+66 812345678', pondKey: 'admin.competitionPond', spot: null, date: '2026-03-20', timeKey: 'booking.fullDay', participants: 15, groupName: 'Team Alpha', price: 7500, status: 'CONFIRMED' },
+  { id: 'BK-003', customer: 'สมชาย', phone: '+66 998765432', pondKey: 'admin.leisurePond', spot: 8, date: '2026-03-20', timeKey: 'booking.afternoon', participants: null, groupName: null, price: 100, status: 'PENDING' },
+  { id: 'BK-004', customer: '李四', phone: '+86 13900139000', pondKey: 'admin.competitionPond', spot: null, date: '2026-03-21', timeKey: 'booking.fullDay', participants: 12, groupName: '钓鱼小队', price: 6000, status: 'CANCELLED' },
+  { id: 'BK-005', customer: 'Peter', phone: '+66 855556789', pondKey: 'admin.leisurePond', spot: 25, date: '2026-03-21', timeKey: 'booking.fullDay', participants: null, groupName: null, price: 100, status: 'PENDING' },
 ];
 
 const statusColors: Record<string, string> = {
@@ -34,13 +34,13 @@ const statusColors: Record<string, string> = {
 
 const statusI18n: Record<string, string> = {
   PENDING: 'orders.pending',
-  CONFIRMED: 'common.confirm',
+  CONFIRMED: 'orders.confirmed',
   CANCELLED: 'orders.cancelled',
 };
 
 const pondColors: Record<string, string> = {
-  '休闲塘': 'bg-primary-50 text-primary-700',
-  '竞赛塘': 'bg-accent-50 text-accent-700',
+  'admin.leisurePond': 'bg-primary-50 text-primary-700',
+  'admin.competitionPond': 'bg-accent-50 text-accent-700',
 };
 
 export default function AdminBookingsPage() {
@@ -102,7 +102,7 @@ export default function AdminBookingsPage() {
           {[
             { key: 'all', label: t('orders.all') },
             { key: 'PENDING', label: t('orders.pending') },
-            { key: 'CONFIRMED', label: t('common.confirm') },
+            { key: 'CONFIRMED', label: t('orders.confirmed') },
             { key: 'CANCELLED', label: t('orders.cancelled') },
           ].map((f) => (
             <button
@@ -137,8 +137,8 @@ export default function AdminBookingsPage() {
               </div>
 
               <div className="mb-2 flex items-center gap-2">
-                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${pondColors[booking.pond] || 'bg-neutral-100 text-neutral-600'}`}>
-                  {booking.pond}
+                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${pondColors[booking.pondKey] || 'bg-neutral-100 text-neutral-600'}`}>
+                  {t(booking.pondKey)}
                 </span>
                 {booking.spot !== null && (
                   <span className="text-xs text-neutral-500">#{booking.spot}</span>
@@ -156,7 +156,7 @@ export default function AdminBookingsPage() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-neutral-500">{t('orders.date')}</span>
-                  <span className="text-neutral-900">{booking.date} | {booking.time}</span>
+                  <span className="text-neutral-900">{booking.date} | {t(booking.timeKey)}</span>
                 </div>
                 {booking.groupName && (
                   <div className="flex justify-between">

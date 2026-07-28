@@ -12,7 +12,7 @@ interface BookingItem {
   pondName_th: string;
   spotNumber: number | null;
   date: string;
-  timeSlot: string;
+  timeSlotKey: 'booking.morning' | 'booking.afternoon' | 'booking.evening' | 'booking.fullDay';
   price: number;
 }
 
@@ -37,7 +37,7 @@ const demoItems: CartItem[] = [
     pondName_th: 'บ่อพักผ่อน',
     spotNumber: 12,
     date: '2026-03-20',
-    timeSlot: '上午',
+    timeSlotKey: 'booking.morning',
     price: 100,
   },
   {
@@ -180,7 +180,7 @@ export default function CartPage() {
                         {getLocaleName(item)}
                       </h4>
                       <p className="text-xs text-neutral-500">
-                        {item.date} | {item.timeSlot}
+                        {item.date} | {t(item.timeSlotKey)}
                         {item.spotNumber !== null && ` | #${item.spotNumber}`}
                       </p>
                     </div>

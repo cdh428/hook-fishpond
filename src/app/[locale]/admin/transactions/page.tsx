@@ -180,7 +180,7 @@ export default function AdminTransactionsPage() {
               <div className="ml-2 text-right shrink-0">
                 <p className="text-sm font-bold text-neutral-900">฿{tx.amount.toLocaleString()}</p>
                 <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${statusColors[tx.status]}`}>
-                  {tx.status === 'SUCCESSFUL' ? t('common.success') : tx.status === 'PENDING' ? t('orders.pending') : t('orders.cancelled')}
+                  {tx.status === 'SUCCESSFUL' ? t('orders.successful') : tx.status === 'PENDING' ? t('orders.pending') : t('orders.refunded')}
                 </span>
               </div>
             </div>

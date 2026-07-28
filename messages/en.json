@@ -147,6 +147,9 @@
     "preparing": "Preparing",
     "ready": "Ready",
     "cancelled": "Cancelled",
+    "confirmed": "Confirmed",
+    "refunded": "Refunded",
+    "successful": "Successful",
     "date": "Order Date",
     "details": "Order Details",
     "all": "All",
@@ -197,6 +200,10 @@
     "itemPrice": "Price",
     "itemDescription": "Description",
     "itemImage": "Item Image",
+    "nameZhPlaceholder": "Chinese Name",
+    "nameEnPlaceholder": "English Name",
+    "nameThPlaceholder": "Thai Name",
+    "imageUploadHint": "Max 500KB, WebP format",
     "uploadImage": "Upload Image",
     "isPopular": "Popular",
     "isVegetarian": "Vegetarian",
@@ -234,6 +241,7 @@
     "uploadAlipayQr": "Please upload your Alipay QR code in Settings first",
     "uploadWechatQr": "Please upload your WeChat Pay QR code in Settings first",
     "scanAndPayHint": "Customer scans and enters the amount to pay",
-    "promptpayDynamicHint": "Amount is pre-filled, customer confirms to pay"
+    "promptpayDynamicHint": "Amount is pre-filled, customer confirms to pay",
+    "enterAmountFirst": "Please enter an amount first"
   }
 }

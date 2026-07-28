@@ -140,7 +140,7 @@ export default function BookingPage() {
             }`}
           >
             <span className="block">{t('pond.leisure')}</span>
-            <span className="block text-xs opacity-80">100 ฿/{t('common.perSpot')}</span>
+            <span className="block text-xs opacity-80">{t('home.leisurePrice')}</span>
           </button>
           <button
             onClick={() => {
@@ -154,7 +154,7 @@ export default function BookingPage() {
             }`}
           >
             <span className="block">{t('pond.competition')}</span>
-            <span className="block text-xs opacity-80">500 ฿/{t('common.perSpot')}/{t('common.perDay')}</span>
+            <span className="block text-xs opacity-80">{t('home.competitionPrice')}</span>
           </button>
         </div>
         <p className="mt-2 text-xs text-neutral-500">

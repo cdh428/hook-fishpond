@@ -16,9 +16,9 @@ const defaultUser = {
 
 interface Booking {
   id: string;
-  pondName: string;
+  pondKey: 'admin.leisurePond' | 'admin.competitionPond';
   date: string;
-  timeSlot: string;
+  timeSlotKey: 'booking.morning' | 'booking.afternoon' | 'booking.evening' | 'booking.fullDay';
   spotNumber: number | null;
   price: number;
   status: string;
@@ -28,25 +28,25 @@ interface Order {
   id: string;
   date: string;
   total: number;
-  items: { name: string; qty: number }[];
+  items: { name_zh: string; name_en: string; name_th: string; qty: number }[];
   status: string;
 }
 
 const demoBookings: Booking[] = [
   {
     id: 'BK-001',
-    pondName: '休闲塘',
+    pondKey: 'admin.leisurePond',
     date: '2026-03-20',
-    timeSlot: '上午',
+    timeSlotKey: 'booking.morning',
     spotNumber: 12,
     price: 100,
     status: 'PENDING',
   },
   {
     id: 'BK-002',
-    pondName: '竞赛塘',
+    pondKey: 'admin.competitionPond',
     date: '2026-03-15',
-    timeSlot: '全天',
+    timeSlotKey: 'booking.fullDay',
     spotNumber: null,
     price: 7500,
     status: 'CONFIRMED',
@@ -59,8 +59,8 @@ const demoOrders: Order[] = [
     date: '2026-03-20 14:30',
     total: 480,
     items: [
-      { name: '冬阴功汤', qty: 2 },
-      { name: '烤鸡翅', qty: 1 },
+      { name_zh: '冬阴功汤', name_en: 'Tom Yum Goong', name_th: 'ต้มยำกุ้ง', qty: 2 },
+      { name_zh: '烤鸡翅', name_en: 'Grilled Wings', name_th: 'ปีกไก่ย่าง', qty: 1 },
     ],
     status: 'PREPARING',
   },
@@ -68,7 +68,7 @@ const demoOrders: Order[] = [
     id: 'FP-002',
     date: '2026-03-20 15:00',
     total: 150,
-    items: [{ name: '泰式奶茶', qty: 3 }],
+    items: [{ name_zh: '泰式奶茶', name_en: 'Thai Iced Tea', name_th: 'ชาเย็น', qty: 3 }],
     status: 'PAID',
   },
 ];
@@ -294,14 +294,14 @@ export default function ProfilePage() {
                       <div className="mb-2 flex items-center justify-between">
                         <span className="text-xs text-neutral-400">{booking.id}</span>
                         <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusColors[booking.status]}`}>
-                          {booking.status === 'PENDING' ? t('orders.pending') : booking.status === 'CONFIRMED' ? t('common.confirm') : t('orders.cancelled')}
+                          {booking.status === 'PENDING' ? t('orders.pending') : booking.status === 'CONFIRMED' ? t('orders.confirmed') : t('orders.cancelled')}
                         </span>
                       </div>
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-sm font-semibold text-neutral-900">{booking.pondName}</p>
+                          <p className="text-sm font-semibold text-neutral-900">{t(booking.pondKey)}</p>
                           <p className="text-xs text-neutral-500">
-                            {booking.date} | {booking.timeSlot}
+                            {booking.date} | {t(booking.timeSlotKey)}
                             {booking.spotNumber && ` | #${booking.spotNumber}`}
                           </p>
                         </div>
@@ -327,11 +327,14 @@ export default function ProfilePage() {
                         </span>
                       </div>
                       <div className="space-y-1">
-                        {order.items.map((item, idx) => (
+                        {order.items.map((item, idx) => {
+                          const itemName = locale === 'en' ? item.name_en : locale === 'th' ? item.name_th : item.name_zh;
+                          return (
                           <div key={idx} className="flex justify-between text-sm">
-                            <span className="text-neutral-700">{item.name} × {item.qty}</span>
+                            <span className="text-neutral-700">{itemName} × {item.qty}</span>
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                       <div className="mt-2 flex items-center justify-between border-t border-neutral-100 pt-2">
                         <span className="text-xs text-neutral-400">{order.date}</span>

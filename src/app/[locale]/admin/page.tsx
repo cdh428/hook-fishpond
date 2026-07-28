@@ -48,9 +48,9 @@ const stats = [
 ];
 
 const recentBookings = [
-  { id: 'BK-001', customer: '张三', pond: '休闲塘', spot: 12, date: '2026-03-20', time: '上午', price: 100, status: 'PENDING' },
-  { id: 'BK-002', customer: 'John', pond: '竞赛塘', spot: null, date: '2026-03-20', time: '全天', price: 7500, status: 'CONFIRMED' },
-  { id: 'BK-003', customer: 'สมชาย', pond: '休闲塘', spot: 8, date: '2026-03-20', time: '下午', price: 100, status: 'PENDING' },
+  { id: 'BK-001', customer: '张三', pondKey: 'admin.leisurePond' as const, spot: 12, date: '2026-03-20', timeKey: 'booking.morning' as const, price: 100, status: 'PENDING' },
+  { id: 'BK-002', customer: 'John', pondKey: 'admin.competitionPond' as const, spot: null, date: '2026-03-20', timeKey: 'booking.fullDay' as const, price: 7500, status: 'CONFIRMED' },
+  { id: 'BK-003', customer: 'สมชาย', pondKey: 'admin.leisurePond' as const, spot: 8, date: '2026-03-20', timeKey: 'booking.afternoon' as const, price: 100, status: 'PENDING' },
 ];
 
 const recentOrders = [
@@ -70,7 +70,7 @@ const statusColors: Record<string, string> = {
 
 const statusI18n: Record<string, string> = {
   PENDING: 'orders.pending',
-  CONFIRMED: 'common.confirm',
+  CONFIRMED: 'orders.confirmed',
   CANCELLED: 'orders.cancelled',
   PAID: 'orders.paid',
   PREPARING: 'orders.preparing',
@@ -212,10 +212,10 @@ export default function AdminDashboard() {
             <div key={b.id} className="flex items-center justify-between rounded-lg bg-neutral-50 px-3 py-2">
               <div className="min-w-0">
                 <p className="text-sm font-medium text-neutral-900">
-                  {b.customer} — {b.pond}
+                  {b.customer} — {t(b.pondKey)}
                 </p>
                 <p className="text-xs text-neutral-500">
-                  {b.date} | {b.time}{b.spot ? ` | #${b.spot}` : ''}
+                  {b.date} | {t(b.timeKey)}{b.spot ? ` | #${b.spot}` : ''}
                 </p>
               </div>
               <div className="ml-2 text-right shrink-0">

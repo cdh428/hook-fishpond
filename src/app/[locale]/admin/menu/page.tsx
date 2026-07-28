@@ -314,19 +314,19 @@ export default function AdminMenuPage() {
                 <option value="DRINK">{t('admin.drinkType')}</option>
               </select>
               <input
-                placeholder="中文名"
+                placeholder={t('admin.nameZhPlaceholder')}
                 value={catForm.name_zh}
                 onChange={(e) => setCatForm((f) => ({ ...f, name_zh: e.target.value }))}
                 className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm"
               />
               <input
-                placeholder="English Name"
+                placeholder={t('admin.nameEnPlaceholder')}
                 value={catForm.name_en}
                 onChange={(e) => setCatForm((f) => ({ ...f, name_en: e.target.value }))}
                 className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm"
               />
               <input
-                placeholder="ชื่อภาษาไทย"
+                placeholder={t('admin.nameThPlaceholder')}
                 value={catForm.name_th}
                 onChange={(e) => setCatForm((f) => ({ ...f, name_th: e.target.value }))}
                 className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm"
@@ -367,19 +367,19 @@ export default function AdminMenuPage() {
                 ))}
               </select>
               <input
-                placeholder="中文名"
+                placeholder={t('admin.nameZhPlaceholder')}
                 value={itemForm.name_zh}
                 onChange={(e) => setItemForm((f) => ({ ...f, name_zh: e.target.value }))}
                 className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm"
               />
               <input
-                placeholder="English Name"
+                placeholder={t('admin.nameEnPlaceholder')}
                 value={itemForm.name_en}
                 onChange={(e) => setItemForm((f) => ({ ...f, name_en: e.target.value }))}
                 className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm"
               />
               <input
-                placeholder="ชื่อภาษาไทย"
+                placeholder={t('admin.nameThPlaceholder')}
                 value={itemForm.name_th}
                 onChange={(e) => setItemForm((f) => ({ ...f, name_th: e.target.value }))}
                 className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm"
@@ -429,7 +429,7 @@ export default function AdminMenuPage() {
                 </div>
                 <div className="rounded-lg border-2 border-dashed border-neutral-200 p-4 text-center">
                   <p className="text-xs text-neutral-400">{t('admin.uploadImage')}</p>
-                  <p className="mt-1 text-xs text-neutral-300">Max 500KB, WebP format</p>
+                  <p className="mt-1 text-xs text-neutral-300">{t('admin.imageUploadHint')}</p>
                 </div>
               </div>
               <button

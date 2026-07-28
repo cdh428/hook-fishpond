@@ -217,13 +217,13 @@ export default function AdminCollectPage() {
           {/* Alipay QR Upload */}
           <div>
             <label className="mb-1 block text-sm font-medium text-neutral-700">
-              {t('payment.alipay')} QR
+              {t('payment.alipay')} {t('common.image')}
             </label>
             <div className="flex items-center gap-3">
               {config.alipayQrImage ? (
                 <img
                   src={config.alipayQrImage}
-                  alt="Alipay QR"
+                  alt={t('payment.alipay')}
                   className="h-16 w-16 rounded-lg border border-neutral-200 object-cover"
                 />
               ) : (
@@ -262,13 +262,13 @@ export default function AdminCollectPage() {
           {/* WeChat Pay QR Upload */}
           <div>
             <label className="mb-1 block text-sm font-medium text-neutral-700">
-              {t('payment.wechatPay')} QR
+              {t('payment.wechatPay')} {t('common.image')}
             </label>
             <div className="flex items-center gap-3">
               {config.wechatQrImage ? (
                 <img
                   src={config.wechatQrImage}
-                  alt="WeChat Pay QR"
+                  alt={t('payment.wechatPay')}
                   className="h-16 w-16 rounded-lg border border-neutral-200 object-cover"
                 />
               ) : (
@@ -400,7 +400,7 @@ export default function AdminCollectPage() {
               <div className="rounded-2xl border-2 border-neutral-100 bg-white p-4">
                 <img
                   src={qrDataUrl}
-                  alt="Payment QR Code"
+                  alt={t('admin.generateQR')}
                   className="h-64 w-64"
                 />
               </div>

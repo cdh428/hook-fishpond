@@ -147,6 +147,9 @@
     "preparing": "准备中",
     "ready": "已完成",
     "cancelled": "已取消",
+    "confirmed": "已确认",
+    "refunded": "已退款",
+    "successful": "成功",
     "date": "下单时间",
     "details": "订单详情",
     "all": "全部",
@@ -197,6 +200,10 @@
     "itemPrice": "价格",
     "itemDescription": "描述",
     "itemImage": "菜品图片",
+    "nameZhPlaceholder": "中文名",
+    "nameEnPlaceholder": "英文名",
+    "nameThPlaceholder": "泰文名",
+    "imageUploadHint": "最大500KB，WebP格式",
     "uploadImage": "上传图片",
     "isPopular": "热门推荐",
     "isVegetarian": "素食",
@@ -234,6 +241,7 @@
     "uploadAlipayQr": "请先在设置中上传支付宝收款码",
     "uploadWechatQr": "请先在设置中上传微信收款码",
     "scanAndPayHint": "请客户扫码后输入金额支付",
-    "promptpayDynamicHint": "扫码后自动显示金额，客户确认即可支付"
+    "promptpayDynamicHint": "扫码后自动显示金额，客户确认即可支付",
+    "enterAmountFirst": "请输入收款金额"
   }
 }

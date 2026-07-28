@@ -18,7 +18,7 @@ interface BookingInfo {
   pondName_th: string;
   spotNumber: number | null;
   date: string;
-  timeSlot: string;
+  timeSlotKey: 'booking.morning' | 'booking.afternoon' | 'booking.evening' | 'booking.fullDay';
 }
 
 interface Order {
@@ -46,7 +46,7 @@ const demoOrders: Order[] = [
       pondName_th: 'บ่อพักผ่อน',
       spotNumber: 12,
       date: '2026-03-20',
-      timeSlot: '上午',
+      timeSlotKey: 'booking.morning',
     },
   },
   {
@@ -74,7 +74,7 @@ const demoOrders: Order[] = [
       pondName_th: 'บ่อแข่งขัน',
       spotNumber: null,
       date: '2026-03-19',
-      timeSlot: '全天',
+      timeSlotKey: 'booking.fullDay',
     },
   },
 ];
@@ -185,7 +185,7 @@ export default function OrdersPage() {
                       {getBookingLocale(order.booking).pondName}
                     </span>
                     <span className="ml-2 text-primary-500">
-                      {order.booking.date} | {order.booking.timeSlot}
+                      {order.booking.date} | {t(order.booking.timeSlotKey)}
                       {order.booking.spotNumber !== null && ` | #${order.booking.spotNumber}`}
                     </span>
                   </div>
