@@ -1,30 +1,9 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from '@/i18n/routing';
-
-interface Booking {
-  id: string;
-  customer: string;
-  phone: string;
-  pondKey: 'admin.leisurePond' | 'admin.competitionPond';
-  spot: number | null;
-  date: string;
-  timeKey: 'booking.morning' | 'booking.afternoon' | 'booking.evening' | 'booking.fullDay';
-  participants: number | null;
-  groupName: string | null;
-  price: number;
-  status: 'PENDING' | 'CONFIRMED' | 'CANCELLED';
-}
-
-const demoBookings: Booking[] = [
-  { id: 'BK-001', customer: '张三', phone: '+86 13800138000', pondKey: 'admin.leisurePond', spot: 12, date: '2026-03-20', timeKey: 'booking.morning', participants: null, groupName: null, price: 100, status: 'PENDING' },
-  { id: 'BK-002', customer: 'John', phone: '+66 812345678', pondKey: 'admin.competitionPond', spot: null, date: '2026-03-20', timeKey: 'booking.fullDay', participants: 15, groupName: 'Team Alpha', price: 7500, status: 'CONFIRMED' },
-  { id: 'BK-003', customer: 'สมชาย', phone: '+66 998765432', pondKey: 'admin.leisurePond', spot: 8, date: '2026-03-20', timeKey: 'booking.afternoon', participants: null, groupName: null, price: 100, status: 'PENDING' },
-  { id: 'BK-004', customer: '李四', phone: '+86 13900139000', pondKey: 'admin.competitionPond', spot: null, date: '2026-03-21', timeKey: 'booking.fullDay', participants: 12, groupName: '钓鱼小队', price: 6000, status: 'CANCELLED' },
-  { id: 'BK-005', customer: 'Peter', phone: '+66 855556789', pondKey: 'admin.leisurePond', spot: 25, date: '2026-03-21', timeKey: 'booking.fullDay', participants: null, groupName: null, price: 100, status: 'PENDING' },
-];
+import { fetchAdminBookings, updateBookingStatus } from '@/lib/api-client';
 
 const statusColors: Record<string, string> = {
   PENDING: 'bg-warning-100 text-warning-600',
@@ -39,32 +18,78 @@ const statusI18n: Record<string, string> = {
 };
 
 const pondColors: Record<string, string> = {
-  'admin.leisurePond': 'bg-primary-50 text-primary-700',
-  'admin.competitionPond': 'bg-accent-50 text-accent-700',
+  LEISURE: 'bg-primary-50 text-primary-700',
+  COMPETITION: 'bg-accent-50 text-accent-700',
 };
+
+const timeSlotKey: Record<string, string> = {
+  MORNING: 'booking.morning',
+  AFTERNOON: 'booking.afternoon',
+  EVENING: 'booking.evening',
+  FULL_DAY: 'booking.fullDay',
+};
+
+const pondKeyForType = (type: string) =>
+  type === 'COMPETITION' ? 'admin.competitionPond' : 'admin.leisurePond';
 
 export default function AdminBookingsPage() {
   const t = useTranslations();
-  const [bookings, setBookings] = useState(demoBookings);
+  const [bookings, setBookings] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [dateFilter, setDateFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
 
-  const filtered = bookings.filter((b) => {
-    if (dateFilter && b.date !== dateFilter) return false;
-    if (statusFilter !== 'all' && b.status !== statusFilter) return false;
-    return true;
-  });
+  const loadBookings = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const params: { startDate?: string; endDate?: string; status?: string } = {};
+      if (dateFilter) {
+        params.startDate = dateFilter;
+        params.endDate = dateFilter;
+      }
+      if (statusFilter !== 'all') params.status = statusFilter;
+      const data = await fetchAdminBookings(params);
+      setBookings(data || []);
+    } catch (err: any) {
+      setError(err?.message || t('common.error'));
+    } finally {
+      setLoading(false);
+    }
+  }, [dateFilter, statusFilter, t]);
 
-  const confirmBooking = (id: string) => {
-    setBookings((prev) =>
-      prev.map((b) => (b.id === id ? { ...b, status: 'CONFIRMED' as const } : b))
-    );
+  useEffect(() => {
+    loadBookings();
+  }, [loadBookings]);
+
+  const confirmBooking = async (id: string) => {
+    setUpdatingId(id);
+    try {
+      await updateBookingStatus(id, 'CONFIRMED');
+      setBookings((prev) =>
+        prev.map((b) => (b.id === id ? { ...b, status: 'CONFIRMED' } : b)),
+      );
+    } catch (err: any) {
+      setError(err?.message || t('common.error'));
+    } finally {
+      setUpdatingId(null);
+    }
   };
 
-  const cancelBooking = (id: string) => {
-    setBookings((prev) =>
-      prev.map((b) => (b.id === id ? { ...b, status: 'CANCELLED' as const } : b))
-    );
+  const cancelBooking = async (id: string) => {
+    setUpdatingId(id);
+    try {
+      await updateBookingStatus(id, 'CANCELLED');
+      setBookings((prev) =>
+        prev.map((b) => (b.id === id ? { ...b, status: 'CANCELLED' } : b)),
+      );
+    } catch (err: any) {
+      setError(err?.message || t('common.error'));
+    } finally {
+      setUpdatingId(null);
+    }
   };
 
   return (
@@ -120,43 +145,53 @@ export default function AdminBookingsPage() {
         </div>
       </div>
 
-      {/* Bookings List */}
-      {filtered.length === 0 ? (
+      {loading ? (
+        <div className="py-20 text-center text-sm text-neutral-400">{t('common.loading')}</div>
+      ) : error ? (
+        <div className="py-20 text-center">
+          <p className="text-sm text-error-600">{error}</p>
+          <button onClick={loadBookings} className="mt-3 rounded-lg bg-primary-700 px-4 py-2 text-xs font-medium text-white">
+            {t('common.retry')}
+          </button>
+        </div>
+      ) : bookings.length === 0 ? (
         <div className="py-20 text-center text-sm text-neutral-400">
           {t('common.noData')}
         </div>
       ) : (
         <div className="space-y-3">
-          {filtered.map((booking) => (
+          {bookings.map((booking) => (
             <div key={booking.id} className="rounded-xl bg-white p-4 shadow-md">
               <div className="mb-2 flex items-center justify-between">
                 <span className="text-xs text-neutral-400">{booking.id}</span>
-                <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${statusColors[booking.status]}`}>
-                  {t(statusI18n[booking.status])}
+                <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${statusColors[booking.status] || 'bg-neutral-100 text-neutral-600'}`}>
+                  {t(statusI18n[booking.status] || 'orders.pending')}
                 </span>
               </div>
 
               <div className="mb-2 flex items-center gap-2">
-                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${pondColors[booking.pondKey] || 'bg-neutral-100 text-neutral-600'}`}>
-                  {t(booking.pondKey)}
+                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${pondColors[booking.pond?.type] || 'bg-neutral-100 text-neutral-600'}`}>
+                  {t(pondKeyForType(booking.pond?.type))}
                 </span>
-                {booking.spot !== null && (
-                  <span className="text-xs text-neutral-500">#{booking.spot}</span>
+                {booking.spot?.number !== undefined && booking.spot?.number !== null && (
+                  <span className="text-xs text-neutral-500">#{booking.spot.number}</span>
                 )}
               </div>
 
               <div className="space-y-1 text-sm">
                 <div className="flex justify-between">
                   <span className="text-neutral-500">{t('admin.customer')}</span>
-                  <span className="font-medium text-neutral-900">{booking.customer}</span>
+                  <span className="font-medium text-neutral-900">{booking.customerName || booking.user?.name || '—'}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-neutral-500">{t('profile.phone')}</span>
-                  <span className="text-xs text-neutral-600">{booking.phone}</span>
+                  <span className="text-xs text-neutral-600">{booking.customerPhone}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-neutral-500">{t('orders.date')}</span>
-                  <span className="text-neutral-900">{booking.date} | {t(booking.timeKey)}</span>
+                  <span className="text-neutral-900">
+                    {booking.date?.slice(0, 10)} | {t(timeSlotKey[booking.timeSlot] || 'booking.fullDay')}
+                  </span>
                 </div>
                 {booking.groupName && (
                   <div className="flex justify-between">
@@ -164,27 +199,29 @@ export default function AdminBookingsPage() {
                     <span className="text-neutral-900">{booking.groupName}</span>
                   </div>
                 )}
-                {booking.participants && (
+                {booking.participantCount && (
                   <div className="flex justify-between">
                     <span className="text-neutral-500">{t('booking.participantCount')}</span>
-                    <span className="text-neutral-900">{booking.participants}</span>
+                    <span className="text-neutral-900">{booking.participantCount}</span>
                   </div>
                 )}
               </div>
 
               <div className="mt-3 flex items-center justify-between border-t border-neutral-100 pt-3">
-                <span className="font-bold text-accent-600">฿{booking.price.toLocaleString()}</span>
+                <span className="font-bold text-accent-600">฿{booking.totalPrice?.toLocaleString()}</span>
                 {booking.status === 'PENDING' && (
                   <div className="flex gap-2">
                     <button
                       onClick={() => cancelBooking(booking.id)}
-                      className="rounded-lg border border-error-200 px-3 py-1.5 text-xs font-medium text-error-600 hover:bg-error-50"
+                      disabled={updatingId === booking.id}
+                      className="rounded-lg border border-error-200 px-3 py-1.5 text-xs font-medium text-error-600 hover:bg-error-50 disabled:opacity-50"
                     >
                       {t('common.cancel')}
                     </button>
                     <button
                       onClick={() => confirmBooking(booking.id)}
-                      className="rounded-lg bg-success-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-success-700"
+                      disabled={updatingId === booking.id}
+                      className="rounded-lg bg-success-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-success-700 disabled:opacity-50"
                     >
                       {t('common.confirm')}
                     </button>

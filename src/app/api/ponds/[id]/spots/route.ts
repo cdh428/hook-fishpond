@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase-server";
+import { prisma } from "@/lib/prisma";
 
 export async function GET(
   request: NextRequest,
@@ -25,44 +25,45 @@ export async function GET(
       );
     }
 
-    const { data: pond, error: pondError } = await supabase
-      .from("Pond")
-      .select("*")
-      .eq("id", id)
-      .single();
+    const pond = await prisma.pond.findUnique({
+      where: { id },
+    });
 
-    if (pondError || !pond) {
+    if (!pond) {
       return NextResponse.json({ error: "Pond not found" }, { status: 404 });
     }
 
-    const { data: spots, error: spotsError } = await supabase
-      .from("Spot")
-      .select("*")
-      .eq("pondId", id)
-      .eq("isActive", true)
-      .order("number", { ascending: true });
-
-    if (spotsError) throw spotsError;
+    const spots = await prisma.spot.findMany({
+      where: {
+        pondId: id,
+        isActive: true,
+      },
+      orderBy: { number: "asc" },
+    });
 
     // Find bookings for this pond on this date (non-cancelled)
     const dateStr = date.toISOString().slice(0, 10);
-    const { data: bookings } = await supabase
-      .from("Booking")
-      .select("spotId, timeSlot")
-      .eq("pondId", id)
-      .gte("date", dateStr + "T00:00:00")
-      .lt("date", dateStr + "T23:59:59")
-      .neq("status", "CANCELLED");
+    const startOfDay = new Date(dateStr + "T00:00:00");
+    const endOfDay = new Date(dateStr + "T23:59:59.999");
+
+    const bookings = await prisma.booking.findMany({
+      where: {
+        pondId: id,
+        date: { gte: startOfDay, lt: endOfDay },
+        status: { not: "CANCELLED" },
+      },
+      select: { spotId: true, timeSlot: true },
+    });
 
     // Build availability map
     const bookedKeys = new Set<string>();
-    for (const b of bookings || []) {
+    for (const b of bookings) {
       if (b.spotId) {
         bookedKeys.add(`${b.spotId}:${b.timeSlot || "FULL_DAY"}`);
       }
     }
 
-    const spotsWithAvailability = (spots || []).map((spot) => {
+    const spotsWithAvailability = spots.map((spot) => {
       const slots =
         pond.type === "LEISURE"
           ? ["MORNING", "AFTERNOON", "EVENING", "FULL_DAY"]

@@ -209,7 +209,36 @@ async function main() {
   }
   console.log(`  ✅ ${itemCount} menu items`);
 
-  // ===== 5. Admin User =====
+  // ===== 5. Dining Tables =====
+  console.log("Creating dining tables...");
+  // HUT (茅草屋) A01-A10, CAFE (咖啡厅) C01-C04
+  const tables: { code: string; area: "HUT" | "CAFE"; n: number }[] = [];
+  for (let i = 1; i <= 10; i++) {
+    tables.push({ code: `A${String(i).padStart(2, "0")}`, area: "HUT", n: i });
+  }
+  for (let i = 1; i <= 4; i++) {
+    tables.push({ code: `C${String(i).padStart(2, "0")}`, area: "CAFE", n: i });
+  }
+
+  for (const t of tables) {
+    const isHut = t.area === "HUT";
+    await prisma.diningTable.upsert({
+      where: { code: t.code },
+      update: {},
+      create: {
+        code: t.code,
+        area: t.area,
+        name_zh: isHut ? `茅草屋 ${t.n}号桌` : `咖啡厅 ${t.n}号桌`,
+        name_en: isHut ? `Hut Table ${t.n}` : `Cafe Table ${t.n}`,
+        name_th: isHut ? `โต๊ะกระท่อม ${t.n}` : `โต๊ะคาเฟ่ ${t.n}`,
+        sortOrder: isHut ? t.n : 100 + t.n,
+        isActive: true,
+      },
+    });
+  }
+  console.log(`  ✅ ${tables.length} dining tables (10 huts + 4 cafe)`);
+
+  // ===== 6. Admin User =====
   console.log("Creating admin user...");
   const hashedPassword = await bcrypt.hash("Admin@2026", 10);
   await prisma.adminUser.upsert({

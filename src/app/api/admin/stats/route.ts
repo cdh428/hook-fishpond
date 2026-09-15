@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase-server";
+import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
@@ -12,45 +12,42 @@ export async function GET(request: NextRequest) {
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-    const todayStartStr = todayStart.toISOString();
-    const todayEndStr = todayEnd.toISOString();
 
     // Today's bookings count (non-cancelled)
-    const { count: todayBookings } = await supabase
-      .from("Booking")
-      .select("*", { count: "exact", head: true })
-      .gte("createdAt", todayStartStr)
-      .lt("createdAt", todayEndStr)
-      .neq("status", "CANCELLED");
+    const todayBookings = await prisma.booking.count({
+      where: {
+        createdAt: { gte: todayStart, lt: todayEnd },
+        status: { not: "CANCELLED" },
+      },
+    });
 
     // Today's revenue (from successful payments)
-    const { data: payments } = await supabase
-      .from("Payment")
-      .select("amount")
-      .eq("status", "SUCCESSFUL")
-      .gte("paidAt", todayStartStr)
-      .lt("paidAt", todayEndStr);
+    const payments = await prisma.payment.findMany({
+      where: {
+        status: "SUCCESSFUL",
+        paidAt: { gte: todayStart, lt: todayEnd },
+      },
+      select: { amount: true },
+    });
 
-    const todayRevenue = (payments || []).reduce((sum, p) => sum + p.amount, 0);
+    const todayRevenue = payments.reduce((sum, p) => sum + p.amount, 0);
 
     // Pending orders count
-    const { count: pendingOrders } = await supabase
-      .from("Order")
-      .select("*", { count: "exact", head: true })
-      .eq("status", "PENDING");
+    const pendingOrders = await prisma.order.count({
+      where: { status: "PENDING" },
+    });
 
     // Active spots count
-    const { count: activeSpots } = await supabase
-      .from("Spot")
-      .select("*", { count: "exact", head: true })
-      .eq("isActive", true);
+    const activeSpots = await prisma.spot.count({
+      where: { isActive: true },
+    });
 
     // Total bookings today (including cancelled)
-    const { count: totalTodayBookings } = await supabase
-      .from("Booking")
-      .select("*", { count: "exact", head: true })
-      .gte("createdAt", todayStartStr)
-      .lt("createdAt", todayEndStr);
+    const totalTodayBookings = await prisma.booking.count({
+      where: {
+        createdAt: { gte: todayStart, lt: todayEnd },
+      },
+    });
 
     return NextResponse.json({
       todayBookings: todayBookings || 0,

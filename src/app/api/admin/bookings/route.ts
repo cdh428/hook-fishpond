@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase-server";
+import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
@@ -14,24 +14,21 @@ export async function GET(request: NextRequest) {
     const endDate = searchParams.get("endDate");
     const status = searchParams.get("status");
 
-    let query = supabase
-      .from("Booking")
-      .select("*, pond:Pond(*), spot:Spot(*), user:User(*), order:Order(*)")
-      .order("createdAt", { ascending: false });
-
-    if (startDate) {
-      query = query.gte("date", new Date(startDate).toISOString());
-    }
-    if (endDate) {
-      query = query.lte("date", new Date(endDate).toISOString());
+    const where: any = {};
+    if (startDate || endDate) {
+      where.date = {};
+      if (startDate) where.date.gte = new Date(startDate);
+      if (endDate) where.date.lte = new Date(endDate);
     }
     if (status) {
-      query = query.eq("status", status);
+      where.status = status;
     }
 
-    const { data: bookings, error } = await query;
-
-    if (error) throw error;
+    const bookings = await prisma.booking.findMany({
+      where,
+      include: { pond: true, spot: true, user: true, order: true },
+      orderBy: { createdAt: "desc" },
+    });
 
     return NextResponse.json(bookings || []);
   } catch (error: any) {

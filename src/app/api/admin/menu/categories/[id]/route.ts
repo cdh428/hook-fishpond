@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase-server";
+import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
 
 export async function PUT(
@@ -26,14 +26,10 @@ export async function PUT(
     if (sortOrder !== undefined) updateData.sortOrder = sortOrder;
     if (isActive !== undefined) updateData.isActive = isActive;
 
-    const { data: category, error } = await supabase
-      .from("MenuCategory")
-      .update(updateData)
-      .eq("id", id)
-      .select("*")
-      .single();
-
-    if (error) throw error;
+    const category = await prisma.menuCategory.update({
+      where: { id },
+      data: updateData,
+    });
 
     return NextResponse.json(category);
   } catch (error: any) {
@@ -58,26 +54,22 @@ export async function DELETE(
     const { id } = await params;
 
     // Check if category has items
-    const { count: itemCount } = await supabase
-      .from("MenuItem")
-      .select("*", { count: "exact", head: true })
-      .eq("categoryId", id);
+    const itemCount = await prisma.menuItem.count({
+      where: { categoryId: id },
+    });
 
-    if (itemCount && itemCount > 0) {
+    if (itemCount > 0) {
       // Soft delete — just deactivate
-      await supabase
-        .from("MenuCategory")
-        .update({ isActive: false })
-        .eq("id", id);
+      await prisma.menuCategory.update({
+        where: { id },
+        data: { isActive: false },
+      });
       return NextResponse.json({ message: "Category deactivated (has items)", deactivated: true });
     }
 
-    const { error } = await supabase
-      .from("MenuCategory")
-      .delete()
-      .eq("id", id);
-
-    if (error) throw error;
+    await prisma.menuCategory.delete({
+      where: { id },
+    });
 
     return NextResponse.json({ message: "Category deleted" });
   } catch (error: any) {

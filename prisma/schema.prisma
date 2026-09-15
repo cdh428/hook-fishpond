@@ -146,6 +146,7 @@ model MenuItem {
   description_th String?
   price          Float
   imageUrl       String?
+  imageThumbUrl  String?
   isPopular      Boolean      @default(false)
   isVegetarian   Boolean      @default(false)
   spiceLevel     Int          @default(0)
@@ -161,12 +162,33 @@ enum MenuType {
   DRINK
 }
 
+// ===== DINING TABLE (餐桌二维码点餐) =====
+model DiningTable {
+  id        String   @id @default(cuid())
+  code      String   @unique        // A01–A10 (茅草屋), C01–C04 (咖啡厅) — QR短链用
+  name_zh   String                  // 茅草屋 1号桌
+  name_en   String                  // Hut Table 1
+  name_th   String                  // โต๊ะกระท่อม 1
+  area      TableArea               // 区域：茅草屋 / 咖啡厅
+  isActive  Boolean  @default(true)
+  orders    Order[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum TableArea {
+  HUT   // 茅草屋
+  CAFE  // 咖啡厅
+}
+
 // ===== ORDER & PAYMENT =====
 model Order {
   id            String        @id @default(cuid())
   orderNumber   String        @unique
   userId        String?
   user          User?         @relation(fields: [userId], references: [id])
+  tableId       String?
+  table         DiningTable?  @relation(fields: [tableId], references: [id])
   customerName  String
   customerPhone String
   items         OrderItem[]
@@ -212,6 +234,7 @@ model Payment {
   omiseSourceId String?
   status        PaymentStatus @default(PENDING)
   paidAt        DateTime?
+  expiresAt     DateTime?
   metadata      Json?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt

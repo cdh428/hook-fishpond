@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase-server";
+import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
@@ -14,21 +14,29 @@ export async function GET(request: NextRequest) {
     const endDate = searchParams.get("endDate");
 
     const now = new Date();
-    const start = startDate ? new Date(startDate).toISOString() : new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-    const end = endDate ? new Date(endDate).toISOString() : now.toISOString();
+    const start = startDate ? new Date(startDate) : new Date(now.getFullYear(), now.getMonth(), 1);
+    const end = endDate ? new Date(endDate) : now;
 
     // Get successful payments in date range
-    const { data: payments, error } = await supabase
-      .from("Payment")
-      .select("*, order:Order(*, items:OrderItem(*, menuItem:MenuItem(*)), bookings:Booking(*, pond:Pond(*)))")
-      .eq("status", "SUCCESSFUL")
-      .gte("paidAt", start)
-      .lte("paidAt", end)
-      .order("paidAt", { ascending: false });
-
-    if (error) throw error;
-
-    const allPayments = payments || [];
+    const allPayments = await prisma.payment.findMany({
+      where: {
+        status: "SUCCESSFUL",
+        paidAt: { gte: start, lte: end },
+      },
+      include: {
+        order: {
+          include: {
+            items: {
+              include: { menuItem: true },
+            },
+            bookings: {
+              include: { pond: true },
+            },
+          },
+        },
+      },
+      orderBy: { paidAt: "desc" },
+    });
 
     // Calculate totals
     const totalRevenue = allPayments.reduce((sum, p) => sum + p.amount, 0);
@@ -43,24 +51,24 @@ export async function GET(request: NextRequest) {
     const byDay: Record<string, number> = {};
     for (const p of allPayments) {
       if (p.paidAt) {
-        const day = p.paidAt.slice(0, 10);
+        const day = p.paidAt.toISOString().slice(0, 10);
         byDay[day] = (byDay[day] || 0) + p.amount;
       }
     }
 
     // Booking revenue (from bookings that are confirmed/non-cancelled)
-    const { data: bookings } = await supabase
-      .from("Booking")
-      .select("*, pond:Pond(*)")
-      .neq("status", "CANCELLED")
-      .gte("createdAt", start)
-      .lte("createdAt", end);
+    const allBookings = await prisma.booking.findMany({
+      where: {
+        status: { not: "CANCELLED" },
+        createdAt: { gte: start, lte: end },
+      },
+      include: { pond: true },
+    });
 
-    const allBookings = bookings || [];
     const bookingRevenue = allBookings.reduce((sum, b) => sum + b.totalPrice, 0);
 
     return NextResponse.json({
-      dateRange: { start, end },
+      dateRange: { start: start.toISOString(), end: end.toISOString() },
       totalRevenue,
       bookingRevenue,
       orderRevenue: totalRevenue,

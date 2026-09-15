@@ -1,77 +1,10 @@
 'use client';
 
 import { useTranslations, useLocale } from 'next-intl';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { locales, localeNames, type Locale } from '@/i18n/config';
-
-// Demo user data
-const defaultUser = {
-  id: '1',
-  name: '',
-  phone: '',
-  language: 'zh' as Locale,
-  marketingConsent: false,
-  isLoggedIn: false,
-};
-
-interface Booking {
-  id: string;
-  pondKey: 'admin.leisurePond' | 'admin.competitionPond';
-  date: string;
-  timeSlotKey: 'booking.morning' | 'booking.afternoon' | 'booking.evening' | 'booking.fullDay';
-  spotNumber: number | null;
-  price: number;
-  status: string;
-}
-
-interface Order {
-  id: string;
-  date: string;
-  total: number;
-  items: { name_zh: string; name_en: string; name_th: string; qty: number }[];
-  status: string;
-}
-
-const demoBookings: Booking[] = [
-  {
-    id: 'BK-001',
-    pondKey: 'admin.leisurePond',
-    date: '2026-03-20',
-    timeSlotKey: 'booking.morning',
-    spotNumber: 12,
-    price: 100,
-    status: 'PENDING',
-  },
-  {
-    id: 'BK-002',
-    pondKey: 'admin.competitionPond',
-    date: '2026-03-15',
-    timeSlotKey: 'booking.fullDay',
-    spotNumber: null,
-    price: 7500,
-    status: 'CONFIRMED',
-  },
-];
-
-const demoOrders: Order[] = [
-  {
-    id: 'FP-001',
-    date: '2026-03-20 14:30',
-    total: 480,
-    items: [
-      { name_zh: '冬阴功汤', name_en: 'Tom Yum Goong', name_th: 'ต้มยำกุ้ง', qty: 2 },
-      { name_zh: '烤鸡翅', name_en: 'Grilled Wings', name_th: 'ปีกไก่ย่าง', qty: 1 },
-    ],
-    status: 'PREPARING',
-  },
-  {
-    id: 'FP-002',
-    date: '2026-03-20 15:00',
-    total: 150,
-    items: [{ name_zh: '泰式奶茶', name_en: 'Thai Iced Tea', name_th: 'ชาเย็น', qty: 3 }],
-    status: 'PAID',
-  },
-];
+import { useApp } from '@/contexts/AppContext';
+import { fetchBookings, fetchOrders, updateMe } from '@/lib/api-client';
 
 const statusColors: Record<string, string> = {
   PENDING: 'bg-warning-100 text-warning-600',
@@ -82,55 +15,160 @@ const statusColors: Record<string, string> = {
   READY: 'bg-success-100 text-success-600',
 };
 
+const timeSlotKeyMap: Record<string, string> = {
+  MORNING: 'booking.morning',
+  AFTERNOON: 'booking.afternoon',
+  EVENING: 'booking.evening',
+  FULL_DAY: 'booking.fullDay',
+};
+
+const bookingStatusI18n: Record<string, string> = {
+  PENDING: 'orders.pending',
+  CONFIRMED: 'orders.confirmed',
+  CANCELLED: 'orders.cancelled',
+};
+
+const orderStatusI18n: Record<string, string> = {
+  PENDING: 'orders.pending',
+  PAID: 'orders.paid',
+  PREPARING: 'orders.preparing',
+  READY: 'orders.ready',
+  CANCELLED: 'orders.cancelled',
+};
+
 export default function ProfilePage() {
   const t = useTranslations();
   const locale = useLocale() as Locale;
+  const { user, registerUser, setUser, logout } = useApp();
 
-  const [isLoggedIn, setIsLoggedIn] = useState(defaultUser.isLoggedIn);
-  const [name, setName] = useState(defaultUser.name);
-  const [phone, setPhone] = useState(defaultUser.phone);
-  const [language, setLanguage] = useState<Locale>(defaultUser.language);
-  const [marketingConsent, setMarketingConsent] = useState(defaultUser.marketingConsent);
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [language, setLanguage] = useState<Locale>(locale);
+  const [marketingConsent, setMarketingConsent] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+
   const [showLogin, setShowLogin] = useState(false);
+  const [loginName, setLoginName] = useState('');
   const [loginPhone, setLoginPhone] = useState('');
-  const [loginStep, setLoginStep] = useState<'phone' | 'otp'>('phone');
   const [loginError, setLoginError] = useState('');
+  const [loggingIn, setLoggingIn] = useState(false);
   const [activeTab, setActiveTab] = useState<'bookings' | 'orders'>('bookings');
 
-  const handleLogin = () => {
-    if (loginPhone.length < 8) {
+  const [bookings, setBookings] = useState<any[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
+  // Sync local form state from the user session
+  useEffect(() => {
+    if (user) {
+      setName(user.name);
+      setPhone(user.phone);
+      setLanguage((user.language as Locale) || locale);
+      setMarketingConsent(!!user.marketingConsent);
+    }
+  }, [user, locale]);
+
+  // Load history when logged in
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!user) return;
+      setHistoryLoading(true);
+      try {
+        const [bk, od] = await Promise.all([
+          fetchBookings({ userId: user.id }),
+          fetchOrders({ userId: user.id }),
+        ]);
+        if (!cancelled) {
+          setBookings(bk);
+          setOrders(od);
+        }
+      } catch {
+        /* ignore */
+      } finally {
+        if (!cancelled) setHistoryLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  const handleLogin = async () => {
+    if (loginPhone.trim().length < 8) {
       setLoginError(t('profile.phoneRequired'));
       return;
     }
-    if (loginStep === 'phone') {
-      setLoginStep('otp');
+    if (!loginName.trim()) {
+      setLoginError(t('profile.name'));
       return;
     }
-    // Simulate login
-    setIsLoggedIn(true);
-    setName('');
-    setPhone(loginPhone);
-    setShowLogin(false);
-    setLoginStep('phone');
-    setLoginPhone('');
+    setLoggingIn(true);
     setLoginError('');
+    try {
+      // register is idempotent — returns the existing user or creates one
+      await registerUser({
+        phone: loginPhone.trim(),
+        name: loginName.trim(),
+        language: locale,
+      });
+      setShowLogin(false);
+      setLoginPhone('');
+      setLoginName('');
+    } catch (e: any) {
+      setLoginError(e.message || 'Login failed');
+    } finally {
+      setLoggingIn(false);
+    }
   };
 
-  const handleSaveProfile = () => {
-    setIsEditing(false);
+  const handleSaveProfile = async () => {
+    if (!user) return;
+    setSaving(true);
+    try {
+      const updated = await updateMe({ name, language, marketingConsent });
+      setUser(updated);
+      setIsEditing(false);
+    } catch {
+      /* keep editing on error */
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const getItemName = (it: any) => {
+    const m = it.menuItem || it;
+    return locale === 'en' ? m.name_en : locale === 'th' ? m.name_th : m.name_zh;
+  };
+
+  const getPondName = (b: any) => {
+    const p = b.pond || {};
+    return locale === 'en' ? p.name_en : locale === 'th' ? p.name_th : p.name_zh;
   };
 
   return (
     <div className="mx-auto max-w-lg px-4 py-6">
-      <h2 className="mb-6 text-2xl font-bold text-neutral-900">{t('profile.title')}</h2>
+      <h2 className="mb-6 text-2xl font-bold text-neutral-900">
+        {t('profile.title')}
+      </h2>
 
-      {!isLoggedIn ? (
+      {!user ? (
         /* Unauthenticated State */
         <div className="rounded-2xl bg-white p-6 text-center shadow-md">
           <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-neutral-100">
-            <svg className="h-10 w-10 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            <svg
+              className="h-10 w-10 text-neutral-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.5}
+                d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+              />
             </svg>
           </div>
           <h3 className="mb-1 text-lg font-semibold text-neutral-900">
@@ -175,8 +213,8 @@ export default function ProfilePage() {
                       type="tel"
                       placeholder={t('profile.phone')}
                       value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                      disabled
+                      className="w-full rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-500"
                     />
                   </div>
                 )}
@@ -186,12 +224,32 @@ export default function ProfilePage() {
                 className="shrink-0 rounded-lg bg-neutral-100 p-2 text-neutral-500 hover:bg-neutral-200"
               >
                 {isEditing ? (
-                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  <svg
+                    className="h-5 w-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M5 13l4 4L19 7"
+                    />
                   </svg>
                 ) : (
-                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  <svg
+                    className="h-5 w-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                    />
                   </svg>
                 )}
               </button>
@@ -227,12 +285,26 @@ export default function ProfilePage() {
                     onClick={() => setMarketingConsent(!marketingConsent)}
                     className="flex w-full items-center gap-3 rounded-xl border border-neutral-200 p-3 text-left"
                   >
-                    <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition ${
-                      marketingConsent ? 'bg-primary-700' : 'border-2 border-neutral-300'
-                    }`}>
+                    <div
+                      className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition ${
+                        marketingConsent
+                          ? 'bg-primary-700'
+                          : 'border-2 border-neutral-300'
+                      }`}
+                    >
                       {marketingConsent && (
-                        <svg className="h-4 w-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        <svg
+                          className="h-4 w-4 text-white"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={3}
+                            d="M5 13l4 4L19 7"
+                          />
                         </svg>
                       )}
                     </div>
@@ -249,11 +321,21 @@ export default function ProfilePage() {
 
                 <button
                   onClick={handleSaveProfile}
-                  className="w-full rounded-xl bg-accent-500 py-3 text-sm font-semibold text-white shadow-cta transition hover:bg-accent-600"
+                  disabled={saving}
+                  className="w-full rounded-xl bg-accent-500 py-3 text-sm font-semibold text-white shadow-cta transition hover:bg-accent-600 disabled:bg-neutral-300"
                 >
-                  {t('profile.saveProfile')}
+                  {saving ? t('common.loading') : t('profile.saveProfile')}
                 </button>
               </>
+            )}
+
+            {!isEditing && (
+              <button
+                onClick={logout}
+                className="w-full rounded-xl border border-neutral-200 py-2.5 text-sm font-medium text-neutral-500 transition hover:bg-neutral-50"
+              >
+                {t('common.logout')}
+              </button>
             )}
           </div>
 
@@ -283,66 +365,101 @@ export default function ProfilePage() {
             </div>
 
             <div className="mt-4 space-y-3">
-              {activeTab === 'bookings' ? (
-                demoBookings.length === 0 ? (
+              {historyLoading ? (
+                <div className="py-10 text-center text-sm text-neutral-400">
+                  {t('common.loading')}
+                </div>
+              ) : activeTab === 'bookings' ? (
+                bookings.length === 0 ? (
                   <div className="py-10 text-center text-sm text-neutral-400">
                     {t('common.noData')}
                   </div>
                 ) : (
-                  demoBookings.map((booking) => (
-                    <div key={booking.id} className="rounded-xl bg-white p-4 shadow-md">
+                  bookings.map((booking) => (
+                    <div
+                      key={booking.id}
+                      className="rounded-xl bg-white p-4 shadow-md"
+                    >
                       <div className="mb-2 flex items-center justify-between">
-                        <span className="text-xs text-neutral-400">{booking.id}</span>
-                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusColors[booking.status]}`}>
-                          {booking.status === 'PENDING' ? t('orders.pending') : booking.status === 'CONFIRMED' ? t('orders.confirmed') : t('orders.cancelled')}
+                        <span className="text-xs text-neutral-400">
+                          {String(booking.id).slice(0, 8)}
+                        </span>
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                            statusColors[booking.status] ||
+                            'bg-neutral-100 text-neutral-600'
+                          }`}
+                        >
+                          {t(
+                            bookingStatusI18n[booking.status] ||
+                              'orders.pending',
+                          )}
                         </span>
                       </div>
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-sm font-semibold text-neutral-900">{t(booking.pondKey)}</p>
+                          <p className="text-sm font-semibold text-neutral-900">
+                            {getPondName(booking)}
+                          </p>
                           <p className="text-xs text-neutral-500">
-                            {booking.date} | {t(booking.timeSlotKey)}
-                            {booking.spotNumber && ` | #${booking.spotNumber}`}
+                            {String(booking.date).slice(0, 10)}
+                            {booking.timeSlot &&
+                              ` | ${t(timeSlotKeyMap[booking.timeSlot] || 'booking.fullDay')}`}
+                            {booking.spot?.number &&
+                              ` | #${booking.spot.number}`}
                           </p>
                         </div>
-                        <span className="text-sm font-bold text-accent-600">฿{booking.price}</span>
+                        <span className="text-sm font-bold text-accent-600">
+                          ฿{booking.totalPrice}
+                        </span>
                       </div>
                     </div>
                   ))
                 )
+              ) : orders.length === 0 ? (
+                <div className="py-10 text-center text-sm text-neutral-400">
+                  {t('common.noData')}
+                </div>
               ) : (
-                demoOrders.length === 0 ? (
-                  <div className="py-10 text-center text-sm text-neutral-400">
-                    {t('common.noData')}
-                  </div>
-                ) : (
-                  demoOrders.map((order) => (
-                    <div key={order.id} className="rounded-xl bg-white p-4 shadow-md">
-                      <div className="mb-2 flex items-center justify-between">
-                        <span className="text-xs text-neutral-400">
-                          {t('orders.orderNumber')}: {order.id}
-                        </span>
-                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusColors[order.status]}`}>
-                          {order.status === 'PREPARING' ? t('orders.preparing') : t('orders.paid')}
-                        </span>
-                      </div>
-                      <div className="space-y-1">
-                        {order.items.map((item, idx) => {
-                          const itemName = locale === 'en' ? item.name_en : locale === 'th' ? item.name_th : item.name_zh;
-                          return (
-                          <div key={idx} className="flex justify-between text-sm">
-                            <span className="text-neutral-700">{itemName} × {item.qty}</span>
-                          </div>
-                          );
-                        })}
-                      </div>
-                      <div className="mt-2 flex items-center justify-between border-t border-neutral-100 pt-2">
-                        <span className="text-xs text-neutral-400">{order.date}</span>
-                        <span className="text-sm font-bold text-accent-600">฿{order.total}</span>
-                      </div>
+                orders.map((order) => (
+                  <div
+                    key={order.id}
+                    className="rounded-xl bg-white p-4 shadow-md"
+                  >
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="text-xs text-neutral-400">
+                        {t('orders.orderNumber')}: {order.orderNumber}
+                      </span>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                          statusColors[order.status] ||
+                          'bg-neutral-100 text-neutral-600'
+                        }`}
+                      >
+                        {t(orderStatusI18n[order.status] || 'orders.pending')}
+                      </span>
                     </div>
-                  ))
-                )
+                    <div className="space-y-1">
+                      {(order.items || []).map((item: any, idx: number) => (
+                        <div key={idx} className="flex justify-between text-sm">
+                          <span className="text-neutral-700">
+                            {getItemName(item)} × {item.quantity}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-2 flex items-center justify-between border-t border-neutral-100 pt-2">
+                      <span className="text-xs text-neutral-400">
+                        {order.createdAt
+                          ? new Date(order.createdAt).toLocaleString()
+                          : ''}
+                      </span>
+                      <span className="text-sm font-bold text-accent-600">
+                        ฿{order.totalPrice}
+                      </span>
+                    </div>
+                  </div>
+                ))
               )}
             </div>
           </div>
@@ -360,23 +477,43 @@ export default function ProfilePage() {
               <button
                 onClick={() => {
                   setShowLogin(false);
-                  setLoginStep('phone');
                   setLoginPhone('');
+                  setLoginName('');
                   setLoginError('');
                 }}
                 className="rounded-lg p-1 text-neutral-400 hover:text-neutral-600"
               >
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                <svg
+                  className="h-5 w-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
                 </svg>
               </button>
             </div>
 
             <p className="mb-4 text-sm text-neutral-500">
-              {loginStep === 'phone' ? t('profile.registerDesc') : t('profile.otpSent')}
+              {t('profile.registerDesc')}
             </p>
 
             <div className="space-y-3">
+              <input
+                type="text"
+                placeholder={t('profile.name')}
+                value={loginName}
+                onChange={(e) => {
+                  setLoginName(e.target.value);
+                  setLoginError('');
+                }}
+                className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              />
               <input
                 type="tel"
                 placeholder={t('profile.phone')}
@@ -388,24 +525,18 @@ export default function ProfilePage() {
                 className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               />
 
-              {loginStep === 'otp' && (
-                <input
-                  type="text"
-                  placeholder={t('profile.otpVerify')}
-                  maxLength={6}
-                  className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-center text-lg font-semibold tracking-widest focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                />
-              )}
-
               {loginError && (
                 <p className="text-xs text-error-600">{loginError}</p>
               )}
 
               <button
                 onClick={handleLogin}
-                className="w-full rounded-xl bg-primary-700 py-3 text-sm font-semibold text-white shadow-brand transition hover:bg-primary-800"
+                disabled={loggingIn}
+                className="w-full rounded-xl bg-primary-700 py-3 text-sm font-semibold text-white shadow-brand transition hover:bg-primary-800 disabled:bg-neutral-300"
               >
-                {loginStep === 'phone' ? t('profile.registerTitle') : t('profile.otpVerify')}
+                {loggingIn
+                  ? t('common.loading')
+                  : `${t('common.login')} / ${t('common.register')}`}
               </button>
             </div>
           </div>

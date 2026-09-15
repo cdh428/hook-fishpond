@@ -1,0 +1,46 @@
+name: Database Backup (Neon → Supabase)
+
+# -------------------------------------------------------------
+# Daily cold-standby backup for hook-fishpond.
+# Neon  = PRIMARY database (always-on, free tier, no 7-day pause)
+# Supabase = COLD STANDBY (free tier). The daily write keeps it
+#            active so it never hits Supabase's 7-day pause.
+#
+# Schedule: 17:00 UTC = 00:00 Bangkok (GMT+7). Adjust if needed.
+# First run auto-migrates Supabase -> Neon if Neon is empty.
+# -------------------------------------------------------------
+on:
+  schedule:
+    - cron: "0 17 * * *"
+  workflow_dispatch: {}   # allows manual "Run workflow" from the Actions tab
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install postgresql-client (pg_dump / psql)
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Install pg driver
+        run: npm install pg --no-save
+
+      - name: One-time migrate Supabase → Neon (only if Neon empty)
+        env:
+          NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+          SUPABASE_DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
+        run: node scripts/check-and-migrate.js
+
+      - name: Daily backup Neon → Supabase
+        env:
+          NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+          SUPABASE_DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
+        run: node scripts/backup-neon-to-supabase.js

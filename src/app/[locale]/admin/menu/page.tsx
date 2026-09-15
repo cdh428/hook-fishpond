@@ -1,8 +1,19 @@
 'use client';
 
 import { useTranslations, useLocale } from 'next-intl';
-import { useState } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from '@/i18n/routing';
+import {
+  fetchAdminCategories,
+  fetchAdminMenuItems,
+  createCategory,
+  updateCategory,
+  deleteCategory,
+  createMenuItem,
+  updateMenuItem,
+  deleteMenuItem,
+} from '@/lib/api-client';
+import { processImage } from '@/lib/image-utils';
 
 type MenuType = 'FOOD' | 'DRINK';
 
@@ -12,6 +23,7 @@ interface Category {
   name_en: string;
   name_th: string;
   type: MenuType;
+  itemCount?: number;
 }
 
 interface MenuItem {
@@ -25,34 +37,46 @@ interface MenuItem {
   veg: boolean;
   spice: number;
   type: MenuType;
+  isActive: boolean;
+  imageUrl?: string;
+  imageThumbUrl?: string;
 }
-
-const initialCategories: Category[] = [
-  { id: 'thai', name_zh: '泰式料理', name_en: 'Thai Food', name_th: 'อาหารไทย', type: 'FOOD' },
-  { id: 'seafood', name_zh: '海鲜', name_en: 'Seafood', name_th: 'อาหารทะเล', type: 'FOOD' },
-  { id: 'grill', name_zh: '烧烤', name_en: 'Grilled', name_th: 'ปิ้งย่าง', type: 'FOOD' },
-  { id: 'soup', name_zh: '汤类', name_en: 'Soups', name_th: 'ซุป', type: 'FOOD' },
-  { id: 'cold', name_zh: '冷饮', name_en: 'Cold Drinks', name_th: 'เครื่องดื่มเย็น', type: 'DRINK' },
-  { id: 'hot', name_zh: '热饮', name_en: 'Hot Drinks', name_th: 'เครื่องดื่มร้อน', type: 'DRINK' },
-];
-
-const initialItems: MenuItem[] = [
-  { id: '1', catId: 'thai', name_zh: '冬阴功汤', name_en: 'Tom Yum Goong', name_th: 'ต้มยำกุ้ง', price: 180, popular: true, veg: false, spice: 2, type: 'FOOD' },
-  { id: '2', catId: 'thai', name_zh: '绿咖喱鸡', name_en: 'Green Curry Chicken', name_th: 'แกงเขียวหวานไก่', price: 150, popular: true, veg: false, spice: 2, type: 'FOOD' },
-  { id: '3', catId: 'seafood', name_zh: '清蒸鲈鱼', name_en: 'Steamed Sea Bass', name_th: 'ปลากะพงนึ่งมะนาว', price: 350, popular: true, veg: false, spice: 1, type: 'FOOD' },
-];
 
 export default function AdminMenuPage() {
   const t = useTranslations();
   const locale = useLocale();
 
-  const [categories, setCategories] = useState(initialCategories);
-  const [items, setItems] = useState(initialItems);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [items, setItems] = useState<MenuItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState<MenuType>('FOOD');
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
   const [showCategoryForm, setShowCategoryForm] = useState(false);
   const [showItemForm, setShowItemForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const [cats, menuItems] = await Promise.all([
+        fetchAdminCategories(),
+        fetchAdminMenuItems(),
+      ]);
+      setCategories(cats || []);
+      setItems(menuItems || []);
+    } catch (err: any) {
+      setError(err?.message || t('common.error'));
+    } finally {
+      setLoading(false);
+    }
+  }, [t]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const getLocaleName = (item: { name_zh: string; name_en: string; name_th: string }) => {
     if (locale === 'en') return item.name_en;
@@ -77,28 +101,40 @@ export default function AdminMenuPage() {
     setShowCategoryForm(true);
   };
 
-  const saveCategory = () => {
-    if (editingCategory) {
-      setCategories((prev) =>
-        prev.map((c) => (c.id === editingCategory.id ? { ...editingCategory, ...catForm } : c))
-      );
-    } else {
-      const newCat: Category = {
-        id: Date.now().toString(),
-        ...catForm,
-      };
-      setCategories((prev) => [...prev, newCat]);
+  const saveCategory = async () => {
+    setSaving(true);
+    try {
+      if (editingCategory) {
+        await updateCategory(editingCategory.id, {
+          name_zh: catForm.name_zh,
+          name_en: catForm.name_en,
+          name_th: catForm.name_th,
+          type: catForm.type,
+        });
+      } else {
+        await createCategory({
+          name_zh: catForm.name_zh,
+          name_en: catForm.name_en,
+          name_th: catForm.name_th,
+          type: catForm.type,
+        });
+      }
+      setShowCategoryForm(false);
+      await loadData();
+    } catch (err: any) {
+      setError(err?.message || t('common.error'));
+    } finally {
+      setSaving(false);
     }
-    setShowCategoryForm(false);
   };
 
-  const deleteCategory = (id: string) => {
-    setCategories((prev) => prev.filter((c) => c.id !== id));
-    setItems((prev) => prev.filter((i) => i.catId !== id));
-  };
-
-  const deleteItem = (id: string) => {
-    setItems((prev) => prev.filter((i) => i.id !== id));
+  const handleDeleteCategory = async (id: string) => {
+    try {
+      await deleteCategory(id);
+      await loadData();
+    } catch (err: any) {
+      setError(err?.message || t('common.error'));
+    }
   };
 
   const [itemForm, setItemForm] = useState({
@@ -110,9 +146,16 @@ export default function AdminMenuPage() {
     popular: false,
     veg: false,
     spice: 0,
+    imageUrl: '' as string,
+    imageThumbUrl: '' as string,
   });
 
+  const [imageUploading, setImageUploading] = useState(false);
+  const [imageError, setImageError] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const openItemForm = (item?: MenuItem) => {
+    setImageError('');
     if (item) {
       setEditingItem(item);
       setItemForm({
@@ -124,6 +167,8 @@ export default function AdminMenuPage() {
         popular: item.popular,
         veg: item.veg,
         spice: item.spice,
+        imageUrl: item.imageUrl || '',
+        imageThumbUrl: item.imageThumbUrl || '',
       });
     } else {
       setEditingItem(null);
@@ -136,31 +181,81 @@ export default function AdminMenuPage() {
         popular: false,
         veg: false,
         spice: 0,
+        imageUrl: '',
+        imageThumbUrl: '',
       });
     }
     setShowItemForm(true);
   };
 
-  const saveItem = () => {
-    const price = parseFloat(itemForm.price) || 0;
-    if (editingItem) {
-      setItems((prev) =>
-        prev.map((i) =>
-          i.id === editingItem.id
-            ? { ...editingItem, ...itemForm, price, type: activeTab }
-            : i
-        )
-      );
-    } else {
-      const newItem: MenuItem = {
-        id: Date.now().toString(),
-        ...itemForm,
-        price,
-        type: activeTab,
-      };
-      setItems((prev) => [...prev, newItem]);
+  const saveItem = async () => {
+    setSaving(true);
+    try {
+      const price = parseFloat(itemForm.price) || 0;
+      const imageUrl = itemForm.imageUrl || undefined;
+      const imageThumbUrl = itemForm.imageThumbUrl || undefined;
+      if (editingItem) {
+        await updateMenuItem(editingItem.id, {
+          categoryId: itemForm.catId,
+          name_zh: itemForm.name_zh,
+          name_en: itemForm.name_en,
+          name_th: itemForm.name_th,
+          price,
+          spiceLevel: itemForm.spice,
+          isPopular: itemForm.popular,
+          isVegetarian: itemForm.veg,
+          imageUrl,
+          imageThumbUrl,
+        });
+      } else {
+        await createMenuItem({
+          categoryId: itemForm.catId,
+          name_zh: itemForm.name_zh,
+          name_en: itemForm.name_en,
+          name_th: itemForm.name_th,
+          price,
+          spiceLevel: itemForm.spice,
+          isPopular: itemForm.popular,
+          isVegetarian: itemForm.veg,
+          imageUrl,
+          imageThumbUrl,
+        });
+      }
+      setShowItemForm(false);
+      await loadData();
+    } catch (err: any) {
+      setError(err?.message || t('common.error'));
+    } finally {
+      setSaving(false);
     }
-    setShowItemForm(false);
+  };
+
+  const handleDeleteItem = async (id: string) => {
+    try {
+      await deleteMenuItem(id);
+      await loadData();
+    } catch (err: any) {
+      setError(err?.message || t('common.error'));
+    }
+  };
+
+  const handleImageUpload = async (file: File) => {
+    setImageError('');
+    setImageUploading(true);
+    try {
+      const { hdUrl, thumbUrl } = await processImage(file);
+      setItemForm((f) => ({ ...f, imageUrl: hdUrl, imageThumbUrl: thumbUrl }));
+    } catch (err: any) {
+      setImageError(err?.message || t('admin.imageUploadFailed'));
+    } finally {
+      setImageUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleRemoveImage = () => {
+    setItemForm((f) => ({ ...f, imageUrl: '', imageThumbUrl: '' }));
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   return (
@@ -186,109 +281,140 @@ export default function AdminMenuPage() {
         </div>
       </div>
 
-      {/* Food/Drink Tabs */}
-      <div className="mb-4 flex rounded-xl bg-neutral-100 p-1">
-        <button
-          onClick={() => setActiveTab('FOOD')}
-          className={`flex-1 rounded-lg py-2 text-sm font-medium transition ${
-            activeTab === 'FOOD' ? 'bg-white text-primary-700 shadow-sm' : 'text-neutral-500'
-          }`}
-        >
-          {t('admin.foodType')}
-        </button>
-        <button
-          onClick={() => setActiveTab('DRINK')}
-          className={`flex-1 rounded-lg py-2 text-sm font-medium transition ${
-            activeTab === 'DRINK' ? 'bg-white text-primary-700 shadow-sm' : 'text-neutral-500'
-          }`}
-        >
-          {t('admin.drinkType')}
-        </button>
-      </div>
-
-      {/* Categories */}
-      <div className="mb-6">
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="font-semibold text-neutral-900">{t('menu.categories')}</h3>
-          <button
-            onClick={() => openCategoryForm()}
-            className="rounded-lg bg-primary-700 px-3 py-1.5 text-xs font-medium text-white"
-          >
-            + {t('admin.addCategory')}
-          </button>
+      {error && (
+        <div className="mb-4 rounded-xl bg-error-50 px-4 py-2 text-sm text-error-600">
+          {error}
+          <button onClick={loadData} className="ml-2 underline">{t('common.retry')}</button>
         </div>
-        <div className="space-y-2">
-          {filteredCategories.map((cat) => (
-            <div key={cat.id} className="flex items-center justify-between rounded-lg bg-white p-3 shadow-sm">
-              <span className="text-sm font-medium text-neutral-900">{getLocaleName(cat)}</span>
-              <div className="flex gap-1">
-                <button
-                  onClick={() => openCategoryForm(cat)}
-                  className="rounded px-2 py-1 text-xs text-primary-600 hover:bg-primary-50"
-                >
-                  {t('common.edit')}
-                </button>
-                <button
-                  onClick={() => deleteCategory(cat.id)}
-                  className="rounded px-2 py-1 text-xs text-error-600 hover:bg-error-50"
-                >
-                  {t('common.delete')}
-                </button>
-              </div>
+      )}
+
+      {loading ? (
+        <div className="py-20 text-center text-sm text-neutral-400">{t('common.loading')}</div>
+      ) : (
+        <>
+          {/* Food/Drink Tabs */}
+          <div className="mb-4 flex rounded-xl bg-neutral-100 p-1">
+            <button
+              onClick={() => setActiveTab('FOOD')}
+              className={`flex-1 rounded-lg py-2 text-sm font-medium transition ${
+                activeTab === 'FOOD' ? 'bg-white text-primary-700 shadow-sm' : 'text-neutral-500'
+              }`}
+            >
+              {t('admin.foodType')}
+            </button>
+            <button
+              onClick={() => setActiveTab('DRINK')}
+              className={`flex-1 rounded-lg py-2 text-sm font-medium transition ${
+                activeTab === 'DRINK' ? 'bg-white text-primary-700 shadow-sm' : 'text-neutral-500'
+              }`}
+            >
+              {t('admin.drinkType')}
+            </button>
+          </div>
+
+          {/* Categories */}
+          <div className="mb-6">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="font-semibold text-neutral-900">{t('menu.categories')}</h3>
+              <button
+                onClick={() => openCategoryForm()}
+                className="rounded-lg bg-primary-700 px-3 py-1.5 text-xs font-medium text-white"
+              >
+                + {t('admin.addCategory')}
+              </button>
             </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Items */}
-      <div>
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="font-semibold text-neutral-900">{t('admin.menu')}</h3>
-          <button
-            onClick={() => openItemForm()}
-            className="rounded-lg bg-accent-500 px-3 py-1.5 text-xs font-medium text-white"
-          >
-            + {t('admin.addItem')}
-          </button>
-        </div>
-        <div className="space-y-2">
-          {filteredItems.map((item) => (
-            <div key={item.id} className="flex items-center justify-between rounded-lg bg-white p-3 shadow-sm">
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-neutral-900">{getLocaleName(item)}</p>
-                <div className="mt-0.5 flex items-center gap-2">
-                  <span className="text-xs font-medium text-accent-600">฿{item.price}</span>
-                  {item.popular && (
-                    <span className="rounded bg-accent-50 px-1.5 py-0.5 text-xs text-accent-600">★</span>
-                  )}
-                  {item.veg && (
-                    <span className="rounded bg-success-50 px-1.5 py-0.5 text-xs text-success-600">{t('menu.vegetarian')}</span>
-                  )}
+            <div className="space-y-2">
+              {filteredCategories.map((cat) => (
+                <div key={cat.id} className="flex items-center justify-between rounded-lg bg-white p-3 shadow-sm">
+                  <span className="text-sm font-medium text-neutral-900">{getLocaleName(cat)}</span>
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => openCategoryForm(cat)}
+                      className="rounded px-2 py-1 text-xs text-primary-600 hover:bg-primary-50"
+                    >
+                      {t('common.edit')}
+                    </button>
+                    <button
+                      onClick={() => handleDeleteCategory(cat.id)}
+                      className="rounded px-2 py-1 text-xs text-error-600 hover:bg-error-50"
+                    >
+                      {t('common.delete')}
+                    </button>
+                  </div>
                 </div>
-              </div>
-              <div className="flex gap-1 shrink-0">
-                <button
-                  onClick={() => openItemForm(item)}
-                  className="rounded px-2 py-1 text-xs text-primary-600 hover:bg-primary-50"
-                >
-                  {t('common.edit')}
-                </button>
-                <button
-                  onClick={() => deleteItem(item.id)}
-                  className="rounded px-2 py-1 text-xs text-error-600 hover:bg-error-50"
-                >
-                  {t('common.delete')}
-                </button>
-              </div>
+              ))}
+              {filteredCategories.length === 0 && (
+                <p className="py-4 text-center text-sm text-neutral-400">{t('common.noData')}</p>
+              )}
             </div>
-          ))}
-          {filteredItems.length === 0 && (
-            <div className="py-10 text-center text-sm text-neutral-400">
-              {t('common.noData')}
+          </div>
+
+          {/* Items */}
+          <div>
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="font-semibold text-neutral-900">{t('admin.menu')}</h3>
+              <button
+                onClick={() => openItemForm()}
+                disabled={filteredCategories.length === 0}
+                className="rounded-lg bg-accent-500 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+              >
+                + {t('admin.addItem')}
+              </button>
             </div>
-          )}
-        </div>
-      </div>
+            <div className="space-y-2">
+              {filteredItems.map((item) => (
+                <div key={item.id} className={`flex items-center justify-between rounded-lg bg-white p-3 shadow-sm ${!item.isActive ? 'opacity-50' : ''}`}>
+                  <div className="flex min-w-0 items-center gap-2">
+                    {item.imageThumbUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={item.imageThumbUrl}
+                        alt={getLocaleName(item)}
+                        className="h-10 w-10 shrink-0 rounded-lg object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-neutral-100 text-lg">
+                        🍽️
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-neutral-900">{getLocaleName(item)}</p>
+                    <div className="mt-0.5 flex items-center gap-2">
+                      <span className="text-xs font-medium text-accent-600">฿{item.price}</span>
+                      {item.popular && (
+                        <span className="rounded bg-accent-50 px-1.5 py-0.5 text-xs text-accent-600">★</span>
+                      )}
+                      {item.veg && (
+                        <span className="rounded bg-success-50 px-1.5 py-0.5 text-xs text-success-600">{t('menu.vegetarian')}</span>
+                      )}
+                    </div>
+                    </div>
+                  </div>
+                  <div className="flex gap-1 shrink-0">
+                    <button
+                      onClick={() => openItemForm(item)}
+                      className="rounded px-2 py-1 text-xs text-primary-600 hover:bg-primary-50"
+                    >
+                      {t('common.edit')}
+                    </button>
+                    <button
+                      onClick={() => handleDeleteItem(item.id)}
+                      className="rounded px-2 py-1 text-xs text-error-600 hover:bg-error-50"
+                    >
+                      {t('common.delete')}
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {filteredItems.length === 0 && (
+                <div className="py-10 text-center text-sm text-neutral-400">
+                  {t('common.noData')}
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Category Form Modal */}
       {showCategoryForm && (
@@ -333,9 +459,10 @@ export default function AdminMenuPage() {
               />
               <button
                 onClick={saveCategory}
-                className="w-full rounded-xl bg-primary-700 py-2.5 text-sm font-semibold text-white"
+                disabled={saving}
+                className="w-full rounded-xl bg-primary-700 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
               >
-                {t('common.save')}
+                {saving ? t('common.saving') : t('common.save')}
               </button>
             </div>
           </div>
@@ -427,16 +554,87 @@ export default function AdminMenuPage() {
                     className="w-full accent-primary-700"
                   />
                 </div>
-                <div className="rounded-lg border-2 border-dashed border-neutral-200 p-4 text-center">
-                  <p className="text-xs text-neutral-400">{t('admin.uploadImage')}</p>
-                  <p className="mt-1 text-xs text-neutral-300">{t('admin.imageUploadHint')}</p>
-                </div>
               </div>
+
+              {/* Image Upload */}
+              <div className="space-y-2">
+                <label className="block text-xs font-medium text-neutral-500">
+                  {t('admin.dishImage')}
+                </label>
+                {itemForm.imageThumbUrl ? (
+                  <div className="flex items-center gap-3">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={itemForm.imageThumbUrl}
+                      alt="preview"
+                      className="h-20 w-20 rounded-xl border border-neutral-200 object-cover"
+                    />
+                    <div className="flex flex-col gap-1">
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={imageUploading}
+                        className="rounded-lg border border-neutral-200 px-3 py-1.5 text-xs font-medium text-neutral-600 hover:bg-neutral-50 disabled:opacity-50"
+                      >
+                        {t('admin.changeImage')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleRemoveImage}
+                        disabled={imageUploading}
+                        className="rounded-lg px-3 py-1.5 text-xs font-medium text-error-600 hover:bg-error-50 disabled:opacity-50"
+                      >
+                        {t('admin.removeImage')}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={imageUploading}
+                    className="flex w-full flex-col items-center justify-center rounded-xl border-2 border-dashed border-neutral-200 py-6 text-neutral-400 hover:border-primary-300 hover:text-primary-500 disabled:opacity-50"
+                  >
+                    {imageUploading ? (
+                      <>
+                        <svg className="mb-1 h-6 w-6 animate-spin" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                        <span className="text-xs">{t('admin.processing')}</span>
+                      </>
+                    ) : (
+                      <>
+                        <svg className="mb-1 h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        <span className="text-xs">{t('admin.uploadImage')}</span>
+                        <span className="mt-0.5 text-[10px] text-neutral-300">{t('admin.imageHint')}</span>
+                      </>
+                    )}
+                  </button>
+                )}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleImageUpload(file);
+                  }}
+                />
+                {imageError && (
+                  <p className="text-xs text-error-600">{imageError}</p>
+                )}
+              </div>
+
               <button
                 onClick={saveItem}
-                className="w-full rounded-xl bg-primary-700 py-2.5 text-sm font-semibold text-white"
+                disabled={saving}
+                className="w-full rounded-xl bg-primary-700 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
               >
-                {t('common.save')}
+                {saving ? t('common.saving') : t('common.save')}
               </button>
             </div>
           </div>

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase-server";
+import { prisma } from "@/lib/prisma";
 
 export async function GET(
   request: NextRequest,
@@ -8,13 +8,22 @@ export async function GET(
   try {
     const { id } = await params;
 
-    const { data: booking, error } = await supabase
-      .from("Booking")
-      .select("*, pond:Pond(*), spot:Spot(*), order:Order(*, items:OrderItem(*, menuItem:MenuItem(*)))")
-      .eq("id", id)
-      .single();
+    const booking = await prisma.booking.findUnique({
+      where: { id },
+      include: {
+        pond: true,
+        spot: true,
+        order: {
+          include: {
+            items: {
+              include: { menuItem: true },
+            },
+          },
+        },
+      },
+    });
 
-    if (error || !booking) {
+    if (!booking) {
       return NextResponse.json({ error: "Booking not found" }, { status: 404 });
     }
 
@@ -43,18 +52,18 @@ export async function PUT(
       );
     }
 
-    const { data: booking, error } = await supabase
-      .from("Booking")
-      .update({ status })
-      .eq("id", id)
-      .select("*, pond:Pond(*), spot:Spot(*)")
-      .single();
-
-    if (error) throw error;
+    const booking = await prisma.booking.update({
+      where: { id },
+      data: { status },
+      include: { pond: true, spot: true },
+    });
 
     return NextResponse.json(booking);
   } catch (error: any) {
     console.error("Update booking error:", error);
+    if (error?.code === "P2025") {
+      return NextResponse.json({ error: "Booking not found" }, { status: 404 });
+    }
     return NextResponse.json(
       { error: error.message || "Failed to update booking" },
       { status: 500 },

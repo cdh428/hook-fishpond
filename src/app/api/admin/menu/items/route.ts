@@ -1,6 +1,32 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase, genId } from "@/lib/supabase-server";
+import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
+
+export async function GET(request: NextRequest) {
+  try {
+    const admin = await requireAdmin(request);
+    if (!admin) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const categoryId = searchParams.get("categoryId");
+
+    const items = await prisma.menuItem.findMany({
+      where: categoryId ? { categoryId } : undefined,
+      include: { category: true },
+      orderBy: { sortOrder: "asc" },
+    });
+
+    return NextResponse.json(items);
+  } catch (error: any) {
+    console.error("List admin menu items error:", error);
+    return NextResponse.json(
+      { error: error.message || "Failed to list menu items" },
+      { status: 500 },
+    );
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -20,6 +46,7 @@ export async function POST(request: NextRequest) {
       description_th,
       price,
       imageUrl,
+      imageThumbUrl,
       isPopular,
       isVegetarian,
       spiceLevel,
@@ -33,10 +60,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { data: item, error } = await supabase
-      .from("MenuItem")
-      .insert({
-        id: genId(),
+    const item = await prisma.menuItem.create({
+      data: {
         categoryId,
         name_zh,
         name_en,
@@ -46,15 +71,14 @@ export async function POST(request: NextRequest) {
         description_th: description_th || null,
         price,
         imageUrl: imageUrl || null,
+        imageThumbUrl: imageThumbUrl || null,
         isPopular: isPopular || false,
         isVegetarian: isVegetarian || false,
         spiceLevel: spiceLevel || 0,
         sortOrder: sortOrder || 0,
-      })
-      .select("*, category:MenuCategory(*)")
-      .single();
-
-    if (error) throw error;
+      },
+      include: { category: true },
+    });
 
     return NextResponse.json(item, { status: 201 });
   } catch (error: any) {

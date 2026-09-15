@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase-server";
+import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
 
 export async function PUT(
@@ -24,6 +24,7 @@ export async function PUT(
       description_th,
       price,
       imageUrl,
+      imageThumbUrl,
       isPopular,
       isVegetarian,
       spiceLevel,
@@ -41,20 +42,18 @@ export async function PUT(
     if (description_th !== undefined) updateData.description_th = description_th;
     if (price !== undefined) updateData.price = price;
     if (imageUrl !== undefined) updateData.imageUrl = imageUrl;
+    if (imageThumbUrl !== undefined) updateData.imageThumbUrl = imageThumbUrl;
     if (isPopular !== undefined) updateData.isPopular = isPopular;
     if (isVegetarian !== undefined) updateData.isVegetarian = isVegetarian;
     if (spiceLevel !== undefined) updateData.spiceLevel = spiceLevel;
     if (sortOrder !== undefined) updateData.sortOrder = sortOrder;
     if (isActive !== undefined) updateData.isActive = isActive;
 
-    const { data: item, error } = await supabase
-      .from("MenuItem")
-      .update(updateData)
-      .eq("id", id)
-      .select("*, category:MenuCategory(*)")
-      .single();
-
-    if (error) throw error;
+    const item = await prisma.menuItem.update({
+      where: { id },
+      data: updateData,
+      include: { category: true },
+    });
 
     return NextResponse.json(item);
   } catch (error: any) {
@@ -79,26 +78,22 @@ export async function DELETE(
     const { id } = await params;
 
     // Check if item has been ordered
-    const { count: orderItemCount } = await supabase
-      .from("OrderItem")
-      .select("*", { count: "exact", head: true })
-      .eq("menuItemId", id);
+    const orderItemCount = await prisma.orderItem.count({
+      where: { menuItemId: id },
+    });
 
-    if (orderItemCount && orderItemCount > 0) {
+    if (orderItemCount > 0) {
       // Soft delete
-      await supabase
-        .from("MenuItem")
-        .update({ isActive: false })
-        .eq("id", id);
+      await prisma.menuItem.update({
+        where: { id },
+        data: { isActive: false },
+      });
       return NextResponse.json({ message: "Item deactivated (has order history)", deactivated: true });
     }
 
-    const { error } = await supabase
-      .from("MenuItem")
-      .delete()
-      .eq("id", id);
-
-    if (error) throw error;
+    await prisma.menuItem.delete({
+      where: { id },
+    });
 
     return NextResponse.json({ message: "Item deleted" });
   } catch (error: any) {

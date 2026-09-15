@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { supabase } from "./supabase-server";
+import { prisma } from "./prisma";
 
 /**
  * Simple header-based user auth.
@@ -10,14 +10,14 @@ export async function getUserFromRequest(request: NextRequest) {
   const userId = request.headers.get("x-user-id");
   if (!userId) return null;
 
-  const { data, error } = await supabase
-    .from("User")
-    .select("*")
-    .eq("id", userId)
-    .single();
-
-  if (error || !data) return null;
-  return data;
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+    });
+    return user;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -29,14 +29,14 @@ export async function getAdminFromRequest(request: NextRequest) {
   const adminId = request.cookies.get("admin-session")?.value;
   if (!adminId) return null;
 
-  const { data, error } = await supabase
-    .from("AdminUser")
-    .select("*")
-    .eq("id", adminId)
-    .single();
-
-  if (error || !data) return null;
-  return data;
+  try {
+    const admin = await prisma.adminUser.findUnique({
+      where: { id: adminId },
+    });
+    return admin;
+  } catch {
+    return null;
+  }
 }
 
 /**

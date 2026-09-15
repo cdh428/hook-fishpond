@@ -1,31 +1,26 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase-server";
+import { prisma } from "@/lib/prisma";
 
 export async function GET() {
   try {
-    // Fetch active ponds
-    const { data: ponds, error } = await supabase
-      .from("Pond")
-      .select("*")
-      .eq("isActive", true)
-      .order("price", { ascending: true });
-
-    if (error) throw error;
+    // Fetch active ponds ordered by price
+    const ponds = await prisma.pond.findMany({
+      where: { isActive: true },
+      orderBy: { price: "asc" },
+    });
 
     // Fetch active spots count per pond
-    const { data: spots } = await supabase
-      .from("Spot")
-      .select("pondId")
-      .eq("isActive", true);
+    const spots = await prisma.spot.findMany({
+      where: { isActive: true },
+      select: { pondId: true },
+    });
 
     const spotCountMap = new Map<string, number>();
-    if (spots) {
-      for (const s of spots) {
-        spotCountMap.set(s.pondId, (spotCountMap.get(s.pondId) || 0) + 1);
-      }
+    for (const s of spots) {
+      spotCountMap.set(s.pondId, (spotCountMap.get(s.pondId) || 0) + 1);
     }
 
-    const result = (ponds || []).map((pond) => ({
+    const result = ponds.map((pond) => ({
       ...pond,
       _count: { spots: spotCountMap.get(pond.id) || 0 },
     }));

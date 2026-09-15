@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase-server";
+import { prisma } from "@/lib/prisma";
 
 /**
  * Omise Webhook Handler
@@ -28,24 +28,24 @@ export async function POST(request: NextRequest) {
 
         if (status === "successful" && orderId) {
           // Update order status to PAID
-          await supabase
-            .from("Order")
-            .update({ status: "PAID" })
-            .eq("id", orderId);
+          await prisma.order.updateMany({
+            where: { id: orderId },
+            data: { status: "PAID" },
+          });
 
           // Update payment status to SUCCESSFUL
-          await supabase
-            .from("Payment")
-            .update({ status: "SUCCESSFUL", paidAt: new Date().toISOString() })
-            .eq("orderId", orderId);
+          await prisma.payment.updateMany({
+            where: { orderId },
+            data: { status: "SUCCESSFUL", paidAt: new Date() },
+          });
 
           console.log(`Order ${orderId} payment successful`);
         } else if (status === "failed") {
           // Update payment status to failed
-          await supabase
-            .from("Payment")
-            .update({ status: "FAILED" })
-            .eq("orderId", orderId);
+          await prisma.payment.updateMany({
+            where: { orderId },
+            data: { status: "FAILED" },
+          });
 
           console.log(`Order ${orderId} payment failed`);
         }

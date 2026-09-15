@@ -1,65 +1,33 @@
 'use client';
 
 import { useTranslations, useLocale } from 'next-intl';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useRouter } from '@/i18n/routing';
+import {
+  fetchPonds,
+  fetchPondSpots,
+  createBooking,
+  ApiPond,
+  ApiSpot,
+} from '@/lib/api-client';
+import { useApp } from '@/contexts/AppContext';
 
 type PondType = 'LEISURE' | 'COMPETITION';
 type TimeSlotKey = 'MORNING' | 'AFTERNOON' | 'EVENING' | 'FULL_DAY';
 
-interface Pond {
-  id: string;
-  type: PondType;
-  name_zh: string;
-  name_en: string;
-  name_th: string;
-  price: number;
-  minParticipants: number | null;
-  maxSpots: number;
-}
-
-interface Spot {
-  id: string;
-  number: number;
-  booked: boolean;
-}
-
-const pondData: Pond[] = [
-  {
-    id: '1',
-    type: 'LEISURE',
-    name_zh: '休闲塘',
-    name_en: 'Leisure Pond',
-    name_th: 'บ่อพักผ่อน',
-    price: 100,
-    minParticipants: null,
-    maxSpots: 30,
-  },
-  {
-    id: '2',
-    type: 'COMPETITION',
-    name_zh: '竞赛塘',
-    name_en: 'Competition Pond',
-    name_th: 'บ่อแข่งขัน',
-    price: 500,
-    minParticipants: 10,
-    maxSpots: 40,
-  },
-];
-
-const generateSpots = (count: number, booked: number[]): Spot[] =>
-  Array.from({ length: count }, (_, i) => ({
-    id: `spot-${i + 1}`,
-    number: i + 1,
-    booked: booked.includes(i + 1),
-  }));
-
 export default function BookingPage() {
   const t = useTranslations();
   const locale = useLocale();
+  const router = useRouter();
+  const { user } = useApp();
+
+  const [ponds, setPonds] = useState<ApiPond[]>([]);
+  const [pondsLoading, setPondsLoading] = useState(true);
 
   const [pondType, setPondType] = useState<PondType>('LEISURE');
   const [selectedDate, setSelectedDate] = useState('');
-  const [selectedTimeSlot, setSelectedTimeSlot] = useState<TimeSlotKey>('MORNING');
+  const [selectedTimeSlot, setSelectedTimeSlot] =
+    useState<TimeSlotKey>('MORNING');
   const [selectedSpot, setSelectedSpot] = useState<string | null>(null);
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
@@ -68,16 +36,66 @@ export default function BookingPage() {
   const [showSuccess, setShowSuccess] = useState(false);
   const [showParticipantError, setShowParticipantError] = useState(false);
 
-  const activePond = pondData.find((p) => p.type === pondType)!;
+  const [spots, setSpots] = useState<ApiSpot[]>([]);
+  const [spotsLoading, setSpotsLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const spots = generateSpots(
-    activePond.maxSpots,
-    activePond.type === 'LEISURE'
-      ? [3, 7, 12, 15, 22, 28]
-      : [5, 10, 15, 20, 25, 30, 35, 38]
-  );
+  // Prefill customer details from the logged-in user
+  useEffect(() => {
+    if (user) {
+      setCustomerName((n) => n || user.name);
+      setCustomerPhone((p) => p || user.phone);
+    }
+  }, [user]);
 
+  // Load ponds
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setPondsLoading(true);
+      try {
+        const data = await fetchPonds();
+        if (!cancelled) setPonds(data);
+      } catch {
+        /* keep empty; UI shows unavailable */
+      } finally {
+        if (!cancelled) setPondsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const activePond = ponds.find((p) => p.type === pondType);
   const isLeisure = pondType === 'LEISURE';
+
+  // Load spots whenever pond or date changes (leisure needs the grid)
+  useEffect(() => {
+    if (!activePond || !selectedDate) {
+      setSpots([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setSpotsLoading(true);
+      try {
+        const { spots: data } = await fetchPondSpots(
+          activePond.id,
+          selectedDate,
+        );
+        if (!cancelled) setSpots(data);
+      } catch {
+        if (!cancelled) setSpots([]);
+      } finally {
+        if (!cancelled) setSpotsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activePond, selectedDate]);
 
   const timeSlots: { key: TimeSlotKey; labelKey: string }[] = [
     { key: 'MORNING', labelKey: 'booking.morning' },
@@ -86,32 +104,82 @@ export default function BookingPage() {
     { key: 'FULL_DAY', labelKey: 'booking.fullDay' },
   ];
 
-  const price = isLeisure ? activePond.price : activePond.price * participantCount;
+  const price = !activePond
+    ? 0
+    : isLeisure
+      ? activePond.price
+      : activePond.price * participantCount;
+
   const selectedSpotData = spots.find((s) => s.id === selectedSpot);
 
-  const canConfirm = isLeisure
-    ? selectedDate && selectedSpot && customerName && customerPhone
-    : selectedDate && customerName && customerPhone && participantCount >= 10;
+  // A spot is available for the selected slot
+  const isSpotAvailable = (spot: ApiSpot) => {
+    if (isLeisure) {
+      return spot.slotAvailability
+        ? !!spot.slotAvailability[selectedTimeSlot]
+        : spot.available;
+    }
+    return spot.available;
+  };
 
-  const handleConfirm = () => {
-    if (!isLeisure && participantCount < activePond.minParticipants!) {
+  const availableCount = spots.filter(isSpotAvailable).length;
+
+  const canConfirm = !activePond
+    ? false
+    : isLeisure
+      ? !!(selectedDate && selectedSpot && customerName && customerPhone)
+      : !!(
+          selectedDate &&
+          customerName &&
+          customerPhone &&
+          groupName &&
+          participantCount >= 10
+        );
+
+  const handleConfirm = async () => {
+    if (!activePond) return;
+    if (!isLeisure && participantCount < (activePond.minParticipants || 10)) {
       setShowParticipantError(true);
       return;
     }
-    setShowSuccess(true);
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      await createBooking({
+        pondId: activePond.id,
+        spotId: isLeisure ? selectedSpot || undefined : undefined,
+        date: selectedDate,
+        timeSlot: isLeisure ? selectedTimeSlot : 'FULL_DAY',
+        participantCount: isLeisure ? undefined : participantCount,
+        groupName: isLeisure ? undefined : groupName,
+        customerName,
+        customerPhone,
+        userId: user?.id,
+      });
+      setShowSuccess(true);
+    } catch (e: any) {
+      setSubmitError(e.message || 'Failed to create booking');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleReset = () => {
     setShowSuccess(false);
     setSelectedSpot(null);
-    setCustomerName('');
-    setCustomerPhone('');
     setGroupName('');
     setParticipantCount(10);
     setShowParticipantError(false);
+    setSubmitError(null);
+    // refresh spot availability after a successful booking
+    if (activePond && selectedDate) {
+      fetchPondSpots(activePond.id, selectedDate)
+        .then(({ spots: data }) => setSpots(data))
+        .catch(() => {});
+    }
   };
 
-  const getPondName = (pond: Pond) => {
+  const getPondName = (pond: ApiPond) => {
     if (locale === 'en') return pond.name_en;
     if (locale === 'th') return pond.name_th;
     return pond.name_zh;
@@ -119,7 +187,9 @@ export default function BookingPage() {
 
   return (
     <div className="mx-auto max-w-lg px-4 py-6">
-      <h2 className="mb-4 text-2xl font-bold text-neutral-900">{t('booking.title')}</h2>
+      <h2 className="mb-4 text-2xl font-bold text-neutral-900">
+        {t('booking.title')}
+      </h2>
 
       {/* Pond Type Selector */}
       <div className="mb-6">
@@ -140,7 +210,9 @@ export default function BookingPage() {
             }`}
           >
             <span className="block">{t('pond.leisure')}</span>
-            <span className="block text-xs opacity-80">{t('home.leisurePrice')}</span>
+            <span className="block text-xs opacity-80">
+              {t('home.leisurePrice')}
+            </span>
           </button>
           <button
             onClick={() => {
@@ -154,7 +226,9 @@ export default function BookingPage() {
             }`}
           >
             <span className="block">{t('pond.competition')}</span>
-            <span className="block text-xs opacity-80">{t('home.competitionPrice')}</span>
+            <span className="block text-xs opacity-80">
+              {t('home.competitionPrice')}
+            </span>
           </button>
         </div>
         <p className="mt-2 text-xs text-neutral-500">
@@ -170,7 +244,10 @@ export default function BookingPage() {
         <input
           type="date"
           value={selectedDate}
-          onChange={(e) => setSelectedDate(e.target.value)}
+          onChange={(e) => {
+            setSelectedDate(e.target.value);
+            setSelectedSpot(null);
+          }}
           min={new Date().toISOString().split('T')[0]}
           className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
         />
@@ -186,7 +263,10 @@ export default function BookingPage() {
             {timeSlots.map((slot) => (
               <button
                 key={slot.key}
-                onClick={() => setSelectedTimeSlot(slot.key)}
+                onClick={() => {
+                  setSelectedTimeSlot(slot.key);
+                  setSelectedSpot(null);
+                }}
                 className={`rounded-xl px-3 py-2.5 text-sm font-medium transition ${
                   selectedTimeSlot === slot.key
                     ? 'bg-primary-700 text-white shadow-brand'
@@ -202,8 +282,18 @@ export default function BookingPage() {
 
       {!isLeisure && (
         <div className="mb-4 rounded-xl bg-neutral-50 p-3 text-center text-sm text-neutral-500">
-          <svg className="mx-auto mb-1 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          <svg
+            className="mx-auto mb-1 h-5 w-5"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
           </svg>
           {t('booking.onlyFullDay')}
         </div>
@@ -216,38 +306,65 @@ export default function BookingPage() {
             <label className="text-sm font-medium text-neutral-700">
               {t('booking.selectSpot')}
             </label>
-            <span className="text-xs text-neutral-400">
-              {spots.filter((s) => !s.booked).length}/{spots.length} {t('booking.available')}
-            </span>
+            {selectedDate && !spotsLoading && (
+              <span className="text-xs text-neutral-400">
+                {availableCount}/{spots.length} {t('booking.available')}
+              </span>
+            )}
           </div>
-          <div className="mb-2 flex items-center gap-4 text-xs text-neutral-500">
-            <span className="flex items-center gap-1">
-              <span className="inline-block h-3 w-3 rounded border border-primary-200 bg-primary-50" />
-              {t('booking.available')}
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="inline-block h-3 w-3 rounded border border-error-500/30 bg-error-100" />
-              {t('booking.booked')}
-            </span>
-          </div>
-          <div className="grid grid-cols-6 gap-2 md:grid-cols-8">
-            {spots.map((spot) => (
-              <button
-                key={spot.id}
-                disabled={spot.booked}
-                onClick={() => setSelectedSpot(spot.id)}
-                className={`flex h-11 w-full items-center justify-center rounded-lg text-sm font-medium transition ${
-                  spot.booked
-                    ? 'cursor-not-allowed bg-error-100 text-error-400'
-                    : selectedSpot === spot.id
-                      ? 'bg-primary-700 text-white shadow-brand'
-                      : 'bg-primary-50 text-primary-700 hover:bg-primary-100'
-                }`}
-              >
-                {spot.number}
-              </button>
-            ))}
-          </div>
+
+          {!selectedDate ? (
+            <div className="rounded-xl bg-neutral-50 p-4 text-center text-sm text-neutral-500">
+              {t('booking.selectDate')}
+            </div>
+          ) : spotsLoading ? (
+            <div className="grid grid-cols-6 gap-2 md:grid-cols-8">
+              {Array.from({ length: 18 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="h-11 w-full animate-pulse rounded-lg bg-neutral-100"
+                />
+              ))}
+            </div>
+          ) : spots.length === 0 ? (
+            <div className="rounded-xl bg-neutral-50 p-4 text-center text-sm text-neutral-500">
+              {t('common.noData')}
+            </div>
+          ) : (
+            <>
+              <div className="mb-2 flex items-center gap-4 text-xs text-neutral-500">
+                <span className="flex items-center gap-1">
+                  <span className="inline-block h-3 w-3 rounded border border-primary-200 bg-primary-50" />
+                  {t('booking.available')}
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="inline-block h-3 w-3 rounded border border-error-500/30 bg-error-100" />
+                  {t('booking.booked')}
+                </span>
+              </div>
+              <div className="grid grid-cols-6 gap-2 md:grid-cols-8">
+                {spots.map((spot) => {
+                  const available = isSpotAvailable(spot);
+                  return (
+                    <button
+                      key={spot.id}
+                      disabled={!available}
+                      onClick={() => setSelectedSpot(spot.id)}
+                      className={`flex h-11 w-full items-center justify-center rounded-lg text-sm font-medium transition ${
+                        !available
+                          ? 'cursor-not-allowed bg-error-100 text-error-400'
+                          : selectedSpot === spot.id
+                            ? 'bg-primary-700 text-white shadow-brand'
+                            : 'bg-primary-50 text-primary-700 hover:bg-primary-100'
+                      }`}
+                    >
+                      {spot.number}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -256,7 +373,10 @@ export default function BookingPage() {
         <div className="mb-4 rounded-xl bg-white p-4 shadow-md">
           <div className="mb-3 flex items-center justify-between">
             <span className="text-sm text-neutral-600">
-              {t('booking.spotNumber')}: <strong className="text-neutral-900">#{selectedSpotData.number}</strong>
+              {t('booking.spotNumber')}:{' '}
+              <strong className="text-neutral-900">
+                #{selectedSpotData.number}
+              </strong>
             </span>
             <span className="text-lg font-bold text-accent-600">฿{price}</span>
           </div>
@@ -282,7 +402,9 @@ export default function BookingPage() {
       {/* Competition Form */}
       {!isLeisure && (
         <div className="mb-4 rounded-xl bg-white p-4 shadow-md">
-          <h4 className="mb-3 text-sm font-semibold text-neutral-900">{t('booking.groupBooking')}</h4>
+          <h4 className="mb-3 text-sm font-semibold text-neutral-900">
+            {t('booking.groupBooking')}
+          </h4>
           <div className="space-y-3">
             <div>
               <label className="mb-1 block text-xs font-medium text-neutral-500">
@@ -334,20 +456,29 @@ export default function BookingPage() {
                 </button>
               </div>
               {showParticipantError && (
-                <p className="mt-1 text-xs text-error-600">{t('booking.participantCountError')}</p>
+                <p className="mt-1 text-xs text-error-600">
+                  {t('booking.participantCountError')}
+                </p>
               )}
-              <p className="mt-1 text-xs text-neutral-400">{t('booking.minParticipants')}</p>
+              <p className="mt-1 text-xs text-neutral-400">
+                {t('booking.minParticipants')}
+              </p>
             </div>
             <div className="border-t border-neutral-100 pt-3">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-neutral-500">{t('booking.price')}</span>
+                <span className="text-sm text-neutral-500">
+                  {t('booking.price')}
+                </span>
                 <span className="text-lg font-bold text-accent-600">
                   ฿{price.toLocaleString()}
                 </span>
               </div>
-              <p className="mt-0.5 text-xs text-neutral-400">
-                {activePond.price} × {participantCount} = ฿{price.toLocaleString()}
-              </p>
+              {activePond && (
+                <p className="mt-0.5 text-xs text-neutral-400">
+                  {activePond.price} × {participantCount} = ฿
+                  {price.toLocaleString()}
+                </p>
+              )}
             </div>
             <div className="space-y-2 pt-2">
               <input
@@ -369,52 +500,100 @@ export default function BookingPage() {
         </div>
       )}
 
+      {submitError && (
+        <div className="mb-4 rounded-xl bg-error-50 p-3 text-sm text-error-600">
+          {submitError}
+        </div>
+      )}
+
       {/* Sticky CTA */}
-      {(isLeisure ? selectedSpot : true) && (
+      {activePond && (isLeisure ? selectedSpot : true) && (
         <div className="fixed bottom-16 left-0 right-0 z-40 border-t border-neutral-200 bg-white/95 px-4 py-3 backdrop-blur-md">
           <div className="mx-auto flex max-w-lg items-center justify-between gap-4">
             <div>
               <p className="text-xs text-neutral-500">
                 {isLeisure
-                  ? `${t('booking.spotNumber')}: ${selectedSpotData?.number ? `#${selectedSpotData.number}` : '—'}`
+                  ? `${t('booking.spotNumber')}: ${
+                      selectedSpotData?.number
+                        ? `#${selectedSpotData.number}`
+                        : '—'
+                    }`
                   : getPondName(activePond)}
               </p>
-              <p className="text-lg font-bold text-neutral-900">฿{price.toLocaleString()}</p>
+              <p className="text-lg font-bold text-neutral-900">
+                ฿{price.toLocaleString()}
+              </p>
             </div>
             <button
               onClick={handleConfirm}
-              disabled={!canConfirm}
+              disabled={!canConfirm || submitting}
               className="flex-1 rounded-xl bg-accent-500 py-3 text-sm font-semibold text-white shadow-cta transition hover:bg-accent-600 disabled:cursor-not-allowed disabled:bg-neutral-300"
             >
-              {t('booking.confirmBooking')}
+              {submitting ? t('common.loading') : t('booking.confirmBooking')}
             </button>
           </div>
         </div>
       )}
 
+      {pondsLoading && ponds.length === 0 && (
+        <div className="py-10 text-center text-sm text-neutral-400">
+          {t('common.loading')}
+        </div>
+      )}
+
       {/* Success Modal */}
-      {showSuccess && (
+      {showSuccess && activePond && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-xl">
             <div className="mb-4 flex justify-center">
               <div className="flex h-16 w-16 items-center justify-center rounded-full bg-success-50">
-                <svg className="h-8 w-8 text-success-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                <svg
+                  className="h-8 w-8 text-success-600"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M5 13l4 4L19 7"
+                  />
                 </svg>
               </div>
             </div>
-            <h3 className="text-lg font-bold text-neutral-900">{t('booking.bookingSuccess')}</h3>
+            <h3 className="text-lg font-bold text-neutral-900">
+              {t('booking.bookingSuccess')}
+            </h3>
             <div className="mt-2 space-y-1 text-sm text-neutral-500">
-              {!isLeisure && groupName && <p>{t('booking.groupName')}: {groupName}</p>}
-              {!isLeisure && <p>{participantCount} {t('booking.participantCount')}</p>}
-              <p className="text-lg font-bold text-accent-600">฿{price.toLocaleString()}</p>
+              {!isLeisure && groupName && (
+                <p>
+                  {t('booking.groupName')}: {groupName}
+                </p>
+              )}
+              {!isLeisure && (
+                <p>
+                  {participantCount} {t('booking.participantCount')}
+                </p>
+              )}
+              <p className="text-lg font-bold text-accent-600">
+                ฿{price.toLocaleString()}
+              </p>
             </div>
-            <button
-              onClick={handleReset}
-              className="mt-4 w-full rounded-xl bg-primary-700 py-2.5 text-sm font-semibold text-white transition hover:bg-primary-800"
-            >
-              {t('common.confirm')}
-            </button>
+            <div className="mt-4 flex gap-2">
+              <button
+                onClick={handleReset}
+                className="flex-1 rounded-xl bg-neutral-100 py-2.5 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-200"
+              >
+                {t('common.confirm')}
+              </button>
+              <button
+                onClick={() => router.push('/orders')}
+                className="flex-1 rounded-xl bg-primary-700 py-2.5 text-sm font-semibold text-white transition hover:bg-primary-800"
+              >
+                {t('common.orders')}
+              </button>
+            </div>
           </div>
         </div>
       )}
