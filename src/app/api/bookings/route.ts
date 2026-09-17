@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { isClosedDate } from "@/lib/closed-days";
 
 export async function POST(request: NextRequest) {
   try {
@@ -34,6 +35,16 @@ export async function POST(request: NextRequest) {
     const bookingDate = new Date(date);
     if (isNaN(bookingDate.getTime())) {
       return NextResponse.json({ error: "Invalid date" }, { status: 400 });
+    }
+
+    // Reject bookings on any closed day (Monday or statutory holiday)
+    const dateStr = String(date).slice(0, 10);
+    const closed = await isClosedDate(dateStr);
+    if (closed) {
+      return NextResponse.json(
+        { error: "The venue is closed on this date" },
+        { status: 400 },
+      );
     }
 
     if (pond.type === "LEISURE") {

@@ -2,7 +2,6 @@
 
 import { useTranslations, useLocale } from 'next-intl';
 import { useState, useEffect, useCallback } from 'react';
-import { Link } from '@/i18n/routing';
 import QRCode from 'qrcode';
 import {
   fetchAdminTables,
@@ -23,15 +22,6 @@ interface TableRow {
   isActive: boolean;
   orderCount?: number;
 }
-
-const adminTabs = [
-  { href: '/admin', labelKey: 'admin.dashboard', icon: '📊' },
-  { href: '/admin/collect', labelKey: 'admin.collectPayment', icon: '💳' },
-  { href: '/admin/menu', labelKey: 'admin.menu', icon: '🍽️' },
-  { href: '/admin/tables', labelKey: 'admin.tables', icon: '🪑' },
-  { href: '/admin/bookings', labelKey: 'admin.bookings', icon: '📅' },
-  { href: '/admin/transactions', labelKey: 'admin.transactions', icon: '💰' },
-];
 
 export default function AdminTablesPage() {
   const t = useTranslations();
@@ -353,43 +343,7 @@ export default function AdminTablesPage() {
   );
 
   return (
-    <div className="mx-auto max-w-lg px-4 py-6">
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-neutral-900">{t('admin.tables')}</h2>
-        <div className="flex items-center gap-2">
-          <Link
-            href="/"
-            className="flex items-center gap-1 rounded-lg bg-primary-50 px-3 py-1.5 text-xs font-medium text-primary-700 hover:bg-primary-100"
-          >
-            {t('admin.viewSite')}
-          </Link>
-          <Link
-            href="/admin"
-            className="rounded-lg bg-neutral-100 px-3 py-1.5 text-xs font-medium text-neutral-600 hover:bg-neutral-200"
-          >
-            {t('common.back')}
-          </Link>
-        </div>
-      </div>
-
-      {/* Admin nav */}
-      <div className="mb-4 flex gap-1 overflow-x-auto rounded-xl bg-neutral-100 p-1">
-        {adminTabs.map((tab) => (
-          <Link
-            key={tab.href}
-            href={tab.href}
-            className={`flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition ${
-              tab.href === '/admin/tables'
-                ? 'bg-white text-primary-700 shadow-sm'
-                : 'text-neutral-500 hover:text-neutral-700'
-            }`}
-          >
-            <span>{tab.icon}</span>
-            {t(tab.labelKey)}
-          </Link>
-        ))}
-      </div>
-
+    <>
       {error && (
         <div className="mb-4 rounded-xl bg-error-50 px-4 py-2 text-sm text-error-600">
           {error}
@@ -508,6 +462,6 @@ export default function AdminTablesPage() {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }

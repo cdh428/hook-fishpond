@@ -95,12 +95,17 @@
     "participantCount": "Number of Participants",
     "minParticipants": "Minimum 10 participants required",
     "participantCountError": "Competition pond requires at least 10 participants",
-    "leisureMode": "Leisure mode — select spot & time slot",
+    "leisureMode": "Leisure mode — pick a spot, fish all day",
     "competitionMode": "Competition mode — group event, full-day only",
     "timeSlotsAvailable": "Time slots available",
     "onlyFullDay": "Full-day only",
     "spotsAvailable": "Spots available",
-    "spotsTotal": "Total spots"
+    "spotsTotal": "Total spots",
+    "businessHours": "Business hours 09:00–18:00",
+    "fullDayNote": "One-time full-day purchase — no time slots",
+    "mondayClosed": "Closed every Monday",
+    "closedDay": "This day is a rest day — booking unavailable",
+    "upcomingClosed": "Upcoming closed days"
   },
   "menu": {
     "title": "Menu",
@@ -224,6 +229,7 @@
   },
   "admin": {
     "dashboard": "Dashboard",
+    "title": "Admin",
     "menu": "Menu Management",
     "bookings": "Booking Management",
     "transactions": "Transaction Reports",
@@ -305,6 +311,14 @@
     "uploadWechatQr": "Please upload your WeChat Pay QR code in Settings first",
     "scanAndPayHint": "Customer scans and enters the amount to pay",
     "promptpayDynamicHint": "Amount is pre-filled, customer confirms to pay",
-    "enterAmountFirst": "Please enter an amount first"
+    "enterAmountFirst": "Please enter an amount first",
+    "restDays": "Rest Days",
+    "mondayFixed": "Closed every Monday (automatic)",
+    "statutoryHint": "Statutory holidays automatically block bookings and same-day ordering",
+    "addRestDay": "Add Rest Day",
+    "restDayDate": "Date",
+    "restDayReason": "Note (optional)",
+    "noRestDays": "No extra rest days",
+    "yearLabel": "Year"
   }
 }

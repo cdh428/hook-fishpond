@@ -2,9 +2,7 @@
 
 import { useTranslations } from 'next-intl';
 import { useState, useEffect } from 'react';
-import { Link } from '@/i18n/routing';
 import {
-  adminLogin,
   fetchAdminStats,
   fetchAdminBookings,
   fetchAdminOrders,
@@ -30,15 +28,6 @@ const statusI18n: Record<string, string> = {
   READY: 'orders.ready',
 };
 
-const adminTabs = [
-  { href: '/admin', labelKey: 'admin.dashboard', icon: '📊' },
-  { href: '/admin/collect', labelKey: 'admin.collectPayment', icon: '💳' },
-  { href: '/admin/menu', labelKey: 'admin.menu', icon: '🍽️' },
-  { href: '/admin/tables', labelKey: 'admin.tables', icon: '🪑' },
-  { href: '/admin/bookings', labelKey: 'admin.bookings', icon: '📅' },
-  { href: '/admin/transactions', labelKey: 'admin.transactions', icon: '💰' },
-];
-
 // time slot + pond helpers
 const timeSlotKey: Record<string, string> = {
   MORNING: 'booking.morning',
@@ -52,12 +41,6 @@ const pondKeyForType = (type: string) =>
 
 export default function AdminDashboard() {
   const t = useTranslations();
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [showLogin, setShowLogin] = useState(false);
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [loginError, setLoginError] = useState('');
-  const [loading, setLoading] = useState(false);
 
   const [stats, setStats] = useState({
     todayBookings: 0,
@@ -73,9 +56,9 @@ export default function AdminDashboard() {
   const [rebindBusy, setRebindBusy] = useState(false);
 
   useEffect(() => {
-    if (!isLoggedIn) return;
     loadDashboardData();
-  }, [isLoggedIn]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const loadDashboardData = async () => {
     setDataLoading(true);
@@ -117,69 +100,6 @@ export default function AdminDashboard() {
       setRebindBusy(false);
     }
   };
-
-  const handleLogin = async () => {
-    if (!username || !password) {
-      setLoginError(t('admin.loginFailed'));
-      return;
-    }
-    setLoading(true);
-    setLoginError('');
-    try {
-      await adminLogin(username, password);
-      setIsLoggedIn(true);
-      setShowLogin(false);
-      setUsername('');
-      setPassword('');
-    } catch {
-      setLoginError(t('admin.loginFailed'));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (!isLoggedIn) {
-    return (
-      <div className="mx-auto max-w-lg px-4 py-6">
-        <h2 className="mb-6 text-2xl font-bold text-neutral-900">{t('admin.loginTitle')}</h2>
-        <div className="rounded-2xl bg-white p-6 shadow-md">
-          <div className="space-y-4">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-neutral-700">
-                {t('admin.loginUsername')}
-              </label>
-              <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-neutral-700">
-                {t('admin.loginPassword')}
-              </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
-              />
-            </div>
-            {loginError && <p className="text-xs text-error-600">{loginError}</p>}
-            <button
-              onClick={handleLogin}
-              disabled={loading}
-              className="w-full rounded-xl bg-primary-700 py-3 text-sm font-semibold text-white shadow-brand transition hover:bg-primary-800 disabled:opacity-50"
-            >
-              {loading ? t('common.loading') : t('common.login')}
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   const statCards = [
     {
@@ -225,46 +145,7 @@ export default function AdminDashboard() {
   ];
 
   return (
-    <div className="mx-auto max-w-lg px-4 py-6">
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-neutral-900">{t('admin.dashboard')}</h2>
-        <div className="flex items-center gap-2">
-          <Link
-            href="/"
-            className="flex items-center gap-1 rounded-lg bg-primary-50 px-3 py-1.5 text-xs font-medium text-primary-700 hover:bg-primary-100"
-          >
-            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12H3m0 0l4-4m-4 4l4 4m12-4a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            {t('admin.viewSite')}
-          </Link>
-          <button
-            onClick={() => setIsLoggedIn(false)}
-            className="rounded-lg bg-neutral-100 px-3 py-1.5 text-xs font-medium text-neutral-600 hover:bg-neutral-200"
-          >
-            {t('common.logout')}
-          </button>
-        </div>
-      </div>
-
-      {/* Tab Navigation */}
-      <div className="mb-6 flex gap-1 overflow-x-auto rounded-xl bg-neutral-100 p-1">
-        {adminTabs.map((tab) => (
-          <Link
-            key={tab.href}
-            href={tab.href}
-            className={`flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition ${
-              tab.href === '/admin'
-                ? 'bg-white text-primary-700 shadow-sm'
-                : 'text-neutral-500 hover:text-neutral-700'
-            }`}
-          >
-            <span>{tab.icon}</span>
-            {t(tab.labelKey)}
-          </Link>
-        ))}
-      </div>
-
+    <>
       {dataLoading ? (
         <div className="py-20 text-center text-sm text-neutral-400">{t('common.loading')}</div>
       ) : dataError ? (
@@ -378,6 +259,6 @@ export default function AdminDashboard() {
         onClear={() => handleRebind(null)}
         title={rebindOrder ? `${rebindOrder.orderNumber} · ${t('table.changeTable')}` : undefined}
       />
-    </div>
+    </>
   );
 }

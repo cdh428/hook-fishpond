@@ -181,6 +181,20 @@ enum TableArea {
   CAFE  // 咖啡厅
 }
 
+// ===== CLOSED DAY (休息日 / 法定假日) =====
+// Monday is ALWAYS closed (hard-coded rule in lib/closed-days.ts).
+// This model stores *additional* statutory holidays the admin adds.
+model ClosedDay {
+  id        String   @id @default(cuid())
+  date      DateTime @unique @db.Date
+  reason_zh String?
+  reason_en String?
+  reason_th String?
+  createdAt DateTime @default(now())
+
+  @@index([date])
+}
+
 // ===== ORDER & PAYMENT =====
 model Order {
   id            String        @id @default(cuid())

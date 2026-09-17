@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { bangkokDateString } from "@/lib/date-utils";
+import { isClosedDate } from "@/lib/closed-days";
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,6 +18,14 @@ export async function POST(request: NextRequest) {
     // Order type: DINE_IN (default) must be tied to a table, TAKEAWAY never is.
     const orderType: "DINE_IN" | "TAKEAWAY" =
       body.orderType === "TAKEAWAY" ? "TAKEAWAY" : "DINE_IN";
+
+    // Block same-day (on-site) ordering when the venue is closed today
+    if (await isClosedDate(bangkokDateString())) {
+      return NextResponse.json(
+        { error: "The venue is closed today" },
+        { status: 400 },
+      );
+    }
 
     // Resolve dining table. Dine-in orders REQUIRE a valid, active table so
     // staff can serve and settle them; takeaway orders carry no table.

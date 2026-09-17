@@ -7,13 +7,15 @@ import {
   fetchPonds,
   fetchPondSpots,
   createBooking,
+  fetchClosedDays,
   ApiPond,
   ApiSpot,
 } from '@/lib/api-client';
+import { bangkokDateString, isMonday } from '@/lib/date-utils';
+import DatePicker from '@/components/DatePicker';
 import { useApp } from '@/contexts/AppContext';
 
 type PondType = 'LEISURE' | 'COMPETITION';
-type TimeSlotKey = 'MORNING' | 'AFTERNOON' | 'EVENING' | 'FULL_DAY';
 
 export default function BookingPage() {
   const t = useTranslations();
@@ -26,8 +28,6 @@ export default function BookingPage() {
 
   const [pondType, setPondType] = useState<PondType>('LEISURE');
   const [selectedDate, setSelectedDate] = useState('');
-  const [selectedTimeSlot, setSelectedTimeSlot] =
-    useState<TimeSlotKey>('MORNING');
   const [selectedSpot, setSelectedSpot] = useState<string | null>(null);
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
@@ -40,6 +40,12 @@ export default function BookingPage() {
   const [spotsLoading, setSpotsLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  // Closed-day tracking for the date picker
+  const [closedDates, setClosedDates] = useState<Set<string>>(new Set());
+  const todayStr = bangkokDateString();
+  const isDateDisabled = (s: string) =>
+    s < todayStr || isMonday(s) || closedDates.has(s);
 
   // Prefill customer details from the logged-in user
   useEffect(() => {
@@ -61,6 +67,24 @@ export default function BookingPage() {
         /* keep empty; UI shows unavailable */
       } finally {
         if (!cancelled) setPondsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Load closed days (statutory holidays) to disable them in the picker
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetchClosedDays();
+        if (!cancelled) {
+          setClosedDates(new Set(res.days.map((d) => d.date)));
+        }
+      } catch {
+        /* ignore — picker still blocks Mondays + past dates */
       }
     })();
     return () => {
@@ -97,13 +121,6 @@ export default function BookingPage() {
     };
   }, [activePond, selectedDate]);
 
-  const timeSlots: { key: TimeSlotKey; labelKey: string }[] = [
-    { key: 'MORNING', labelKey: 'booking.morning' },
-    { key: 'AFTERNOON', labelKey: 'booking.afternoon' },
-    { key: 'EVENING', labelKey: 'booking.evening' },
-    { key: 'FULL_DAY', labelKey: 'booking.fullDay' },
-  ];
-
   const price = !activePond
     ? 0
     : isLeisure
@@ -116,7 +133,7 @@ export default function BookingPage() {
   const isSpotAvailable = (spot: ApiSpot) => {
     if (isLeisure) {
       return spot.slotAvailability
-        ? !!spot.slotAvailability[selectedTimeSlot]
+        ? !!spot.slotAvailability['FULL_DAY']
         : spot.available;
     }
     return spot.available;
@@ -124,10 +141,31 @@ export default function BookingPage() {
 
   const availableCount = spots.filter(isSpotAvailable).length;
 
+  // Upcoming closed days: Mondays (recurring) + the next statutory holidays
+  const upcomingClosedChips: string[] = [
+    t('booking.mondayClosed'),
+    ...Array.from(closedDates)
+      .filter((d) => d >= todayStr)
+      .sort()
+      .slice(0, 4)
+      .map((d) =>
+        new Intl.DateTimeFormat(locale, {
+          month: 'short',
+          day: 'numeric',
+        }).format(new Date(`${d}T00:00:00`)),
+      ),
+  ];
+
   const canConfirm = !activePond
     ? false
     : isLeisure
-      ? !!(selectedDate && selectedSpot && customerName && customerPhone)
+      ? !!(
+          selectedDate &&
+          !isDateDisabled(selectedDate) &&
+          selectedSpot &&
+          customerName &&
+          customerPhone
+        )
       : !!(
           selectedDate &&
           customerName &&
@@ -149,7 +187,7 @@ export default function BookingPage() {
         pondId: activePond.id,
         spotId: isLeisure ? selectedSpot || undefined : undefined,
         date: selectedDate,
-        timeSlot: isLeisure ? selectedTimeSlot : 'FULL_DAY',
+        timeSlot: 'FULL_DAY',
         participantCount: isLeisure ? undefined : participantCount,
         groupName: isLeisure ? undefined : groupName,
         customerName,
@@ -234,6 +272,11 @@ export default function BookingPage() {
         <p className="mt-2 text-xs text-neutral-500">
           {isLeisure ? t('booking.leisureMode') : t('booking.competitionMode')}
         </p>
+        {isLeisure && (
+          <p className="mt-1 text-xs text-neutral-400">
+            {t('booking.fullDayNote')}
+          </p>
+        )}
       </div>
 
       {/* Date Selection */}
@@ -241,44 +284,35 @@ export default function BookingPage() {
         <label className="mb-2 block text-sm font-medium text-neutral-700">
           {t('booking.selectDate')}
         </label>
-        <input
-          type="date"
+        <DatePicker
           value={selectedDate}
-          onChange={(e) => {
-            setSelectedDate(e.target.value);
+          onChange={(d) => {
+            setSelectedDate(d);
             setSelectedSpot(null);
           }}
-          min={new Date().toISOString().split('T')[0]}
-          className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+          minDate={todayStr}
+          isDisabled={isDateDisabled}
+          locale={locale}
         />
-      </div>
-
-      {/* Time Slot Selection — Leisure only */}
-      {isLeisure && (
-        <div className="mb-4">
-          <label className="mb-2 block text-sm font-medium text-neutral-700">
-            {t('booking.selectTime')}
-          </label>
-          <div className="grid grid-cols-2 gap-2">
-            {timeSlots.map((slot) => (
-              <button
-                key={slot.key}
-                onClick={() => {
-                  setSelectedTimeSlot(slot.key);
-                  setSelectedSpot(null);
-                }}
-                className={`rounded-xl px-3 py-2.5 text-sm font-medium transition ${
-                  selectedTimeSlot === slot.key
-                    ? 'bg-primary-700 text-white shadow-brand'
-                    : 'bg-white text-neutral-700 shadow-sm hover:bg-primary-50'
-                }`}
+        <p className="mt-2 text-xs text-neutral-500">
+          {t('booking.businessHours')} · {t('booking.mondayClosed')}
+        </p>
+        <div className="mt-3">
+          <p className="mb-1.5 text-xs font-medium text-neutral-600">
+            {t('booking.upcomingClosed')}
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {upcomingClosedChips.map((chip, i) => (
+              <span
+                key={i}
+                className="rounded-full bg-neutral-100 px-2.5 py-1 text-[11px] font-medium text-neutral-500"
               >
-                {t(slot.labelKey)}
-              </button>
+                {chip}
+              </span>
             ))}
           </div>
         </div>
-      )}
+      </div>
 
       {!isLeisure && (
         <div className="mb-4 rounded-xl bg-neutral-50 p-3 text-center text-sm text-neutral-500">

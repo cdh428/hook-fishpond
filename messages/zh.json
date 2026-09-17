@@ -95,12 +95,17 @@
     "participantCount": "参与人数",
     "minParticipants": "最少需要10人",
     "participantCountError": "竞赛塘最少需要10人才能预约",
-    "leisureMode": "休闲模式 — 选择钓位和时段",
+    "leisureMode": "休闲模式 — 选择钓位，全天畅钓",
     "competitionMode": "竞赛模式 — 团体活动，全天使用",
     "timeSlotsAvailable": "可选时段",
     "onlyFullDay": "仅全天时段",
     "spotsAvailable": "可预约钓位",
-    "spotsTotal": "总钓位"
+    "spotsTotal": "总钓位",
+    "businessHours": "营业时间 09:00–18:00",
+    "fullDayNote": "全天一次性购买，不分时段",
+    "mondayClosed": "每周一休息",
+    "closedDay": "该日为休息日，暂不可预约",
+    "upcomingClosed": "近期休息日"
   },
   "menu": {
     "title": "美食菜单",
@@ -224,6 +229,7 @@
   },
   "admin": {
     "dashboard": "仪表盘",
+    "title": "管理后台",
     "menu": "菜单管理",
     "bookings": "预约管理",
     "transactions": "交易报表",
@@ -305,6 +311,14 @@
     "uploadWechatQr": "请先在设置中上传微信收款码",
     "scanAndPayHint": "请客户扫码后输入金额支付",
     "promptpayDynamicHint": "扫码后自动显示金额，客户确认即可支付",
-    "enterAmountFirst": "请输入收款金额"
+    "enterAmountFirst": "请输入收款金额",
+    "restDays": "休息日",
+    "mondayFixed": "每周一固定休息（系统自动）",
+    "statutoryHint": "法定休息日将自动屏蔽用户预约与当日点餐",
+    "addRestDay": "新增休息日",
+    "restDayDate": "日期",
+    "restDayReason": "说明（可选）",
+    "noRestDays": "暂无额外休息日",
+    "yearLabel": "年份"
   }
 }

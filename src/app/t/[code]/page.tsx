@@ -1,6 +1,8 @@
 import { redirect } from 'next/navigation';
 import { cookies, headers } from 'next/headers';
 import { prisma } from '@/lib/prisma';
+import { bangkokDateString } from '@/lib/date-utils';
+import { isClosedDate } from '@/lib/closed-days';
 import { locales, defaultLocale } from '@/i18n/config';
 
 /**
@@ -96,6 +98,48 @@ export default async function TableLandingPage({
     headerStore.get('accept-language'),
     cookieStore.get('NEXT_LOCALE')?.value,
   );
+
+  // Venue closed today (Monday or statutory holiday) → do not route into ordering
+  if (await isClosedDate(bangkokDateString())) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-bg-page px-6">
+        <div className="w-full max-w-md rounded-2xl bg-white p-8 text-center shadow-lg">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-error-50">
+            <svg
+              className="h-8 w-8 text-error-500"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+          </div>
+          <h1 className="text-lg font-bold text-neutral-900">
+            今日休息 / Closed Today / วันนี้ปิดทำการ
+          </h1>
+          <p className="mt-2 text-sm text-neutral-500">
+            乐钓鱼塘每周一休息，或今日为法定休息日。欢迎其他时间光临。
+            <br />
+            We rest every Monday, or today is a statutory holiday. Please visit
+            us another day.
+            <br />
+            เราปิดทุกวันจันทร์ หรือวันนี้เป็นวันหยุดนักขัตฤกษ์ กรุณาเยี่ยมชมในวันอื่น
+          </p>
+          <a
+            href={`/${locale}`}
+            className="mt-6 inline-block rounded-xl bg-primary-700 px-6 py-3 text-sm font-semibold text-white"
+          >
+            继续浏览 / Continue / ดำเนินการต่อ
+          </a>
+        </div>
+      </div>
+    );
+  }
 
   redirect(`/${locale}/menu?table=${table.code}`);
 }

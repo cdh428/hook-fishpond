@@ -376,6 +376,27 @@ export async function adminLogin(
   });
 }
 
+export interface AdminSession {
+  id: string;
+  username: string;
+  role: string;
+}
+
+/**
+ * Admin — resolve the current session from the `admin-session` cookie.
+ * Throws (401) when not logged in, so callers use try/catch as an auth check.
+ */
+export async function fetchAdminMe(): Promise<AdminSession> {
+  return request<AdminSession>(`/api/admin/auth/me`);
+}
+
+/** Admin — clear the session cookie. */
+export async function adminLogout(): Promise<{ message: string }> {
+  return request<{ message: string }>(`/api/admin/auth/logout`, {
+    method: 'POST',
+  });
+}
+
 export async function fetchAdminStats(): Promise<any> {
   return request<any>(`/api/admin/stats`);
 }
@@ -641,4 +662,51 @@ export function tableOrderUrl(code: string, baseUrl?: string): string {
     baseUrl ||
     (typeof window !== 'undefined' ? window.location.origin : '');
   return `${base}/t/${code}`;
+}
+
+// ---------- Closed days (休息日 / 法定假日) ----------
+
+export interface ApiClosedDay {
+  id: string;
+  /** YYYY-MM-DD */
+  date: string;
+  reason_zh?: string;
+  reason_en?: string;
+  reason_th?: string;
+}
+
+export interface ClosedDaysResponse {
+  /** Monday is always closed — this is a hard-coded rule. */
+  mondayClosed: boolean;
+  days: ApiClosedDay[];
+}
+
+/**
+ * Public — list every closed day (statutory holidays) for a year.
+ * Used by the booking page (to disable dates), the table landing page and
+ * the admin rest-days tab. `year` defaults to the current year server-side.
+ */
+export async function fetchClosedDays(year?: number): Promise<ClosedDaysResponse> {
+  const qs = year ? `?year=${year}` : '';
+  return request<ClosedDaysResponse>(`/api/closed-days${qs}`);
+}
+
+/** Admin — add a statutory holiday. */
+export async function createClosedDay(input: {
+  date: string;
+  reason_zh?: string;
+  reason_en?: string;
+  reason_th?: string;
+}): Promise<ApiClosedDay> {
+  return request<ApiClosedDay>(`/api/admin/closed-days`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+/** Admin — remove a statutory holiday. */
+export async function deleteClosedDay(id: string): Promise<any> {
+  return request<any>(`/api/admin/closed-days/${id}`, {
+    method: 'DELETE',
+  });
 }
