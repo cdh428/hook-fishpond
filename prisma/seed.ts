@@ -231,7 +231,6 @@ async function main() {
         name_zh: isHut ? `茅草屋 ${t.n}号桌` : `咖啡厅 ${t.n}号桌`,
         name_en: isHut ? `Hut Table ${t.n}` : `Cafe Table ${t.n}`,
         name_th: isHut ? `โต๊ะกระท่อม ${t.n}` : `โต๊ะคาเฟ่ ${t.n}`,
-        sortOrder: isHut ? t.n : 100 + t.n,
         isActive: true,
       },
     });
