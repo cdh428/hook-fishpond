@@ -6,6 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { Link } from '@/i18n/routing';
 import QRCode from 'qrcode';
 import { getPayment, confirmPayment } from '@/lib/api-client';
+import { clearStoredTable } from '@/lib/table-storage';
 
 type PaymentStatus = 'PENDING' | 'PROCESSING' | 'SUCCESSFUL' | 'FAILED' | 'REFUNDED';
 
@@ -177,6 +178,9 @@ export default function PaymentPage() {
 
   // --- Success ---
   if (status === 'SUCCESSFUL') {
+    // Payment settled → forget the stored table so the next party at that
+    // table (or the same customer re-ordering) starts fresh.
+    clearStoredTable();
     return (
       <div className="mx-auto flex min-h-[60vh] max-w-md flex-col items-center justify-center px-4">
         <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-green-100">

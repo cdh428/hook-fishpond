@@ -13,6 +13,12 @@ import {
   MenuType,
 } from '@/lib/api-client';
 import { useApp } from '@/contexts/AppContext';
+import TablePicker from '@/components/TablePicker';
+import {
+  getStoredTableCode,
+  setStoredTableCode,
+  clearStoredTable,
+} from '@/lib/table-storage';
 
 type TabType = MenuType;
 
@@ -40,25 +46,21 @@ export default function MenuPage() {
   const [error, setError] = useState<string | null>(null);
   const [zoomImage, setZoomImage] = useState<{ url: string; name: string } | null>(null);
 
-  // Dining table context (set when the customer scanned a table QR code)
+  // Dining table context (scanned QR or manually picked; persists for today)
   const [table, setTable] = useState<ApiTable | null>(null);
   const [tableCode, setTableCode] = useState<string | null>(null);
+  const [showPicker, setShowPicker] = useState(false);
 
-  // Resolve the table from the URL (?table=A01) or from the session.
-  // The scanned code is persisted so it survives navigation to the cart.
+  // Resolve the table: the URL param (QR scan) wins, otherwise today's pick.
   useEffect(() => {
     let cancelled = false;
 
-    const applyCode = (raw: string | null) => {
+    const applyCode = (raw: string | null | undefined) => {
       if (!raw) return;
       const code = raw.toUpperCase().trim();
       if (!/^[A-Z0-9]{1,8}$/.test(code)) return;
       setTableCode(code);
-      try {
-        sessionStorage.setItem('fp_table', code);
-      } catch {
-        // sessionStorage unavailable (private mode) — badge still works this page view
-      }
+      setStoredTableCode(code);
       getTableByCode(code)
         .then((t) => {
           if (!cancelled) setTable(t);
@@ -74,13 +76,7 @@ export default function MenuPage() {
     if (fromUrl) {
       applyCode(fromUrl);
     } else {
-      let stored: string | null = null;
-      try {
-        stored = sessionStorage.getItem('fp_table');
-      } catch {
-        stored = null;
-      }
-      applyCode(stored);
+      applyCode(getStoredTableCode());
     }
 
     return () => {
@@ -91,11 +87,16 @@ export default function MenuPage() {
   const clearTable = () => {
     setTable(null);
     setTableCode(null);
-    try {
-      sessionStorage.removeItem('fp_table');
-    } catch {
-      // ignore
-    }
+    clearStoredTable();
+  };
+
+  const selectTable = (code: string) => {
+    setTableCode(code);
+    setStoredTableCode(code);
+    setShowPicker(false);
+    getTableByCode(code)
+      .then((t) => setTable(t))
+      .catch(() => setTable(null));
   };
 
   // Load all categories + items once
@@ -197,9 +198,12 @@ export default function MenuPage() {
       <div className="px-4 pt-6">
         <h2 className="text-2xl font-bold text-neutral-900">{t('menu.title')}</h2>
 
-        {/* Table badge — shown when the customer entered by scanning a table QR */}
-        {tableCode && (
-          <div className="mt-3 flex items-center justify-between gap-2 rounded-xl border border-primary-200 bg-primary-50 px-3 py-2">
+        {/* Table context — from a scanned QR or manually picked */}
+        {tableCode ? (
+          <button
+            onClick={() => setShowPicker(true)}
+            className="mt-3 flex w-full items-center justify-between gap-2 rounded-xl border border-primary-200 bg-primary-50 px-3 py-2 text-left"
+          >
             <div className="flex min-w-0 items-center gap-2">
               <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary-700 text-white">
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -218,13 +222,29 @@ export default function MenuPage() {
                 <p className="text-[10px] text-primary-500">{t('table.orderingFor')}</p>
               </div>
             </div>
-            <button
-              onClick={clearTable}
-              className="shrink-0 rounded-lg px-2 py-1 text-[10px] font-medium text-primary-600 hover:bg-primary-100"
-            >
-              {t('table.clear')}
-            </button>
-          </div>
+            <span className="shrink-0 rounded-lg px-2 py-1 text-[10px] font-medium text-primary-600 hover:bg-primary-100">
+              {t('table.changeTable')}
+            </span>
+          </button>
+        ) : (
+          <button
+            onClick={() => setShowPicker(true)}
+            className="mt-3 flex w-full items-center gap-2 rounded-xl border border-dashed border-neutral-300 bg-white px-3 py-2.5 text-left"
+          >
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-neutral-100 text-neutral-500">
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 6h16M4 10h16M6 14v6m4-6v6m4-6v6m4-6v6"
+                />
+              </svg>
+            </span>
+            <p className="text-xs font-medium text-neutral-600">
+              {t('table.selectTable')}
+            </p>
+          </button>
         )}
       </div>
 
@@ -492,6 +512,19 @@ export default function MenuPage() {
           </div>
         </div>
       )}
+
+      {/* Table picker */}
+      <TablePicker
+        open={showPicker}
+        currentCode={tableCode}
+        onSelect={selectTable}
+        onClose={() => setShowPicker(false)}
+        allowClear
+        onClear={() => {
+          clearTable();
+          setShowPicker(false);
+        }}
+      />
     </div>
   );
 }

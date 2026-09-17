@@ -5,6 +5,14 @@ import { useState, useEffect } from 'react';
 import { Link, useRouter } from '@/i18n/routing';
 import { useApp } from '@/contexts/AppContext';
 import { createOrder, createPayment } from '@/lib/api-client';
+import TablePicker from '@/components/TablePicker';
+import {
+  getStoredTableCode,
+  setStoredTableCode,
+  clearStoredTable,
+} from '@/lib/table-storage';
+
+type OrderTypeValue = 'DINE_IN' | 'TAKEAWAY';
 
 type PaymentMethodType =
   | 'PROMPTPAY'
@@ -55,17 +63,22 @@ export default function CartPage() {
   const [paymentSuccess, setPaymentSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Dining table carried over from the scanned QR code (set on the menu page)
+  // Dining table + order type. Dine-in requires a table; takeaway skips it.
+  const [orderType, setOrderType] = useState<OrderTypeValue>('DINE_IN');
   const [tableCode, setTableCode] = useState<string | null>(null);
+  const [showTableError, setShowTableError] = useState(false);
+  const [showPicker, setShowPicker] = useState(false);
 
   useEffect(() => {
-    try {
-      const stored = sessionStorage.getItem('fp_table');
-      if (stored) setTableCode(stored.toUpperCase());
-    } catch {
-      // sessionStorage unavailable — treat as walk-in order
-    }
+    setTableCode(getStoredTableCode());
   }, []);
+
+  const selectTable = (code: string) => {
+    setTableCode(code);
+    setStoredTableCode(code);
+    setShowTableError(false);
+    setShowPicker(false);
+  };
 
   const getLocaleName = (item: {
     name_zh: string;
@@ -100,6 +113,12 @@ export default function CartPage() {
 
   const handlePay = async () => {
     if (!selectedPayment) return;
+    // Dine-in orders must be tied to a table so staff can serve & settle them.
+    if (orderType === 'DINE_IN' && !tableCode) {
+      setShowTableError(true);
+      setShowPicker(true);
+      return;
+    }
     setProcessing(true);
     setError(null);
     try {
@@ -119,7 +138,9 @@ export default function CartPage() {
             quantity: i.quantity,
           })),
           note: note || undefined,
-          tableCode: tableCode || undefined,
+          orderType,
+          // Takeaway orders never carry a table, even if one is stored.
+          tableCode: orderType === 'DINE_IN' ? tableCode || undefined : undefined,
         });
         orderId = order.id;
       }
@@ -310,6 +331,67 @@ export default function CartPage() {
             </div>
           )}
 
+          {/* Order type (dine-in / takeaway) + table selection */}
+          <div className="mb-4 rounded-xl bg-white p-4 shadow-md">
+            <p className="mb-2 text-xs font-semibold text-neutral-500">
+              {t('orderType.label')}
+            </p>
+            <div className="mb-3 grid grid-cols-2 gap-2">
+              {(['DINE_IN', 'TAKEAWAY'] as OrderTypeValue[]).map((v) => (
+                <button
+                  key={v}
+                  onClick={() => {
+                    setOrderType(v);
+                    setShowTableError(false);
+                  }}
+                  className={`rounded-xl border-2 px-3 py-2.5 text-sm font-medium transition ${
+                    orderType === v
+                      ? 'border-primary-600 bg-primary-50 text-primary-700'
+                      : 'border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300'
+                  }`}
+                >
+                  {v === 'DINE_IN'
+                    ? t('orderType.dineIn')
+                    : t('orderType.takeaway')}
+                </button>
+              ))}
+            </div>
+            {orderType === 'DINE_IN' && (
+              <>
+                <button
+                  onClick={() => setShowPicker(true)}
+                  className={`flex w-full items-center justify-between rounded-xl border px-3 py-2.5 text-left transition ${
+                    showTableError && !tableCode
+                      ? 'border-error-400 bg-error-50'
+                      : 'border-neutral-200 bg-neutral-50'
+                  }`}
+                >
+                  <span className="text-xs text-neutral-500">
+                    {t('table.yourTable')}
+                  </span>
+                  {tableCode ? (
+                    <span className="rounded-lg bg-primary-50 px-2 py-0.5 text-xs font-semibold text-primary-700">
+                      {tableCode} · {t('table.changeTable')}
+                    </span>
+                  ) : (
+                    <span
+                      className={`text-xs font-medium ${
+                        showTableError ? 'text-error-600' : 'text-neutral-400'
+                      }`}
+                    >
+                      {t('table.selectTable')}
+                    </span>
+                  )}
+                </button>
+                {showTableError && !tableCode && (
+                  <p className="mt-2 text-xs text-error-600">
+                    {t('table.selectRequired')}
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+
           {/* Order Note */}
           <div className="mb-4">
             <textarea
@@ -338,14 +420,6 @@ export default function CartPage() {
               </div>
             )}
             <div className="mt-3 border-t border-neutral-100 pt-3">
-              {tableCode && (
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="text-xs text-neutral-500">{t('table.yourTable')}</span>
-                  <span className="rounded-lg bg-primary-50 px-2 py-0.5 text-xs font-semibold text-primary-700">
-                    {tableCode}
-                  </span>
-                </div>
-              )}
               <div className="flex items-center justify-between">
                 <span className="font-semibold text-neutral-900">
                   {t('payment.total')}
@@ -435,6 +509,14 @@ export default function CartPage() {
           </div>
         </div>
       )}
+
+      {/* Table picker (dine-in) */}
+      <TablePicker
+        open={showPicker}
+        currentCode={tableCode}
+        onSelect={selectTable}
+        onClose={() => setShowPicker(false)}
+      />
     </div>
   );
 }

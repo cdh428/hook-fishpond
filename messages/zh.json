@@ -173,7 +173,16 @@
   "table": {
     "yourTable": "您的餐桌",
     "orderingFor": "正在为该桌点餐",
-    "clear": "清除"
+    "clear": "清除",
+    "selectTable": "选择桌号",
+    "changeTable": "更换桌号",
+    "selectRequired": "堂食请先选择桌号",
+    "title": "选择桌号"
+  },
+  "orderType": {
+    "label": "用餐方式",
+    "dineIn": "堂食",
+    "takeaway": "外带"
   },
   "orders": {
     "title": "我的订单",

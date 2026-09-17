@@ -43,6 +43,7 @@ interface OrderView {
   }[];
   total: number;
   status: string;
+  orderType: 'DINE_IN' | 'TAKEAWAY';
   date: string;
   table: {
     code: string;
@@ -75,6 +76,7 @@ function mapOrder(raw: any): OrderView {
     })),
     total: raw.totalPrice,
     status: raw.status,
+    orderType: raw.orderType ?? 'DINE_IN',
     date: raw.createdAt ? new Date(raw.createdAt).toLocaleString() : '',
     table: raw.table
       ? {
@@ -267,8 +269,8 @@ export default function OrdersPage() {
                 </span>
               </div>
 
-              {/* Dining Table */}
-              {order.table && (
+              {/* Dining Table / Takeaway */}
+              {order.table ? (
                 <div className="mb-3 flex items-center gap-2 rounded-lg bg-accent-50 px-3 py-2">
                   <svg className="h-4 w-4 shrink-0 text-accent-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M6 14v6m4-6v6m4-6v6m4-6v6" />
@@ -281,7 +283,16 @@ export default function OrdersPage() {
                         : order.table.name_zh}
                   </span>
                 </div>
-              )}
+              ) : order.orderType === 'TAKEAWAY' ? (
+                <div className="mb-3 flex items-center gap-2 rounded-lg bg-neutral-100 px-3 py-2">
+                  <svg className="h-4 w-4 shrink-0 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                  </svg>
+                  <span className="text-xs font-medium text-neutral-600">
+                    {t('orderType.takeaway')}
+                  </span>
+                </div>
+              ) : null}
 
               {/* Booking Info */}
               {order.booking && (

@@ -173,7 +173,16 @@
   "table": {
     "yourTable": "โต๊ะของคุณ",
     "orderingFor": "กำลังสั่งอาหารสำหรับโต๊ะนี้",
-    "clear": "ล้าง"
+    "clear": "ล้าง",
+    "selectTable": "เลือกโต๊ะ",
+    "changeTable": "เปลี่ยนโต๊ะ",
+    "selectRequired": "กรุณาเลือกโต๊ะสำหรับทานที่ร้าน",
+    "title": "เลือกโต๊ะ"
+  },
+  "orderType": {
+    "label": "ประเภทการสั่ง",
+    "dineIn": "ทานที่ร้าน",
+    "takeaway": "สั่งกลับ"
   },
   "orders": {
     "title": "คำสั่งซื้อของฉัน",

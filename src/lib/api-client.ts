@@ -259,6 +259,8 @@ export async function fetchBookings(params: {
 
 // ---------- Orders ----------
 
+export type OrderTypeValue = 'DINE_IN' | 'TAKEAWAY';
+
 export interface CreateOrderInput {
   userId?: string;
   customerName: string;
@@ -266,6 +268,7 @@ export interface CreateOrderInput {
   items: { menuItemId: string; quantity: number; note?: string }[];
   bookingId?: string;
   note?: string;
+  orderType?: OrderTypeValue;
   tableCode?: string;
 }
 
@@ -412,6 +415,20 @@ export async function fetchAdminOrders(params?: {
   if (params?.endDate) qs.set('endDate', params.endDate);
   const query = qs.toString() ? `?${qs.toString()}` : '';
   return request<any[]>(`/api/admin/orders${query}`);
+}
+
+/**
+ * Admin — rebind an order's dining table.
+ * Pass a table code to attach/move, or null to detach (order becomes takeaway).
+ */
+export async function updateAdminOrderTable(
+  orderId: string,
+  tableCode: string | null,
+): Promise<any> {
+  return request<any>(`/api/admin/orders/${orderId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ tableCode }),
+  });
 }
 
 // ---------- Booking status (admin) ----------

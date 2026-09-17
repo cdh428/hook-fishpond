@@ -13,15 +13,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Resolve dining table from scanned QR code (optional — walk-in orders may skip this)
+    // Order type: DINE_IN (default) must be tied to a table, TAKEAWAY never is.
+    const orderType: "DINE_IN" | "TAKEAWAY" =
+      body.orderType === "TAKEAWAY" ? "TAKEAWAY" : "DINE_IN";
+
+    // Resolve dining table. Dine-in orders REQUIRE a valid, active table so
+    // staff can serve and settle them; takeaway orders carry no table.
     let tableId: string | null = null;
-    if (tableCode) {
+    if (orderType === "DINE_IN") {
+      if (!tableCode) {
+        return NextResponse.json(
+          { error: "Dine-in orders require a tableCode" },
+          { status: 400 },
+        );
+      }
       const table = await prisma.diningTable.findUnique({
         where: { code: String(tableCode).toUpperCase() },
       });
-      if (table && table.isActive) {
-        tableId = table.id;
+      if (!table || !table.isActive) {
+        return NextResponse.json(
+          { error: "Invalid or inactive table code" },
+          { status: 400 },
+        );
       }
+      tableId = table.id;
     }
 
     // Fetch menu items to calculate prices
@@ -83,6 +98,7 @@ export async function POST(request: NextRequest) {
           subtotal,
           totalPrice: subtotal,
           note: note || null,
+          orderType,
           status: "PENDING",
           items: {
             create: orderItemsData,

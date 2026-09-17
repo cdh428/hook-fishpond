@@ -8,7 +8,9 @@ import {
   fetchAdminStats,
   fetchAdminBookings,
   fetchAdminOrders,
+  updateAdminOrderTable,
 } from '@/lib/api-client';
+import TablePicker from '@/components/TablePicker';
 
 const statusColors: Record<string, string> = {
   PENDING: 'bg-warning-100 text-warning-600',
@@ -67,6 +69,8 @@ export default function AdminDashboard() {
   const [recentOrders, setRecentOrders] = useState<any[]>([]);
   const [dataLoading, setDataLoading] = useState(false);
   const [dataError, setDataError] = useState('');
+  const [rebindOrder, setRebindOrder] = useState<any | null>(null);
+  const [rebindBusy, setRebindBusy] = useState(false);
 
   useEffect(() => {
     if (!isLoggedIn) return;
@@ -96,6 +100,21 @@ export default function AdminDashboard() {
       setDataError(err?.message || t('common.error'));
     } finally {
       setDataLoading(false);
+    }
+  };
+
+  // Rebind an order to another table (customer moved / ordered without the QR).
+  const handleRebind = async (tableCode: string | null) => {
+    if (!rebindOrder) return;
+    setRebindBusy(true);
+    try {
+      const updated = await updateAdminOrderTable(rebindOrder.id, tableCode);
+      setRecentOrders((list) => list.map((o) => (o.id === updated.id ? updated : o)));
+      setRebindOrder(null);
+    } catch {
+      setDataError(t('common.error'));
+    } finally {
+      setRebindBusy(false);
     }
   };
 
@@ -313,13 +332,26 @@ export default function AdminDashboard() {
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-neutral-900">{o.orderNumber || o.id}</p>
                       <p className="truncate text-xs text-neutral-500">{o.customerName}</p>
-                      {o.table && (
-                        <span className="mt-0.5 inline-flex items-center gap-1 rounded bg-accent-50 px-1.5 py-0.5 text-[10px] font-medium text-accent-700">
+                      {o.table ? (
+                        <button
+                          onClick={() => setRebindOrder(o)}
+                          disabled={rebindBusy}
+                          className="mt-0.5 inline-flex items-center gap-1 rounded bg-accent-50 px-1.5 py-0.5 text-[10px] font-medium text-accent-700 hover:bg-accent-100"
+                        >
                           <svg className="h-2.5 w-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M6 14v6m4-6v6m4-6v6m4-6v6" />
                           </svg>
-                          {o.table.code}
-                        </span>
+                          {o.table.code} · {t('table.changeTable')}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => setRebindOrder(o)}
+                          disabled={rebindBusy}
+                          className="mt-0.5 inline-flex items-center gap-1 rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium text-neutral-500 hover:bg-neutral-200"
+                        >
+                          🥡 {t('orderType.takeaway')}
+                          <span className="text-neutral-400">· {t('table.changeTable')}</span>
+                        </button>
                       )}
                     </div>
                     <div className="text-right">
@@ -335,6 +367,17 @@ export default function AdminDashboard() {
           </div>
         </>
       )}
+
+      {/* Rebind table picker */}
+      <TablePicker
+        open={!!rebindOrder}
+        currentCode={rebindOrder?.table?.code || null}
+        onSelect={(code) => handleRebind(code)}
+        onClose={() => setRebindOrder(null)}
+        allowClear
+        onClear={() => handleRebind(null)}
+        title={rebindOrder ? `${rebindOrder.orderNumber} · ${t('table.changeTable')}` : undefined}
+      />
     </div>
   );
 }

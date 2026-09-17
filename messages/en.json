@@ -173,7 +173,16 @@
   "table": {
     "yourTable": "Your table",
     "orderingFor": "Ordering for this table",
-    "clear": "Clear"
+    "clear": "Clear",
+    "selectTable": "Select a table",
+    "changeTable": "Change",
+    "selectRequired": "Please select a table for dine-in",
+    "title": "Select a table"
+  },
+  "orderType": {
+    "label": "Order type",
+    "dineIn": "Dine-in",
+    "takeaway": "Takeaway"
   },
   "orders": {
     "title": "My Orders",

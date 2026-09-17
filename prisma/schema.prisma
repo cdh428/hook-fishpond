@@ -196,6 +196,7 @@ model Order {
   subtotal      Float
   totalPrice    Float
   note          String?
+  orderType     OrderType     @default(DINE_IN)
   status        OrderStatus   @default(PENDING)
   payment       Payment?
   createdAt     DateTime      @default(now())
@@ -221,6 +222,12 @@ enum OrderStatus {
   PREPARING
   READY
   CANCELLED
+}
+
+// ===== ORDER TYPE (点餐方式：堂食 / 外带) =====
+enum OrderType {
+  DINE_IN   // 堂食 — 必须绑定餐桌
+  TAKEAWAY  // 外带 — 无桌号
 }
 
 model Payment {
