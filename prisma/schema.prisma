@@ -168,7 +168,7 @@ model DiningTable {
   code      String   @unique        // A01–A10 (茅草屋), C01–C04 (咖啡厅) — QR短链用
   name_zh   String                  // 茅草屋 1号桌
   name_en   String                  // Hut Table 1
-  name_th   String                  // โต๊ะกระท่อม 1
+  name_th   String                  // ซุ้ม 1
   area      TableArea               // 区域：茅草屋 / 咖啡厅
   isActive  Boolean  @default(true)
   orders    Order[]

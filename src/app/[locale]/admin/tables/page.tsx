@@ -130,14 +130,14 @@ export default function AdminTablesPage() {
         ...f,
         name_zh: `茅草屋 ${num}号桌`,
         name_en: `Hut Table ${num}`,
-        name_th: `โต๊ะกระท่อม ${num}`,
+        name_th: `ซุ้ม ${num}`,
       }));
     } else {
       setForm((f) => ({
         ...f,
         name_zh: `咖啡厅 ${num}号桌`,
         name_en: `Cafe Table ${num}`,
-        name_th: `โต๊ะคาเฟ่ ${num}`,
+        name_th: `คาเฟ่ ${num}`,
       }));
     }
   };
