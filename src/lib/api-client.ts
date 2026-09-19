@@ -710,3 +710,107 @@ export async function deleteClosedDay(id: string): Promise<any> {
     method: 'DELETE',
   });
 }
+
+// ---------- Menu bulk import / export (admin) ----------
+
+export type MenuImportAction = 'ADD' | 'UPDATE' | 'DELETE' | 'ERROR';
+
+export interface MenuImportRow {
+  rowNumber: number;
+  action: MenuImportAction;
+  category: string;
+  categoryId?: string;
+  itemId?: string;
+  name_zh: string;
+  name_en: string;
+  name_th: string;
+  description_zh?: string;
+  description_en?: string;
+  description_th?: string;
+  price?: number;
+  spiceLevel?: number;
+  isPopular?: boolean;
+  isVegetarian?: boolean;
+  isActive?: boolean;
+  autoTranslated: string[];
+  changes: string[];
+  error?: string;
+}
+
+export interface MenuImportPreview {
+  summary: {
+    total: number;
+    add: number;
+    update: number;
+    delete: number;
+    error: number;
+    translated: number;
+  };
+  rows: MenuImportRow[];
+  newCategories: string[];
+}
+
+export interface MenuImportResult {
+  ok: boolean;
+  added: number;
+  updated: number;
+  deleted: number;
+  skipped: { rowNumber: number; name: string; reason: string }[];
+}
+
+/** Build the export download URL (file download — no JSON parsing). */
+export function menuExportUrl(format: 'xlsx' | 'csv' = 'xlsx'): string {
+  return `/api/admin/menu/export?format=${format}`;
+}
+
+/** Build the blank template download URL (file download — no JSON parsing). */
+export function menuTemplateUrl(format: 'xlsx' | 'csv' = 'xlsx'): string {
+  return `/api/admin/menu/template?format=${format}`;
+}
+
+/**
+ * Upload a menu file and receive a preview (nothing is written yet).
+ * Uses a raw fetch with FormData — must NOT set Content-Type manually so the
+ * browser can attach the multipart boundary. Does not use the `request()`
+ * helper because that forces `application/json`.
+ */
+export async function importMenuPreview(
+  file: File,
+  mode: 'translate' | 'keep',
+): Promise<MenuImportPreview> {
+  const form = new FormData();
+  form.append('file', file);
+  form.append('mode', mode);
+
+  const res = await fetch('/api/admin/menu/import', {
+    method: 'POST',
+    body: form,
+  });
+
+  const text = await res.text();
+  let body: any = null;
+  if (text) {
+    try {
+      body = JSON.parse(text);
+    } catch {
+      body = null;
+    }
+  }
+
+  if (!res.ok) {
+    throw new Error((body && body.error) || `Request failed (${res.status})`);
+  }
+
+  return body as MenuImportPreview;
+}
+
+/** Commit the validated preview rows to the server. */
+export async function commitMenuImport(input: {
+  rows: MenuImportRow[];
+  autoCreateCategories: boolean;
+}): Promise<MenuImportResult> {
+  return request<MenuImportResult>(`/api/admin/menu/import/commit`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}

@@ -2,6 +2,7 @@
 
 import { useTranslations, useLocale } from 'next-intl';
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { Link } from '@/i18n/routing';
 import {
   fetchAdminCategories,
   fetchAdminMenuItems,
@@ -331,13 +332,21 @@ export default function AdminMenuPage() {
           <div>
             <div className="mb-3 flex items-center justify-between">
               <h3 className="font-semibold text-neutral-900">{t('admin.menu')}</h3>
-              <button
-                onClick={() => openItemForm()}
-                disabled={filteredCategories.length === 0}
-                className="rounded-lg bg-accent-500 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
-              >
-                + {t('admin.addItem')}
-              </button>
+              <div className="flex gap-2">
+                <Link
+                  href="/admin/menu/bulk"
+                  className="rounded-lg bg-neutral-100 px-3 py-1.5 text-xs font-medium text-neutral-600 hover:bg-neutral-200"
+                >
+                  ⇅ {t('adminBulk.entry')}
+                </Link>
+                <button
+                  onClick={() => openItemForm()}
+                  disabled={filteredCategories.length === 0}
+                  className="rounded-lg bg-accent-500 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+                >
+                  + {t('admin.addItem')}
+                </button>
+              </div>
             </div>
             <div className="space-y-2">
               {filteredItems.map((item) => (
