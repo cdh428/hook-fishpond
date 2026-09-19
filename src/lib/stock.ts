@@ -167,6 +167,9 @@ export async function decrementStock(
   for (const item of items) {
     const qty = merged.get(item.id)!;
 
+    // 手动强制售罄：任何库存类型都必须拒绝下单
+    if (item.soldOut) throw new InsufficientStockError(item.name_zh);
+
     if (item.stockType === "MADE") {
       const limit = item.dailyLimit;
       if (limit != null) {
