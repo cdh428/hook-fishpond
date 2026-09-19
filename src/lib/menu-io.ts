@@ -317,13 +317,16 @@ export async function buildPreview(
       errorList.push("缺少分类或中文名称");
     }
 
-    const priceRaw = raw.price ?? "";
+    const priceRaw = (raw.price ?? "").trim();
     if (priceRaw === "") {
       errorList.push("价格不是有效数字");
     } else {
-      const cleaned = priceRaw.replace(/[^0-9.\-]/g, "");
+      // Tolerate a currency symbol, thousands separators and spaces — but do
+      // NOT silently turn garbage (e.g. "abc") into 0: stripping every
+      // non-numeric char left "" which Number() reads as 0.
+      const cleaned = priceRaw.replace(/[,\s฿]/g, "");
       const p = Number(cleaned);
-      if (!Number.isFinite(p) || p < 0) {
+      if (cleaned === "" || !Number.isFinite(p) || p < 0) {
         errorList.push("价格不是有效数字");
       } else {
         price = p;
