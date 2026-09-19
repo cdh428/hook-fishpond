@@ -125,7 +125,7 @@ export default function HomePage() {
   const [adminError, setAdminError] = useState('');
 
   const handleAdminAccess = () => {
-    if (adminUsername === 'hook' && adminPassword === 'Happy@2026') {
+    if (adminUsername === 'admin' && adminPassword === 'Admin@2026') {
       setShowAdminModal(false);
       setAdminUsername('');
       setAdminPassword('');
