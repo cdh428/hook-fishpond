@@ -3,6 +3,7 @@
 import { useTranslations, useLocale } from 'next-intl';
 import { useState } from 'react';
 import { Link, useRouter } from '@/i18n/routing';
+import { adminLogin } from '@/lib/api-client';
 
 const ponds = [
   {
@@ -123,16 +124,28 @@ export default function HomePage() {
   const [adminUsername, setAdminUsername] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
   const [adminError, setAdminError] = useState('');
+  const [adminLoading, setAdminLoading] = useState(false);
 
-  const handleAdminAccess = () => {
-    if (adminUsername === 'admin' && adminPassword === 'Admin@2026') {
+  // Single sign-in: authenticate against the real admin API here, so the
+  // `admin-session` cookie is set before we land on /admin — the admin shell
+  // then sees a valid session and does NOT ask for credentials a second time.
+  const handleAdminAccess = async () => {
+    if (!adminUsername || !adminPassword) {
+      setAdminError(t('admin.loginFailed'));
+      return;
+    }
+    setAdminLoading(true);
+    setAdminError('');
+    try {
+      await adminLogin(adminUsername, adminPassword);
       setShowAdminModal(false);
       setAdminUsername('');
       setAdminPassword('');
-      setAdminError('');
       router.push('/admin');
-    } else {
+    } catch {
       setAdminError(t('admin.loginFailed'));
+    } finally {
+      setAdminLoading(false);
     }
   };
 
@@ -323,9 +336,10 @@ export default function HomePage() {
               {adminError && <p className="text-xs text-error-600">{adminError}</p>}
               <button
                 onClick={handleAdminAccess}
-                className="w-full rounded-xl bg-primary-700 py-3 text-sm font-semibold text-white shadow-brand transition hover:bg-primary-800"
+                disabled={adminLoading}
+                className="w-full rounded-xl bg-primary-700 py-3 text-sm font-semibold text-white shadow-brand transition hover:bg-primary-800 disabled:opacity-50"
               >
-                {t('common.login')}
+                {adminLoading ? t('common.loading') : t('common.login')}
               </button>
             </div>
           </div>
