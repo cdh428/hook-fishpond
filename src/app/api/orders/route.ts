@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { bangkokDateString } from "@/lib/date-utils";
 import { isClosedDate } from "@/lib/closed-days";
+import { decrementStock, InsufficientStockError } from "@/lib/stock";
 
 export async function POST(request: NextRequest) {
   try {
@@ -123,6 +124,13 @@ export async function POST(request: NextRequest) {
         });
       }
 
+      // 扣减库存（不足时事务内抛 InsufficientStockError，整体回滚）
+      await decrementStock(
+        tx,
+        orderItemsData.map((i) => ({ menuItemId: i.menuItemId, quantity: i.quantity })),
+        { orderId: newOrder.id },
+      );
+
       return newOrder;
     });
 
@@ -138,6 +146,12 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(fullOrder || order, { status: 201 });
   } catch (error: any) {
+    if (error instanceof InsufficientStockError) {
+      return NextResponse.json(
+        { error: `${error.itemName} 已售罄，请调整购物车` },
+        { status: 400 },
+      );
+    }
     console.error("Create order error:", error);
     return NextResponse.json(
       { error: error.message || "Failed to create order" },

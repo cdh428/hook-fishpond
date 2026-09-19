@@ -30,6 +30,11 @@ export async function PUT(
       spiceLevel,
       sortOrder,
       isActive,
+      stockType,
+      dailyLimit,
+      stockQty,
+      lowStockAlert,
+      costPrice,
     } = body;
 
     const updateData: Record<string, any> = {};
@@ -48,6 +53,23 @@ export async function PUT(
     if (spiceLevel !== undefined) updateData.spiceLevel = spiceLevel;
     if (sortOrder !== undefined) updateData.sortOrder = sortOrder;
     if (isActive !== undefined) updateData.isActive = isActive;
+    if (stockType !== undefined) updateData.stockType = stockType;
+    if (dailyLimit !== undefined)
+      updateData.dailyLimit =
+        typeof dailyLimit === "number" ? dailyLimit : dailyLimit ? Number(dailyLimit) : null;
+    if (stockQty !== undefined)
+      updateData.stockQty =
+        typeof stockQty === "number" ? stockQty : stockQty ? Number(stockQty) : null;
+    if (lowStockAlert !== undefined)
+      updateData.lowStockAlert =
+        typeof lowStockAlert === "number"
+          ? lowStockAlert
+          : lowStockAlert
+            ? Number(lowStockAlert)
+            : null;
+    if (costPrice !== undefined)
+      updateData.costPrice =
+        typeof costPrice === "number" ? costPrice : costPrice ? Number(costPrice) : null;
 
     const item = await prisma.menuItem.update({
       where: { id },

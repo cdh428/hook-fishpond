@@ -40,6 +40,11 @@ interface MenuItem {
   isActive: boolean;
   imageUrl?: string;
   imageThumbUrl?: string;
+  stockType?: 'NONE' | 'MADE' | 'PURCHASED';
+  dailyLimit?: number | null;
+  stockQty?: number | null;
+  lowStockAlert?: number | null;
+  costPrice?: number | null;
 }
 
 export default function AdminMenuPage() {
@@ -148,6 +153,11 @@ export default function AdminMenuPage() {
     spice: 0,
     imageUrl: '' as string,
     imageThumbUrl: '' as string,
+    stockType: 'NONE' as 'NONE' | 'MADE' | 'PURCHASED',
+    dailyLimit: '' as string,
+    stockQty: '' as string,
+    lowStockAlert: '' as string,
+    costPrice: '' as string,
   });
 
   const [imageUploading, setImageUploading] = useState(false);
@@ -169,6 +179,23 @@ export default function AdminMenuPage() {
         spice: item.spice,
         imageUrl: item.imageUrl || '',
         imageThumbUrl: item.imageThumbUrl || '',
+        stockType: item.stockType || 'NONE',
+        dailyLimit:
+          item.dailyLimit === null || item.dailyLimit === undefined
+            ? ''
+            : String(item.dailyLimit),
+        stockQty:
+          item.stockQty === null || item.stockQty === undefined
+            ? ''
+            : String(item.stockQty),
+        lowStockAlert:
+          item.lowStockAlert === null || item.lowStockAlert === undefined
+            ? ''
+            : String(item.lowStockAlert),
+        costPrice:
+          item.costPrice === null || item.costPrice === undefined
+            ? ''
+            : String(item.costPrice),
       });
     } else {
       setEditingItem(null);
@@ -183,6 +210,11 @@ export default function AdminMenuPage() {
         spice: 0,
         imageUrl: '',
         imageThumbUrl: '',
+        stockType: 'NONE',
+        dailyLimit: '',
+        stockQty: '',
+        lowStockAlert: '',
+        costPrice: '',
       });
     }
     setShowItemForm(true);
@@ -194,6 +226,15 @@ export default function AdminMenuPage() {
       const price = parseFloat(itemForm.price) || 0;
       const imageUrl = itemForm.imageUrl || undefined;
       const imageThumbUrl = itemForm.imageThumbUrl || undefined;
+      const stockType = itemForm.stockType;
+      const dailyLimit =
+        itemForm.dailyLimit === '' ? null : Number(itemForm.dailyLimit);
+      const stockQty =
+        itemForm.stockQty === '' ? null : Number(itemForm.stockQty);
+      const lowStockAlert =
+        itemForm.lowStockAlert === '' ? null : Number(itemForm.lowStockAlert);
+      const costPrice =
+        itemForm.costPrice === '' ? null : Number(itemForm.costPrice);
       if (editingItem) {
         await updateMenuItem(editingItem.id, {
           categoryId: itemForm.catId,
@@ -206,6 +247,11 @@ export default function AdminMenuPage() {
           isVegetarian: itemForm.veg,
           imageUrl,
           imageThumbUrl,
+          stockType,
+          dailyLimit,
+          stockQty,
+          lowStockAlert,
+          costPrice,
         });
       } else {
         await createMenuItem({
@@ -219,6 +265,11 @@ export default function AdminMenuPage() {
           isVegetarian: itemForm.veg,
           imageUrl,
           imageThumbUrl,
+          stockType,
+          dailyLimit,
+          stockQty,
+          lowStockAlert,
+          costPrice,
         });
       }
       setShowItemForm(false);
@@ -613,6 +664,81 @@ export default function AdminMenuPage() {
                 />
                 {imageError && (
                   <p className="text-xs text-error-600">{imageError}</p>
+                )}
+              </div>
+
+              {/* Stock / 库存 block */}
+              <div className="space-y-2 border-t border-neutral-100 pt-3">
+                <label className="block text-xs font-medium text-neutral-500">
+                  {t('adminStock.stockType')}
+                </label>
+                <select
+                  value={itemForm.stockType}
+                  onChange={(e) =>
+                    setItemForm((f) => ({
+                      ...f,
+                      stockType: e.target.value as
+                        | 'NONE'
+                        | 'MADE'
+                        | 'PURCHASED',
+                    }))
+                  }
+                  className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm"
+                >
+                  <option value="NONE">{t('adminStock.typeNone')}</option>
+                  <option value="MADE">{t('adminStock.typeMade')}</option>
+                  <option value="PURCHASED">
+                    {t('adminStock.typePurchased')}
+                  </option>
+                </select>
+                {itemForm.stockType === 'MADE' && (
+                  <input
+                    type="number"
+                    min={0}
+                    placeholder={t('adminStock.dailyLimit')}
+                    value={itemForm.dailyLimit}
+                    onChange={(e) =>
+                      setItemForm((f) => ({ ...f, dailyLimit: e.target.value }))
+                    }
+                    className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm"
+                  />
+                )}
+                {itemForm.stockType === 'PURCHASED' && (
+                  <>
+                    <div className="rounded-xl bg-neutral-50 px-3 py-2.5 text-sm text-neutral-700">
+                      {t('adminStock.currentStock')}:{' '}
+                      {itemForm.stockQty === ''
+                        ? '—'
+                        : `${itemForm.stockQty} ${t('adminStock.unitPieces')}`}
+                    </div>
+                    <input
+                      type="number"
+                      min={0}
+                      placeholder={t('adminStock.lowStockAlertLine')}
+                      value={itemForm.lowStockAlert}
+                      onChange={(e) =>
+                        setItemForm((f) => ({
+                          ...f,
+                          lowStockAlert: e.target.value,
+                        }))
+                      }
+                      className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm"
+                    />
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      placeholder={t('adminStock.costPrice')}
+                      value={itemForm.costPrice}
+                      onChange={(e) =>
+                        setItemForm((f) => ({
+                          ...f,
+                          costPrice: e.target.value,
+                        }))
+                      }
+                      className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm"
+                    />
+                  </>
                 )}
               </div>
 

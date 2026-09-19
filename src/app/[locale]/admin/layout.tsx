@@ -27,6 +27,7 @@ const adminTabs = [
   { href: '/admin', labelKey: 'admin.dashboard', icon: '📊' },
   { href: '/admin/collect', labelKey: 'admin.collectPayment', icon: '💳' },
   { href: '/admin/menu', labelKey: 'admin.menu', icon: '🍽️' },
+  { href: '/admin/stock', labelKey: 'adminStock.entry', icon: '📦' },
   { href: '/admin/tables', labelKey: 'admin.tables', icon: '🪑' },
   { href: '/admin/rest-days', labelKey: 'admin.restDays', icon: '🗓️' },
   { href: '/admin/bookings', labelKey: 'admin.bookings', icon: '📅' },

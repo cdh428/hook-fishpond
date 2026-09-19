@@ -22,6 +22,16 @@ import {
 
 type TabType = MenuType;
 
+// Stock info returned by the public menu API (optional — legacy items may
+// omit it). `remaining` is only populated when the real remaining is ≤ 10,
+// otherwise it is `null` (meaning "don't show a number").
+type StockInfo = {
+  soldOut: boolean;
+  remaining: number | null;
+  stockType: 'NONE' | 'MADE' | 'PURCHASED';
+};
+type MenuItemWithStock = ApiMenuItem & { stock?: StockInfo };
+
 // Emoji keyed by category id (matches seed: cat-rice, cat-grill, cat-snack,
 // cat-drink, cat-beer). Falls back to a generic icon for unknown ids.
 const foodEmojis: Record<string, string> = {
@@ -41,7 +51,7 @@ export default function MenuPage() {
   const [activeCat, setActiveCat] = useState<string>('popular');
 
   const [categories, setCategories] = useState<ApiCategory[]>([]);
-  const [menuItems, setMenuItems] = useState<ApiMenuItem[]>([]);
+  const [menuItems, setMenuItems] = useState<MenuItemWithStock[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [zoomImage, setZoomImage] = useState<{ url: string; name: string } | null>(null);
@@ -112,7 +122,7 @@ export default function MenuPage() {
         ]);
         if (cancelled) return;
         setCategories(cats);
-        setMenuItems(items);
+        setMenuItems(items as MenuItemWithStock[]);
       } catch (e: any) {
         if (!cancelled) setError(e.message || 'Failed to load menu');
       } finally {
@@ -161,7 +171,14 @@ export default function MenuPage() {
 
   const popularItemsForTab = allItems.filter((i) => i.popular);
 
-  const handleAdd = (item: ApiMenuItem) => {    addFood({
+  const handleAdd = (item: MenuItemWithStock) => {
+    // Defensive: never add a sold-out item.
+    if (item.stock?.soldOut) return;
+    // Cap quantity at the remaining count when it is known (≤10).
+    const remaining = item.stock?.remaining;
+    const current = cartQtyMap[item.id] || 0;
+    if (remaining != null && current >= remaining) return;
+    addFood({
       id: item.id,
       name_zh: item.name_zh,
       name_en: item.name_en,
@@ -170,7 +187,7 @@ export default function MenuPage() {
     });
   };
 
-  const handleDecrement = (item: ApiMenuItem) => {
+  const handleDecrement = (item: MenuItemWithStock) => {
     const current = cartQtyMap[item.id] || 0;
     setFoodQuantity(item.id, current - 1);
   };
@@ -361,7 +378,9 @@ export default function MenuPage() {
               return (
                 <div
                   key={item.id}
-                  className="flex items-center gap-3 rounded-xl bg-white p-3 shadow-md transition hover:shadow-lg"
+                  className={`flex items-center gap-3 rounded-xl bg-white p-3 shadow-md transition hover:shadow-lg ${
+                    item.stock?.soldOut ? 'opacity-60 grayscale' : ''
+                  }`}
                 >
                   <div
                     className={`relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-neutral-50 text-3xl ${
@@ -418,6 +437,16 @@ export default function MenuPage() {
                               {t('menu.vegetarian')}
                             </span>
                           )}
+                          {item.stock?.soldOut && (
+                            <span className="rounded bg-neutral-400 px-1.5 py-0.5 text-white">
+                              {t('stock.soldOut')}
+                            </span>
+                          )}
+                          {item.stock?.remaining != null && (
+                            <span className="rounded bg-amber-100 px-1.5 py-0.5 text-amber-700">
+                              {t('stock.onlyLeft', { n: item.stock.remaining })}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -438,7 +467,12 @@ export default function MenuPage() {
                           </span>
                           <button
                             onClick={() => handleAdd(item)}
-                            className="flex h-7 w-7 items-center justify-center rounded-full bg-accent-500 text-sm font-medium text-white hover:bg-accent-600"
+                            disabled={item.stock?.soldOut}
+                            className={`flex h-7 w-7 items-center justify-center rounded-full bg-accent-500 text-sm font-medium text-white ${
+                              item.stock?.soldOut
+                                ? 'cursor-not-allowed opacity-50'
+                                : 'hover:bg-accent-600'
+                            }`}
                           >
                             +
                           </button>
@@ -446,7 +480,12 @@ export default function MenuPage() {
                       ) : (
                         <button
                           onClick={() => handleAdd(item)}
-                          className="rounded-lg bg-accent-500 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-accent-600"
+                          disabled={item.stock?.soldOut}
+                          className={`rounded-lg px-3 py-1.5 text-xs font-medium text-white transition ${
+                            item.stock?.soldOut
+                              ? 'cursor-not-allowed bg-neutral-400'
+                              : 'bg-accent-500 hover:bg-accent-600'
+                          }`}
                         >
                           {t('menu.addToCart')}
                         </button>

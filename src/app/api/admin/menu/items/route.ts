@@ -51,6 +51,11 @@ export async function POST(request: NextRequest) {
       isVegetarian,
       spiceLevel,
       sortOrder,
+      stockType,
+      dailyLimit,
+      stockQty,
+      lowStockAlert,
+      costPrice,
     } = body;
 
     if (!categoryId || !name_zh || !name_en || !name_th || price === undefined) {
@@ -76,6 +81,19 @@ export async function POST(request: NextRequest) {
         isVegetarian: isVegetarian || false,
         spiceLevel: spiceLevel || 0,
         sortOrder: sortOrder || 0,
+        stockType: stockType ?? "NONE",
+        dailyLimit:
+          typeof dailyLimit === "number" ? dailyLimit : dailyLimit ? Number(dailyLimit) : null,
+        stockQty:
+          typeof stockQty === "number" ? stockQty : stockQty ? Number(stockQty) : null,
+        lowStockAlert:
+          typeof lowStockAlert === "number"
+            ? lowStockAlert
+            : lowStockAlert
+              ? Number(lowStockAlert)
+              : null,
+        costPrice:
+          typeof costPrice === "number" ? costPrice : costPrice ? Number(costPrice) : null,
       },
       include: { category: true },
     });

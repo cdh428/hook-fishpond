@@ -152,6 +152,14 @@ model MenuItem {
   spiceLevel     Int          @default(0)
   isActive       Boolean      @default(true)
   sortOrder      Int          @default(0)
+  // ----- 库存管理 -----
+  stockType      StockType    @default(NONE)   // NONE=不管理 / MADE=自制 / PURCHASED=外购
+  dailyLimit     Int?                          // 自制：每日限量（空=不限量）
+  stockQty       Int?                          // 外购：当前库存（持久计数）
+  lowStockAlert  Int?                          // 外购：低库存预警线
+  costPrice      Float?                        // 成本价（用于毛利）
+  soldOut        Boolean      @default(false)  // 手动强制售罄
+  movements      StockMovement[]
   orderItems     OrderItem[]
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
@@ -160,6 +168,36 @@ model MenuItem {
 enum MenuType {
   FOOD
   DRINK
+}
+
+enum StockType {
+  NONE       // 不管理库存（默认可售）
+  MADE       // 自制：每日限量，余量=限量−当日已售
+  PURCHASED  // 外购：库存计数，可入库/损耗/调整
+}
+
+enum StockMovementType {
+  PURCHASE  // 外购入库
+  SALE      // 订单卖出（扣减）
+  CANCEL    // 取消/拒单回补
+  MANUAL    // 手动调整（盘点增减）
+  WASTE     // 损耗 / 自用
+}
+
+// ===== STOCK MOVEMENT (库存流水，可对账) =====
+model StockMovement {
+  id        String            @id @default(cuid())
+  itemId    String
+  item      MenuItem          @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  type      StockMovementType
+  quantity  Int               // 带符号：正=入库/回补，负=扣减/损耗
+  note      String?
+  orderId   String?
+  adminName String?
+  createdAt DateTime          @default(now())
+
+  @@index([itemId, createdAt])
+  @@index([createdAt])
 }
 
 // ===== DINING TABLE (餐桌二维码点餐) =====

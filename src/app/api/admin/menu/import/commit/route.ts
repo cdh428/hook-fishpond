@@ -103,6 +103,8 @@ export async function POST(request: NextRequest) {
               isPopular: r.isPopular ?? false,
               isVegetarian: r.isVegetarian ?? false,
               isActive: r.isActive ?? true,
+              stockType: r.stockType ?? "NONE",
+              dailyLimit: r.dailyLimit ?? null,
               sortOrder: nextSort++,
             },
           });
@@ -128,6 +130,11 @@ export async function POST(request: NextRequest) {
           if (r.isPopular !== undefined) data.isPopular = r.isPopular;
           if (r.isVegetarian !== undefined) data.isVegetarian = r.isVegetarian;
           if (r.isActive !== undefined) data.isActive = r.isActive;
+          // Only write stock fields when the row actually carries them, so a
+          // partial import never overwrites existing stock configuration.
+          // stockQty / lowStockAlert / costPrice are intentionally untouched.
+          if (r.stockType !== undefined) data.stockType = r.stockType;
+          if (r.dailyLimit !== undefined) data.dailyLimit = r.dailyLimit;
           if (category) data.categoryId = category.id;
 
           const upd = await tx.menuItem.update({

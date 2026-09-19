@@ -548,6 +548,11 @@ export async function createMenuItem(input: {
   description_th?: string;
   imageUrl?: string;
   imageThumbUrl?: string;
+  stockType?: 'NONE' | 'MADE' | 'PURCHASED';
+  dailyLimit?: number | null;
+  stockQty?: number | null;
+  lowStockAlert?: number | null;
+  costPrice?: number | null;
 }): Promise<any> {
   return request<any>(`/api/admin/menu/items`, {
     method: 'POST',
@@ -571,6 +576,11 @@ export async function updateMenuItem(
     description_th?: string;
     imageUrl?: string;
     imageThumbUrl?: string;
+    stockType?: 'NONE' | 'MADE' | 'PURCHASED';
+    dailyLimit?: number | null;
+    stockQty?: number | null;
+    lowStockAlert?: number | null;
+    costPrice?: number | null;
   },
 ): Promise<any> {
   return request<any>(`/api/admin/menu/items/${id}`, {
@@ -813,4 +823,135 @@ export async function commitMenuImport(input: {
     method: 'POST',
     body: JSON.stringify(input),
   });
+}
+
+// ---------- Inventory / Stock (库存管理) ----------
+
+export interface StockView {
+  stockType: 'NONE' | 'MADE' | 'PURCHASED';
+  soldOut: boolean;
+  remaining: number | null;
+  dailyLimit?: number | null;
+  lowStockAlert?: number | null;
+  lowStock: boolean;
+}
+
+export interface AdminStockItem {
+  id: string;
+  name_zh: string;
+  name_en: string;
+  name_th: string;
+  categoryName: string;
+  price: number;
+  costPrice: number | null;
+  imageThumbUrl: string | null;
+  stockType: 'NONE' | 'MADE' | 'PURCHASED';
+  dailyLimit: number | null;
+  stockQty: number | null;
+  lowStockAlert: number | null;
+  soldOut: boolean;
+  view: StockView;
+}
+
+export interface StockMovement {
+  id: string;
+  type: 'PURCHASE' | 'SALE' | 'CANCEL' | 'MANUAL' | 'WASTE';
+  quantity: number;
+  note: string | null;
+  orderId: string | null;
+  adminName: string | null;
+  createdAt: string;
+}
+
+export interface AdminStockSummary {
+  soldOut: number;
+  lowStock: number;
+  normal: number;
+  total: number;
+}
+
+export async function fetchAdminStock(): Promise<{
+  items: AdminStockItem[];
+  summary: AdminStockSummary;
+}> {
+  return request<{ items: AdminStockItem[]; summary: AdminStockSummary }>(
+    `/api/admin/stock`,
+  );
+}
+
+export async function fetchStockItem(itemId: string): Promise<{
+  item: AdminStockItem;
+  movements: StockMovement[];
+}> {
+  return request<{ item: AdminStockItem; movements: StockMovement[] }>(
+    `/api/admin/stock/${itemId}`,
+  );
+}
+
+export async function updateStockSettings(
+  itemId: string,
+  patch: {
+    stockType?: string;
+    dailyLimit?: number | null;
+    lowStockAlert?: number | null;
+    costPrice?: number | null;
+    soldOut?: boolean;
+  },
+): Promise<{ item: AdminStockItem }> {
+  return request<{ item: AdminStockItem }>(`/api/admin/stock/${itemId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  });
+}
+
+export async function postStockPurchase(
+  itemId: string,
+  input: { quantity: number; unitCost?: number; note?: string },
+): Promise<{ ok: boolean; stockQty: number | null }> {
+  return request<{ ok: boolean; stockQty: number | null }>(
+    `/api/admin/stock/${itemId}/purchase`,
+    {
+      method: 'POST',
+      body: JSON.stringify(input),
+    },
+  );
+}
+
+export async function postStockAdjust(
+  itemId: string,
+  input: { quantity: number; note?: string },
+): Promise<{ ok: boolean; stockQty: number | null }> {
+  return request<{ ok: boolean; stockQty: number | null }>(
+    `/api/admin/stock/${itemId}/adjust`,
+    {
+      method: 'POST',
+      body: JSON.stringify(input),
+    },
+  );
+}
+
+export async function postStockWaste(
+  itemId: string,
+  input: { quantity: number; note?: string },
+): Promise<{ ok: boolean; stockQty: number | null }> {
+  return request<{ ok: boolean; stockQty: number | null }>(
+    `/api/admin/stock/${itemId}/waste`,
+    {
+      method: 'POST',
+      body: JSON.stringify(input),
+    },
+  );
+}
+
+export async function postStockSoldOut(
+  itemId: string,
+  soldOut: boolean,
+): Promise<{ ok: boolean; soldOut: boolean }> {
+  return request<{ ok: boolean; soldOut: boolean }>(
+    `/api/admin/stock/${itemId}/soldout`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ soldOut }),
+    },
+  );
 }

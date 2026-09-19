@@ -19,6 +19,8 @@ export const MENU_COLUMNS: { key: string; header: string; required: boolean }[] 
   { key: "isPopular", header: "招牌", required: false },
   { key: "isVegetarian", header: "素食", required: false },
   { key: "isActive", header: "在售", required: false },
+  { key: "stockType", header: "库存类型", required: false },
+  { key: "dailyLimit", header: "每日限量", required: false },
   { key: "action", header: "操作", required: false },
 ];
 
@@ -45,6 +47,8 @@ export interface MenuImportRow {
   isPopular?: boolean;
   isVegetarian?: boolean;
   isActive?: boolean;
+  stockType?: "NONE" | "MADE" | "PURCHASED";
+  dailyLimit?: number | null;
   autoTranslated: string[]; // e.g. ['name_en','name_th']
   changes: string[]; // human-readable diff for UPDATE
   error?: string; // set when action === 'ERROR'
@@ -71,6 +75,12 @@ export type TranslateMode = "translate" | "keep";
 
 function boolZh(b: boolean): string {
   return b ? "是" : "否";
+}
+
+function zhStockType(v: string | null | undefined): string {
+  if (v === "MADE") return "自制";
+  if (v === "PURCHASED") return "外购";
+  return "不管理";
 }
 
 function fmtPrice(n: number): string {
@@ -222,6 +232,8 @@ type MenuItemRecord = {
   isPopular: boolean;
   isVegetarian: boolean;
   isActive: boolean;
+  stockType: string;
+  dailyLimit: number | null;
   categoryId: string;
 };
 
@@ -356,6 +368,32 @@ export async function buildPreview(
     isVegetarian = parseBool(raw.isVegetarian);
     isActive = parseBool(raw.isActive);
 
+    // --- stock columns ---
+    let stockType: "NONE" | "MADE" | "PURCHASED" | undefined;
+    const stockTypeRaw = (raw.stockType ?? "").trim();
+    if (stockTypeRaw !== "") {
+      if (["自制", "made", "MADE", "ทำเอง"].includes(stockTypeRaw)) {
+        stockType = "MADE";
+      } else if (["外购", "purchased", "PURCHASED", "ซื้อมา"].includes(stockTypeRaw)) {
+        stockType = "PURCHASED";
+      } else if (["不管理", "none", "ไม่มี"].includes(stockTypeRaw)) {
+        stockType = "NONE";
+      } else {
+        errorList.push("库存类型无法识别");
+      }
+    }
+
+    let dailyLimit: number | null | undefined;
+    const dailyLimitRaw = (raw.dailyLimit ?? "").trim();
+    if (dailyLimitRaw !== "") {
+      const n = Number(dailyLimitRaw);
+      if (!Number.isInteger(n) || n < 0) {
+        errorList.push("每日限量应为非负整数");
+      } else {
+        dailyLimit = n;
+      }
+    }
+
     // base action
     const matchedItem = itemByKey.get(`${category.trim()}|${name_zh.trim()}`);
     let action: ImportAction;
@@ -483,6 +521,17 @@ export async function buildPreview(
       if (isActive !== undefined && isActive !== matchedItem.isActive) {
         changes.push(`在售 ${boolZh(matchedItem.isActive)}→${boolZh(isActive)}`);
       }
+      if (stockType !== undefined && stockType !== matchedItem.stockType) {
+        changes.push(
+          `库存类型 ${zhStockType(matchedItem.stockType)}→${zhStockType(stockType)}`,
+        );
+      }
+      if (
+        dailyLimit !== undefined &&
+        dailyLimit !== (matchedItem.dailyLimit ?? null)
+      ) {
+        changes.push(`每日限量 ${dailyLimit}`);
+      }
       const catName = catById.get(matchedItem.categoryId)?.name_zh;
       if (catName && category && category !== catName) {
         changes.push(`分类 ${catName}→${category}`);
@@ -510,6 +559,8 @@ export async function buildPreview(
       isPopular,
       isVegetarian,
       isActive,
+      stockType,
+      dailyLimit,
       autoTranslated,
       changes,
       error: errorMsg,
@@ -578,6 +629,12 @@ export function buildExportRows(
         case "isActive":
           line.push(item.isActive ? "是" : "否");
           break;
+        case "stockType":
+          line.push(zhStockType(item.stockType));
+          break;
+        case "dailyLimit":
+          line.push(item.dailyLimit ?? "");
+          break;
         case "action":
           line.push("");
           break;
@@ -606,6 +663,8 @@ export function buildTemplateRows(): (string | number)[][] {
     "是",
     "否",
     "是",
+    "",
+    "",
     "",
   ]);
   return rows;

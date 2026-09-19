@@ -1,6 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
+import { buildStockViews, LOW_STOCK_DISPLAY_THRESHOLD } from "@/lib/stock";
+
+async function withStockField(items: any[]) {
+  // Never expose the exact remaining count above the display threshold.
+  const views = await buildStockViews(items);
+  return items.map((it) => {
+    const v = views.get(it.id)!;
+    return {
+      ...it,
+      stock: {
+        soldOut: v.soldOut,
+        remaining:
+          v.remaining != null && v.remaining <= LOW_STOCK_DISPLAY_THRESHOLD
+            ? v.remaining
+            : null,
+        stockType: v.stockType,
+      },
+    };
+  });
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -18,7 +38,7 @@ export async function GET(request: NextRequest) {
         orderBy: { sortOrder: "asc" },
       });
 
-      return NextResponse.json(items);
+      return NextResponse.json(await withStockField(items));
     }
 
     const items = await prisma.menuItem.findMany({
@@ -30,7 +50,7 @@ export async function GET(request: NextRequest) {
       orderBy: { sortOrder: "asc" },
     });
 
-    return NextResponse.json(items);
+    return NextResponse.json(await withStockField(items));
   } catch (error: any) {
     console.error("List menu items error:", error);
     return NextResponse.json(
