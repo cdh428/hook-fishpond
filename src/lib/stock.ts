@@ -183,11 +183,13 @@ export async function decrementStock(
         if (sold + qty > limit) throw new InsufficientStockError(item.name_zh);
       }
     } else if (item.stockType === "PURCHASED") {
-      const res = await tx.menuItem.updateMany({
-        where: { id: item.id, stockQty: { gte: qty } },
-        data: { stockQty: { decrement: qty } },
-      });
-      if (res.count === 0) throw new InsufficientStockError(item.name_zh);
+      // stockQty 可能为 NULL（刚设为外购）—— COALESCE 视为 0，且保证原子扣减
+      const affected = await tx.$executeRaw`
+        UPDATE "MenuItem"
+        SET "stockQty" = COALESCE("stockQty", 0) - ${qty}
+        WHERE "id" = ${item.id} AND COALESCE("stockQty", 0) >= ${qty}
+      `;
+      if (affected === 0) throw new InsufficientStockError(item.name_zh);
     } else {
       continue; // NONE 不管理库存
     }
@@ -222,10 +224,11 @@ export async function restoreStock(
   for (const oi of orderItems) {
     const st = oi.menuItem.stockType as StockTypeValue;
     if (st === "PURCHASED") {
-      await tx.menuItem.update({
-        where: { id: oi.menuItemId },
-        data: { stockQty: { increment: oi.quantity } },
-      });
+      await tx.$executeRaw`
+        UPDATE "MenuItem"
+        SET "stockQty" = COALESCE("stockQty", 0) + ${oi.quantity}
+        WHERE "id" = ${oi.menuItemId}
+      `;
     }
     if (st !== "NONE") {
       await tx.stockMovement.create({
@@ -258,17 +261,24 @@ export async function applyStockChange(input: {
     const item = await tx.menuItem.findUnique({ where: { id: input.itemId } });
     if (!item) throw new Error("NOT_FOUND");
 
-    const data: Prisma.MenuItemUpdateInput = {};
+    let stockQty = item.stockQty ?? null;
+
     if (item.stockType === "PURCHASED") {
-      data.stockQty = { increment: input.quantity };
-    }
-    if (input.type === "PURCHASE" && input.costPrice !== undefined) {
-      data.costPrice = input.costPrice;
+      // stockQty 可能为 NULL（刚设为外购）—— COALESCE 视为 0
+      await tx.$executeRaw`
+        UPDATE "MenuItem"
+        SET "stockQty" = COALESCE("stockQty", 0) + ${input.quantity}
+        WHERE "id" = ${input.itemId}
+      `;
+      stockQty = (item.stockQty ?? 0) + input.quantity;
     }
 
-    const updated = Object.keys(data).length
-      ? await tx.menuItem.update({ where: { id: input.itemId }, data })
-      : item;
+    if (input.type === "PURCHASE" && input.costPrice !== undefined) {
+      await tx.menuItem.update({
+        where: { id: input.itemId },
+        data: { costPrice: input.costPrice },
+      });
+    }
 
     await tx.stockMovement.create({
       data: {
@@ -280,6 +290,6 @@ export async function applyStockChange(input: {
       },
     });
 
-    return { stockQty: updated.stockQty ?? null };
+    return { stockQty };
   });
 }

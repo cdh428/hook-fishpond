@@ -442,7 +442,7 @@ export default function MenuPage() {
                               {t('stock.soldOut')}
                             </span>
                           )}
-                          {item.stock?.remaining != null && (
+                          {!item.stock?.soldOut && item.stock?.remaining != null && item.stock.remaining > 0 && (
                             <span className="rounded bg-amber-100 px-1.5 py-0.5 text-amber-700">
                               {t('stock.onlyLeft', { n: item.stock.remaining })}
                             </span>

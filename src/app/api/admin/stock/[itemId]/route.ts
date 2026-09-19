@@ -142,6 +142,18 @@ export async function PATCH(
       updateData.soldOut = body.soldOut;
     }
 
+    // 首次切换为外购时把库存初始化为 0（避免 NULL 影响扣减与展示）
+    if (updateData.stockType === "PURCHASED") {
+      const cur = await prisma.menuItem.findUnique({
+        where: { id: itemId },
+        select: { stockQty: true },
+      });
+      if (!cur) {
+        return NextResponse.json({ error: "Menu item not found" }, { status: 404 });
+      }
+      if (cur.stockQty === null) updateData.stockQty = 0;
+    }
+
     const item = await prisma.menuItem.update({
       where: { id: itemId },
       data: updateData,
