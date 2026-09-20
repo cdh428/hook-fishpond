@@ -380,6 +380,21 @@
     "csvName": "名称",
     "csvReason": "原因"
   },
+  "adminMove": {
+    "action": "移动",
+    "title": "移动到其他分类",
+    "bigType": "大类",
+    "chooseTarget": "选择目标分类",
+    "noTarget": "该大类下还没有分类",
+    "submit": "确认移动",
+    "moving": "移动中…",
+    "selectMode": "批量移动",
+    "selectAll": "全选",
+    "clearAll": "取消全选",
+    "exitSelect": "退出",
+    "selected": "已选 {count} 项",
+    "moveSelected": "移动所选"
+  },
   "adminStock": {
     "entry": "库存",
     "title": "库存管理",

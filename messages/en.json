@@ -380,6 +380,21 @@
     "csvName": "Name",
     "csvReason": "Reason"
   },
+  "adminMove": {
+    "action": "Move",
+    "title": "Move to another category",
+    "bigType": "Group",
+    "chooseTarget": "Choose target category",
+    "noTarget": "No category in this group yet",
+    "submit": "Move",
+    "moving": "Moving…",
+    "selectMode": "Bulk move",
+    "selectAll": "Select all",
+    "clearAll": "Clear all",
+    "exitSelect": "Exit",
+    "selected": "{count} selected",
+    "moveSelected": "Move selected"
+  },
   "adminStock": {
     "entry": "Inventory",
     "title": "Inventory",

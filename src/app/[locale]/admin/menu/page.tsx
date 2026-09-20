@@ -12,11 +12,13 @@ import {
   createMenuItem,
   updateMenuItem,
   deleteMenuItem,
+  moveMenuItems,
 } from '@/lib/api-client';
 import { processImage } from '@/lib/image-utils';
 import {
   MENU_TYPES,
   MENU_TYPE_ADMIN_LABEL_KEY,
+  MENU_TYPE_EMOJI,
   type MenuTypeValue,
 } from '@/lib/menu-types';
 
@@ -308,6 +310,68 @@ export default function AdminMenuPage() {
     }
   };
 
+  // ---------- 快速移动（单个 / 批量）----------
+  // 场景：菜品建错了大类（例如「工具」类的东西建到了「美食」下面）。
+  // 设计：不复用那个十几栏的编辑弹窗，只弹一个「先选大类 → 再选分类」的两段式面板。
+  const [moveIds, setMoveIds] = useState<string[] | null>(null); // null = 面板关闭
+  const [moveType, setMoveType] = useState<MenuType>('FOOD');
+  const [moveCatId, setMoveCatId] = useState('');
+  const [moveSaving, setMoveSaving] = useState(false);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  const catsOfType = (type: MenuType) => categories.filter((c) => c.type === type);
+
+  const openMove = (ids: string[]) => {
+    if (ids.length === 0) return;
+    // 默认落到「第一个有分类、且与当前不同」的大类——绝大多数情况一眼就是目标
+    const currentType = items.find((i) => i.id === ids[0])?.type;
+    const preferred =
+      MENU_TYPES.find((tp) => tp !== currentType && catsOfType(tp).length > 0) ??
+      MENU_TYPES.find((tp) => catsOfType(tp).length > 0) ??
+      MENU_TYPES[0];
+    setMoveIds(ids);
+    setMoveType(preferred);
+    setMoveCatId(catsOfType(preferred)[0]?.id ?? '');
+  };
+
+  const pickMoveType = (type: MenuType) => {
+    setMoveType(type);
+    setMoveCatId(catsOfType(type)[0]?.id ?? '');
+  };
+
+  const closeMove = () => {
+    setMoveIds(null);
+    setMoveCatId('');
+  };
+
+  const submitMove = async () => {
+    if (!moveIds || !moveCatId) return;
+    setMoveSaving(true);
+    try {
+      await moveMenuItems(moveIds, moveCatId);
+      closeMove();
+      setSelectedIds([]);
+      setSelectMode(false);
+      await loadData();
+    } catch (err: any) {
+      setError(err?.message || t('common.error'));
+    } finally {
+      setMoveSaving(false);
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  };
+
+  const exitSelectMode = () => {
+    setSelectMode(false);
+    setSelectedIds([]);
+  };
+
   const handleImageUpload = async (file: File) => {
     setImageError('');
     setImageUploading(true);
@@ -399,6 +463,15 @@ export default function AdminMenuPage() {
             <div className="mb-3 flex items-center justify-between">
               <h3 className="font-semibold text-neutral-900">{t('admin.menu')}</h3>
               <div className="flex gap-2">
+                {!selectMode && (
+                  <button
+                    onClick={() => setSelectMode(true)}
+                    disabled={filteredItems.length === 0}
+                    className="rounded-lg bg-neutral-100 px-3 py-1.5 text-xs font-medium text-neutral-600 hover:bg-neutral-200 disabled:opacity-50"
+                  >
+                    {t('adminMove.selectMode')}
+                  </button>
+                )}
                 <Link
                   href="/admin/menu/bulk"
                   className="rounded-lg bg-neutral-100 px-3 py-1.5 text-xs font-medium text-neutral-600 hover:bg-neutral-200"
@@ -414,57 +487,136 @@ export default function AdminMenuPage() {
                 </button>
               </div>
             </div>
-            <div className="space-y-2">
-              {filteredItems.map((item) => (
-                <div key={item.id} className={`flex items-center justify-between rounded-lg bg-white p-3 shadow-sm ${!item.isActive ? 'opacity-50' : ''}`}>
-                  <div className="flex min-w-0 items-center gap-2">
-                    {item.imageThumbUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={item.imageThumbUrl}
-                        alt={getLocaleName(item)}
-                        className="h-10 w-10 shrink-0 rounded-lg object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-neutral-100 text-lg">
-                        🍽️
-                      </div>
-                    )}
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-neutral-900">{getLocaleName(item)}</p>
-                    <div className="mt-0.5 flex items-center gap-2">
-                      <span className="text-xs font-medium text-accent-600">฿{item.price}</span>
-                      {item.popular && (
-                        <span className="rounded bg-accent-50 px-1.5 py-0.5 text-xs text-accent-600">★</span>
-                      )}
-                      {item.veg && (
-                        <span className="rounded bg-success-50 px-1.5 py-0.5 text-xs text-success-600">{t('menu.vegetarian')}</span>
-                      )}
-                    </div>
-                    </div>
-                  </div>
-                  <div className="flex gap-1 shrink-0">
-                    <button
-                      onClick={() => openItemForm(item)}
-                      className="rounded px-2 py-1 text-xs text-primary-600 hover:bg-primary-50"
-                    >
-                      {t('common.edit')}
-                    </button>
-                    <button
-                      onClick={() => handleDeleteItem(item.id)}
-                      className="rounded px-2 py-1 text-xs text-error-600 hover:bg-error-50"
-                    >
-                      {t('common.delete')}
-                    </button>
-                  </div>
+
+            {selectMode && (
+              <div className="mb-2 flex items-center justify-between rounded-lg bg-primary-50 px-3 py-2">
+                <span className="text-xs font-medium text-primary-700">
+                  {t('adminMove.selected', { count: selectedIds.length })}
+                </span>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() =>
+                      setSelectedIds(
+                        selectedIds.length === filteredItems.length
+                          ? []
+                          : filteredItems.map((i) => i.id),
+                      )
+                    }
+                    className="text-xs font-medium text-primary-700 underline"
+                  >
+                    {selectedIds.length === filteredItems.length
+                      ? t('adminMove.clearAll')
+                      : t('adminMove.selectAll')}
+                  </button>
+                  <button
+                    onClick={exitSelectMode}
+                    className="text-xs font-medium text-neutral-500 underline"
+                  >
+                    {t('adminMove.exitSelect')}
+                  </button>
                 </div>
-              ))}
+              </div>
+            )}
+
+            <div className="space-y-2">
+              {filteredItems.map((item) => {
+                const picked = selectedIds.includes(item.id);
+                return (
+                  <div
+                    key={item.id}
+                    className={`flex items-center justify-between rounded-lg bg-white p-3 shadow-sm ${
+                      !item.isActive ? 'opacity-50' : ''
+                    } ${picked ? 'ring-2 ring-primary-500' : ''}`}
+                  >
+                    <div className="flex min-w-0 items-center gap-2">
+                      {selectMode && (
+                        <input
+                          type="checkbox"
+                          checked={picked}
+                          onChange={() => toggleSelect(item.id)}
+                          className="h-4 w-4 shrink-0 accent-primary-700"
+                          aria-label={getLocaleName(item)}
+                        />
+                      )}
+                      {item.imageThumbUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={item.imageThumbUrl}
+                          alt={getLocaleName(item)}
+                          className="h-10 w-10 shrink-0 rounded-lg object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-neutral-100 text-lg">
+                          {MENU_TYPE_EMOJI[item.type]}
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-neutral-900">
+                          {getLocaleName(item)}
+                        </p>
+                        <div className="mt-0.5 flex items-center gap-2">
+                          <span className="text-xs font-medium text-accent-600">
+                            ฿{item.price}
+                          </span>
+                          {item.popular && (
+                            <span className="rounded bg-accent-50 px-1.5 py-0.5 text-xs text-accent-600">
+                              ★
+                            </span>
+                          )}
+                          {item.veg && (
+                            <span className="rounded bg-success-50 px-1.5 py-0.5 text-xs text-success-600">
+                              {t('menu.vegetarian')}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 gap-1">
+                      {!selectMode && (
+                        <button
+                          onClick={() => openMove([item.id])}
+                          className="rounded px-2 py-1 text-xs text-neutral-500 hover:bg-neutral-100"
+                        >
+                          ↗ {t('adminMove.action')}
+                        </button>
+                      )}
+                      <button
+                        onClick={() => openItemForm(item)}
+                        className="rounded px-2 py-1 text-xs text-primary-600 hover:bg-primary-50"
+                      >
+                        {t('common.edit')}
+                      </button>
+                      <button
+                        onClick={() => handleDeleteItem(item.id)}
+                        className="rounded px-2 py-1 text-xs text-error-600 hover:bg-error-50"
+                      >
+                        {t('common.delete')}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
               {filteredItems.length === 0 && (
                 <div className="py-10 text-center text-sm text-neutral-400">
                   {t('common.noData')}
                 </div>
               )}
             </div>
+
+            {selectMode && (
+              <div className="sticky bottom-4 z-20 mt-3 flex items-center gap-2 rounded-xl bg-primary-700 p-2 shadow-lg">
+                <span className="flex-1 px-2 text-xs font-medium text-white">
+                  {t('adminMove.selected', { count: selectedIds.length })}
+                </span>
+                <button
+                  onClick={() => openMove(selectedIds)}
+                  disabled={selectedIds.length === 0}
+                  className="rounded-lg bg-white px-3 py-2 text-xs font-semibold text-primary-700 disabled:opacity-50"
+                >
+                  ↗ {t('adminMove.moveSelected')}
+                </button>
+              </div>
+            )}
           </div>
         </>
       )}
@@ -540,14 +692,28 @@ export default function AdminMenuPage() {
               </button>
             </div>
             <div className="space-y-3">
+              {/* 分类选择：按大类分组列出【全部】分类 —— 允许把菜品挪到另一个大类下 */}
               <select
                 value={itemForm.catId}
                 onChange={(e) => setItemForm((f) => ({ ...f, catId: e.target.value }))}
                 className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm"
               >
-                {filteredCategories.map((c) => (
-                  <option key={c.id} value={c.id}>{getLocaleName(c)}</option>
-                ))}
+                {MENU_TYPES.map((type) => {
+                  const cats = catsOfType(type);
+                  if (cats.length === 0) return null;
+                  return (
+                    <optgroup
+                      key={type}
+                      label={`${MENU_TYPE_EMOJI[type]} ${t(MENU_TYPE_ADMIN_LABEL_KEY[type])}`}
+                    >
+                      {cats.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {getLocaleName(c)}
+                        </option>
+                      ))}
+                    </optgroup>
+                  );
+                })}
               </select>
               <input
                 placeholder={t('admin.nameZhPlaceholder')}
@@ -742,19 +908,6 @@ export default function AdminMenuPage() {
                       }
                       className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm"
                     />
-                        <input
-                          type="number"
-                          min={0}
-                          placeholder={t('adminStock.lowStockAlertLine')}
-                          value={itemForm.lowStockAlert}
-                          onChange={(e) =>
-                            setItemForm((f) => ({
-                              ...f,
-                              lowStockAlert: e.target.value,
-                            }))
-                          }
-                          className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm"
-                        />
                   </>
                 )}
               </div>
@@ -830,6 +983,105 @@ export default function AdminMenuPage() {
                 className="w-full rounded-xl bg-primary-700 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
               >
                 {saving ? t('common.saving') : t('common.save')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 移动面板（单个 / 批量共用）—— 两段式：先选大类，再选分类 */}
+      {moveIds && (
+        <div className="fixed inset-0 z-[70] flex items-end justify-center overflow-y-auto bg-black/50 sm:items-center sm:p-4">
+          <div className="my-auto max-h-[80vh] w-full max-w-sm overflow-y-auto rounded-t-2xl bg-white p-6 shadow-xl sm:max-h-[calc(100dvh-2rem)] sm:rounded-2xl">
+            <div className="mb-3 flex items-start justify-between">
+              <div className="min-w-0">
+                <h3 className="text-lg font-bold text-neutral-900">
+                  {t('adminMove.title')}
+                </h3>
+                <p className="mt-0.5 truncate text-xs text-neutral-400">
+                  {t('adminMove.selected', { count: moveIds.length })}
+                  {moveIds.length === 1 &&
+                    (() => {
+                      const it = items.find((i) => i.id === moveIds[0]);
+                      return it ? <> · {getLocaleName(it)}</> : null;
+                    })()}
+                </p>
+              </div>
+              <button
+                onClick={closeMove}
+                className="text-neutral-400 hover:text-neutral-600"
+              >
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* 第一步：大类 */}
+            <p className="mb-1.5 text-xs font-medium text-neutral-500">
+              {t('adminMove.bigType')}
+            </p>
+            <div className="mb-4 flex rounded-xl bg-neutral-100 p-1">
+              {MENU_TYPES.map((type) => (
+                <button
+                  key={type}
+                  onClick={() => pickMoveType(type)}
+                  disabled={catsOfType(type).length === 0}
+                  className={`flex-1 rounded-lg py-2 text-xs font-medium transition disabled:opacity-40 ${
+                    moveType === type
+                      ? 'bg-white text-primary-700 shadow-sm'
+                      : 'text-neutral-500'
+                  }`}
+                >
+                  {MENU_TYPE_EMOJI[type]} {t(MENU_TYPE_ADMIN_LABEL_KEY[type])}
+                </button>
+              ))}
+            </div>
+
+            {/* 第二步：分类 */}
+            <p className="mb-1.5 text-xs font-medium text-neutral-500">
+              {t('adminMove.chooseTarget')}
+            </p>
+            {catsOfType(moveType).length === 0 ? (
+              <p className="rounded-xl bg-neutral-50 px-3 py-3 text-xs text-neutral-400">
+                {t('adminMove.noTarget')}
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {catsOfType(moveType).map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => setMoveCatId(c.id)}
+                    className={`flex w-full items-center justify-between rounded-xl border px-3 py-2.5 text-sm transition ${
+                      moveCatId === c.id
+                        ? 'border-primary-500 bg-primary-50 text-primary-700'
+                        : 'border-neutral-200 text-neutral-700'
+                    }`}
+                  >
+                    <span className="truncate">{getLocaleName(c)}</span>
+                    {moveCatId === c.id && (
+                      <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-4 flex gap-2">
+              <button
+                onClick={closeMove}
+                className="flex-1 rounded-xl border border-neutral-200 py-2.5 text-sm font-medium text-neutral-600"
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                onClick={submitMove}
+                disabled={moveSaving || !moveCatId}
+                className="flex-1 rounded-xl bg-primary-700 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+              >
+                {moveSaving ? t('adminMove.moving') : t('adminMove.submit')}
               </button>
             </div>
           </div>

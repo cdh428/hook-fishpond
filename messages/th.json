@@ -380,6 +380,21 @@
     "csvName": "ชื่อ",
     "csvReason": "เหตุผล"
   },
+  "adminMove": {
+    "action": "ย้าย",
+    "title": "ย้ายไปหมวดหมู่อื่น",
+    "bigType": "หมวดหมู่หลัก",
+    "chooseTarget": "เลือกหมวดหมู่ปลายทาง",
+    "noTarget": "ยังไม่มีหมวดหมู่ในกลุ่มนี้",
+    "submit": "ยืนยันการย้าย",
+    "moving": "กำลังย้าย…",
+    "selectMode": "ย้ายหลายรายการ",
+    "selectAll": "เลือกทั้งหมด",
+    "clearAll": "ยกเลิกทั้งหมด",
+    "exitSelect": "ออก",
+    "selected": "เลือกแล้ว {count} รายการ",
+    "moveSelected": "ย้ายรายการที่เลือก"
+  },
   "adminStock": {
     "entry": "สต็อก",
     "title": "การจัดการสต็อก",

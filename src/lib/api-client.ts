@@ -645,6 +645,20 @@ export async function deleteCategory(id: string): Promise<any> {
 
 // ---------- Menu admin (items) ----------
 
+/**
+ * 批量把菜品移动到另一个分类（可跨大类：美食 / 饮品 / 工具）。
+ * 服务端走一条 updateMany，一次往返——避免逐个 PUT 在远端 Neon 上累积延迟。
+ */
+export async function moveMenuItems(
+  ids: string[],
+  categoryId: string,
+): Promise<{ moved: number; categoryId: string; type: MenuType }> {
+  return request<{ moved: number; categoryId: string; type: MenuType }>(
+    `/api/admin/menu/items/move`,
+    { method: 'POST', body: JSON.stringify({ ids, categoryId }) },
+  );
+}
+
 export async function fetchAdminMenuItems(params?: {
   categoryId?: string;
 }): Promise<any[]> {
