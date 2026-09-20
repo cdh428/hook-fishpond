@@ -386,6 +386,10 @@
     "bigType": "大类",
     "chooseTarget": "选择目标分类",
     "noTarget": "该大类下还没有分类",
+    "createCategory": "新建分类",
+    "createCatHint": "在这个大类下新建一个分类，建好会自动选中",
+    "createCatSubmit": "创建并选中",
+    "noCatInGroup": "（暂无分类）",
     "submit": "确认移动",
     "moving": "移动中…",
     "selectMode": "批量移动",
@@ -393,7 +397,8 @@
     "clearAll": "取消全选",
     "exitSelect": "退出",
     "selected": "已选 {count} 项",
-    "moveSelected": "移动所选"
+    "moveSelected": "移动所选",
+    "moveWholeCat": "移动整类"
   },
   "adminPrint": {
     "entry": "打印设置",

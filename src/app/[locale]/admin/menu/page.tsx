@@ -320,7 +320,22 @@ export default function AdminMenuPage() {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
+  // 空大类不能是死胡同：以前「工具」大类下一个分类都没有，按钮又被写死 disabled，
+  // 于是无论怎么点都到不了工具类。现在允许在移动面板里直接给该大类建一个分类。
+  const [showNewCat, setShowNewCat] = useState(false);
+  const [newCatForm, setNewCatForm] = useState({ name_zh: '', name_en: '', name_th: '' });
+  const [creatingCat, setCreatingCat] = useState(false);
+
   const catsOfType = (type: MenuType) => categories.filter((c) => c.type === type);
+
+  /** 某分类下的全部菜品 id —— 给「移动整类」用 */
+  const idsOfCategory = (catId: string) =>
+    items.filter((i) => i.catId === catId).map((i) => i.id);
+
+  const resetNewCat = () => {
+    setShowNewCat(false);
+    setNewCatForm({ name_zh: '', name_en: '', name_th: '' });
+  };
 
   const openMove = (ids: string[]) => {
     if (ids.length === 0) return;
@@ -333,16 +348,43 @@ export default function AdminMenuPage() {
     setMoveIds(ids);
     setMoveType(preferred);
     setMoveCatId(catsOfType(preferred)[0]?.id ?? '');
+    resetNewCat();
   };
 
   const pickMoveType = (type: MenuType) => {
     setMoveType(type);
     setMoveCatId(catsOfType(type)[0]?.id ?? '');
+    resetNewCat();
   };
 
   const closeMove = () => {
     setMoveIds(null);
     setMoveCatId('');
+    resetNewCat();
+  };
+
+  /** 在移动面板里现场建分类，建好自动选中，用户直接点「确认移动」 */
+  const createMoveCategory = async () => {
+    const name_zh = newCatForm.name_zh.trim();
+    const name_en = newCatForm.name_en.trim();
+    const name_th = newCatForm.name_th.trim();
+    if (!name_zh || !name_en || !name_th) return;
+    setCreatingCat(true);
+    try {
+      const created = await createCategory({
+        name_zh,
+        name_en,
+        name_th,
+        type: moveType,
+      });
+      setCategories((prev) => [...prev, { ...created, itemCount: 0 } as Category]);
+      setMoveCatId(created.id);
+      resetNewCat();
+    } catch (err: any) {
+      setError(err?.message || t('common.error'));
+    } finally {
+      setCreatingCat(false);
+    }
   };
 
   const submitMove = async () => {
@@ -435,8 +477,24 @@ export default function AdminMenuPage() {
             <div className="space-y-2">
               {filteredCategories.map((cat) => (
                 <div key={cat.id} className="flex items-center justify-between rounded-lg bg-white p-3 shadow-sm">
-                  <span className="text-sm font-medium text-neutral-900">{getLocaleName(cat)}</span>
-                  <div className="flex gap-1">
+                  <span className="min-w-0 truncate text-sm font-medium text-neutral-900">
+                    {getLocaleName(cat)}
+                    {typeof cat.itemCount === 'number' && (
+                      <span className="ml-1.5 text-xs font-normal text-neutral-400">
+                        {cat.itemCount}
+                      </span>
+                    )}
+                  </span>
+                  <div className="flex shrink-0 gap-1">
+                    <button
+                      onClick={() => openMove(idsOfCategory(cat.id))}
+                      disabled={idsOfCategory(cat.id).length === 0}
+                      title={t('adminMove.moveWholeCat')}
+                      aria-label={t('adminMove.moveWholeCat')}
+                      className="rounded px-2 py-1 text-xs text-neutral-500 hover:bg-neutral-100 disabled:opacity-30"
+                    >
+                      ↗
+                    </button>
                     <button
                       onClick={() => openCategoryForm(cat)}
                       className="rounded px-2 py-1 text-xs text-primary-600 hover:bg-primary-50"
@@ -700,17 +758,23 @@ export default function AdminMenuPage() {
               >
                 {MENU_TYPES.map((type) => {
                   const cats = catsOfType(type);
-                  if (cats.length === 0) return null;
                   return (
                     <optgroup
                       key={type}
                       label={`${MENU_TYPE_EMOJI[type]} ${t(MENU_TYPE_ADMIN_LABEL_KEY[type])}`}
                     >
-                      {cats.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {getLocaleName(c)}
+                      {cats.length === 0 ? (
+                        // 空大类也列出来（不可选），否则用户会以为「工具」这个大类根本不存在
+                        <option value="" disabled>
+                          {t('adminMove.noCatInGroup')}
                         </option>
-                      ))}
+                      ) : (
+                        cats.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {getLocaleName(c)}
+                          </option>
+                        ))
+                      )}
                     </optgroup>
                   );
                 })}
@@ -1021,32 +1085,34 @@ export default function AdminMenuPage() {
             <p className="mb-1.5 text-xs font-medium text-neutral-500">
               {t('adminMove.bigType')}
             </p>
+            {/* 三个大类永远可点：哪怕该大类下还没有分类，也能就地建一个 */}
             <div className="mb-4 flex rounded-xl bg-neutral-100 p-1">
-              {MENU_TYPES.map((type) => (
-                <button
-                  key={type}
-                  onClick={() => pickMoveType(type)}
-                  disabled={catsOfType(type).length === 0}
-                  className={`flex-1 rounded-lg py-2 text-xs font-medium transition disabled:opacity-40 ${
-                    moveType === type
-                      ? 'bg-white text-primary-700 shadow-sm'
-                      : 'text-neutral-500'
-                  }`}
-                >
-                  {MENU_TYPE_EMOJI[type]} {t(MENU_TYPE_ADMIN_LABEL_KEY[type])}
-                </button>
-              ))}
+              {MENU_TYPES.map((type) => {
+                const count = catsOfType(type).length;
+                return (
+                  <button
+                    key={type}
+                    onClick={() => pickMoveType(type)}
+                    className={`flex-1 rounded-lg py-2 text-xs font-medium transition ${
+                      moveType === type
+                        ? 'bg-white text-primary-700 shadow-sm'
+                        : count === 0
+                          ? 'text-neutral-400'
+                          : 'text-neutral-500'
+                    }`}
+                  >
+                    {MENU_TYPE_EMOJI[type]} {t(MENU_TYPE_ADMIN_LABEL_KEY[type])}
+                    {count === 0 && <span className="ml-1 text-[10px]">＋</span>}
+                  </button>
+                );
+              })}
             </div>
 
             {/* 第二步：分类 */}
             <p className="mb-1.5 text-xs font-medium text-neutral-500">
               {t('adminMove.chooseTarget')}
             </p>
-            {catsOfType(moveType).length === 0 ? (
-              <p className="rounded-xl bg-neutral-50 px-3 py-3 text-xs text-neutral-400">
-                {t('adminMove.noTarget')}
-              </p>
-            ) : (
+            {catsOfType(moveType).length > 0 && (
               <div className="space-y-2">
                 {catsOfType(moveType).map((c) => (
                   <button
@@ -1066,6 +1132,64 @@ export default function AdminMenuPage() {
                     )}
                   </button>
                 ))}
+              </div>
+            )}
+            {catsOfType(moveType).length === 0 && !showNewCat && (
+              <p className="rounded-xl bg-neutral-50 px-3 py-3 text-xs text-neutral-400">
+                {t('adminMove.noTarget')}
+              </p>
+            )}
+
+            {/* 空大类就地新建分类，避免「选不到工具类」这种死胡同 */}
+            {!showNewCat ? (
+              <button
+                onClick={() => setShowNewCat(true)}
+                className="mt-2 w-full rounded-xl border border-dashed border-neutral-300 py-2.5 text-xs font-medium text-primary-700 hover:bg-primary-50"
+              >
+                + {t('adminMove.createCategory')}
+              </button>
+            ) : (
+              <div className="mt-2 space-y-2 rounded-xl bg-neutral-50 p-3">
+                <p className="text-xs text-neutral-500">{t('adminMove.createCatHint')}</p>
+                <input
+                  autoFocus
+                  placeholder={t('admin.nameZhPlaceholder')}
+                  value={newCatForm.name_zh}
+                  onChange={(e) => setNewCatForm((f) => ({ ...f, name_zh: e.target.value }))}
+                  className="w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm"
+                />
+                <input
+                  placeholder={t('admin.nameEnPlaceholder')}
+                  value={newCatForm.name_en}
+                  onChange={(e) => setNewCatForm((f) => ({ ...f, name_en: e.target.value }))}
+                  className="w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm"
+                />
+                <input
+                  placeholder={t('admin.nameThPlaceholder')}
+                  value={newCatForm.name_th}
+                  onChange={(e) => setNewCatForm((f) => ({ ...f, name_th: e.target.value }))}
+                  className="w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm"
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={resetNewCat}
+                    className="flex-1 rounded-xl border border-neutral-200 py-2 text-xs font-medium text-neutral-600"
+                  >
+                    {t('common.cancel')}
+                  </button>
+                  <button
+                    onClick={createMoveCategory}
+                    disabled={
+                      creatingCat ||
+                      !newCatForm.name_zh.trim() ||
+                      !newCatForm.name_en.trim() ||
+                      !newCatForm.name_th.trim()
+                    }
+                    className="flex-1 rounded-xl bg-primary-700 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                  >
+                    {creatingCat ? t('common.saving') : t('adminMove.createCatSubmit')}
+                  </button>
+                </div>
               </div>
             )}
 
