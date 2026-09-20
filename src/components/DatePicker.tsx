@@ -8,7 +8,7 @@ import { useTranslations } from 'next-intl';
  * the parent owns the closed-day rules and hands back the state, so the
  * calendar stays in sync with server-side booking validation.
  */
-export type DayState = 'past' | 'monday' | 'holiday' | 'available';
+export type DayState = 'past' | 'monday' | 'holiday' | 'cutoff' | 'available';
 
 interface DatePickerProps {
   value: string;
@@ -44,6 +44,7 @@ function weekdayShort(locale: string, dayIndex: number): string {
  *   available → teal pill with a visible ring (clearly tappable)
  *   monday    → solid grey fill + strikethrough (weekly rest day)
  *   holiday   → warm red fill + strikethrough (statutory holiday)
+ *   cutoff    → amber fill + strikethrough (today, past the same-day cut-off)
  *   past      → near-invisible ghost cell (nothing to tap)
  */
 const STATE_CLASS: Record<DayState, string> = {
@@ -53,6 +54,8 @@ const STATE_CLASS: Record<DayState, string> = {
     'cursor-not-allowed bg-neutral-100 text-neutral-500 ring-1 ring-neutral-200',
   holiday:
     'cursor-not-allowed bg-error-100 text-error-700 ring-1 ring-error-500/30',
+  cutoff:
+    'cursor-not-allowed bg-accent-100 text-accent-700 ring-1 ring-accent-500/40',
   past: 'cursor-not-allowed bg-white text-neutral-300 ring-1 ring-neutral-100',
 };
 
@@ -121,9 +124,12 @@ export default function DatePicker({
   };
 
   const restTag = t('booking.restTag');
+  const cutoffTag = t('booking.cutoffTag');
   const closedCount = cells.filter(
     (d) => d && (getDayState(d) === 'monday' || getDayState(d) === 'holiday'),
   ).length;
+  // Only advertise the same-day cut-off in the legend on a day it applies to.
+  const hasCutoff = cells.some((d) => d && getDayState(d) === 'cutoff');
 
   return (
     <div className="rounded-xl border border-neutral-200 bg-white p-3">
@@ -175,6 +181,8 @@ export default function DatePicker({
           const disabled = state !== 'available';
           const selected = dateStr === value;
           const closed = state === 'monday' || state === 'holiday';
+          const struck = closed || state === 'cutoff';
+          const tag = state === 'cutoff' ? cutoffTag : closed ? restTag : '';
           const note = getDayNote?.(dateStr);
 
           return (
@@ -190,12 +198,12 @@ export default function DatePicker({
                   : STATE_CLASS[state]
               }`}
             >
-              <span className={closed && !selected ? 'line-through' : ''}>
+              <span className={struck && !selected ? 'line-through' : ''}>
                 {parseInt(dateStr.slice(8, 10), 10)}
               </span>
-              {closed && (
+              {tag && (
                 <span className="mt-0.5 text-[8px] font-normal leading-none">
-                  {restTag}
+                  {tag}
                 </span>
               )}
             </button>
@@ -217,6 +225,12 @@ export default function DatePicker({
           <span className="inline-block h-3 w-3 rounded bg-error-100 ring-1 ring-error-500/30" />
           {t('booking.legendHoliday')}
         </span>
+        {hasCutoff && (
+          <span className="flex items-center gap-1">
+            <span className="inline-block h-3 w-3 rounded bg-accent-100 ring-1 ring-accent-500/40" />
+            {t('booking.legendCutoff')}
+          </span>
+        )}
         <span className="flex items-center gap-1">
           <span className="inline-block h-3 w-3 rounded bg-white ring-1 ring-neutral-100" />
           {t('booking.legendPast')}

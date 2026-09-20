@@ -112,7 +112,12 @@
     "legendMonday": "จันทร์หยุด",
     "legendHoliday": "วันหยุดนักขัตฤกษ์",
     "legendPast": "ผ่านไปแล้ว",
-    "closedThisMonth": "เดือนนี้หยุด {count} วัน"
+    "closedThisMonth": "เดือนนี้หยุด {count} วัน",
+    "legendCutoff": "ปิดรับวันนี้",
+    "cutoffTag": "ปิด",
+    "cutoffNotice": "การจองออนไลน์สำหรับวันนี้ปิดเมื่อ {hour}:00 น. — กรุณาเลือกวันถัดไป",
+    "cutoffNote": "ไม่สามารถจองวันนี้ได้หลัง {hour}:00 น.",
+    "cutoffError": "ปิดรับจองสำหรับวันนี้แล้ว — กรุณาเลือกวันถัดไป"
   },
   "menu": {
     "title": "เมนูอาหาร",

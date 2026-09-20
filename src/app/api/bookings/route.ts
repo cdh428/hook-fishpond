@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isClosedDate } from "@/lib/closed-days";
+import { isTodayCutoff, SAME_DAY_CUTOFF_HOUR } from "@/lib/date-utils";
 
 export async function POST(request: NextRequest) {
   try {
@@ -43,6 +44,16 @@ export async function POST(request: NextRequest) {
     if (closed) {
       return NextResponse.json(
         { error: "The venue is closed on this date" },
+        { status: 400 },
+      );
+    }
+
+    // Same-day cut-off: from SAME_DAY_CUTOFF_HOUR (venue time) onward, online
+    // booking for *today* is closed — walk-ins / phone only. Other dates are
+    // unaffected, and staff-created bookings go through a separate admin route.
+    if (isTodayCutoff(dateStr)) {
+      return NextResponse.json(
+        { error: "ERR_SAME_DAY_CUTOFF", cutoffHour: SAME_DAY_CUTOFF_HOUR },
         { status: 400 },
       );
     }

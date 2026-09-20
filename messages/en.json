@@ -112,7 +112,12 @@
     "legendMonday": "Monday closed",
     "legendHoliday": "Holiday",
     "legendPast": "Past",
-    "closedThisMonth": "Rest days this month: {count}"
+    "closedThisMonth": "Rest days this month: {count}",
+    "legendCutoff": "Closed for today",
+    "cutoffTag": "OFF",
+    "cutoffNotice": "Online booking for today closed at {hour}:00 — please pick tomorrow or later",
+    "cutoffNote": "Today can't be booked after {hour}:00",
+    "cutoffError": "Same-day booking is closed — please pick tomorrow or later"
   },
   "menu": {
     "title": "Menu",

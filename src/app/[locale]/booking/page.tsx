@@ -11,7 +11,12 @@ import {
   ApiPond,
   ApiSpot,
 } from '@/lib/api-client';
-import { bangkokDateString, isMonday } from '@/lib/date-utils';
+import {
+  bangkokDateString,
+  isMonday,
+  isTodayCutoff,
+  SAME_DAY_CUTOFF_HOUR,
+} from '@/lib/date-utils';
 import DatePicker, { type DayState } from '@/components/DatePicker';
 import { useApp } from '@/contexts/AppContext';
 
@@ -48,7 +53,14 @@ export default function BookingPage() {
   const [holidays, setHolidays] = useState<Map<string, string | undefined>>(
     new Map(),
   );
-  const todayStr = bangkokDateString();
+  // Ticking clock: the same-day cut-off (17:00) and the midnight date rollover
+  // must take effect on a page that is left open, without a reload.
+  const [now, setNow] = useState<Date>(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+  const todayStr = bangkokDateString(now);
   const loadedYears = useRef<Set<number>>(new Set());
 
   // Holidays are stored per calendar year server-side, so load them lazily for
@@ -90,16 +102,24 @@ export default function BookingPage() {
     if (s < todayStr) return 'past';
     if (isMonday(s)) return 'monday';
     if (holidays.has(s)) return 'holiday';
+    // Same-day bookings stop at 17:00 — today is only blocked, never other days.
+    if (isTodayCutoff(s, now)) return 'cutoff';
     return 'available';
   };
 
   const getDayNote = (s: string): string | undefined => {
     if (isMonday(s)) return t('booking.mondayClosed');
     if (holidays.has(s)) return holidays.get(s) || t('booking.legendHoliday');
+    if (isTodayCutoff(s, now)) {
+      return t('booking.cutoffNote', { hour: SAME_DAY_CUTOFF_HOUR });
+    }
     return undefined;
   };
 
   const isDateDisabled = (s: string) => getDayState(s) !== 'available';
+
+  /** True when the venue has already closed today's same-day booking window. */
+  const todayCutoff = isTodayCutoff(todayStr, now);
 
   // Upcoming rest days at a glance — actual dates, not just "every Monday".
   const upcomingClosed: { date: string; label: string; holiday: boolean }[] = [];
@@ -215,6 +235,7 @@ export default function BookingPage() {
         )
       : !!(
           selectedDate &&
+          !isDateDisabled(selectedDate) &&
           customerName &&
           customerPhone &&
           groupName &&
@@ -243,7 +264,13 @@ export default function BookingPage() {
       });
       setShowSuccess(true);
     } catch (e: any) {
-      setSubmitError(e.message || 'Failed to create booking');
+      // The server enforces the same rules; translate its machine codes.
+      const code = e?.message;
+      setSubmitError(
+        code === 'ERR_SAME_DAY_CUTOFF'
+          ? t('booking.cutoffError')
+          : code || 'Failed to create booking',
+      );
     } finally {
       setSubmitting(false);
     }
@@ -346,6 +373,24 @@ export default function BookingPage() {
         <p className="mt-2 text-xs text-neutral-500">
           {t('booking.businessHours')} · {t('booking.mondayClosed')}
         </p>
+        {todayCutoff && (
+          <p className="mt-1.5 flex items-start gap-1.5 rounded-lg bg-accent-50 px-2.5 py-2 text-xs font-medium text-accent-700 ring-1 ring-accent-500/30">
+            <svg
+              className="mt-px h-3.5 w-3.5 shrink-0"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 8v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"
+              />
+            </svg>
+            <span>{t('booking.cutoffNotice', { hour: SAME_DAY_CUTOFF_HOUR })}</span>
+          </p>
+        )}
         {upcomingClosed.length > 0 && (
           <div className="mt-3">
             <p className="mb-1.5 text-xs font-medium text-neutral-600">
