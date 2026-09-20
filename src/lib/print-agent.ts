@@ -174,16 +174,22 @@ export async function fetchBridgeTargets(): Promise<BridgeTarget[]> {
 // --------------------------------------------------------------------------- #
 
 /**
- * 自动挑一个合理目标：优先用显式配置的；其次优先热敏票据机；最后用桥的默认。
+ * 自动挑一个合理目标。优先级：
+ *   1. 设置页里显式指定过的 —— 一律以它为准（每台收银机各存各的）
+ *   2. 桥自己声明的默认目标（= 这台机器的默认打印机），对任何用途都成立
+ *   3. 热敏票据机；其中「后厨单」优先蓝牙（厨房常是手持机或挂在厨房）
  *
- * 分工是按「谁在哪台机子上取纸」来的：
- *   · 后厨单 —— 厨房那台（常是蓝牙手持/挂在厨房），所以优先蓝牙机
- *   · 预结单 / 收据 —— 都是收银台打给顾客的，跟着默认票据机走
- * 只要某台机器在设置页里显式指定过，就一律以显式配置为准。
+ * 把第 2 条放在第 3 条前面很重要：否则一台坏掉的 USB 机只要排在列表前面，
+ * 就会把预结单抢走，而操作员在设置页里改默认也改不动。
  */
 export function pickAutoTarget(health: BridgeHealth, purpose: PrintPurpose): string {
   const saved = getTargetFor(purpose);
   if (saved && health.targets.some((t) => targetId(t) === saved)) return saved;
+
+  const declared = health.defaultPrinter
+    ? health.targets.find((t) => targetId(t) === health.defaultPrinter)
+    : undefined;
+  if (declared) return targetId(declared);
 
   const thermal = health.targets.filter((t) => t.isThermal);
   if (thermal.length) {
@@ -193,7 +199,7 @@ export function pickAutoTarget(health: BridgeHealth, purpose: PrintPurpose): str
     }
     return targetId(thermal[0]);
   }
-  return health.defaultPrinter || '';
+  return '';
 }
 
 export async function printViaBridge(

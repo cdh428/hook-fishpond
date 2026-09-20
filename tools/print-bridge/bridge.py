@@ -391,10 +391,16 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.list:
         for t in escpos.list_targets():
-            tag = " [默认]" if t["isDefault"] else ""
-            tag += " [票据机]" if t["isThermal"] else ""
-            kind = "蓝牙串口" if t["kind"] == "serial" else "打印队列"
             target = t["port"] if t["kind"] == "serial" else t["name"]
+            tags = []
+            if t.get("isThermal"):
+                tags.append("票据机")
+            if t["kind"] == "serial":
+                tags.append("蓝牙")
+            if target and target == (CONFIG.get("defaultPrinter") or ""):
+                tags.append("默认")
+            tag = f" [{'/'.join(tags)}]" if tags else ""
+            kind = "蓝牙串口" if t["kind"] == "serial" else "打印队列"
             print(f"  {t['name']}{tag}   {kind}  目标={target}  驱动/端口={t.get('driver') or t.get('port','')}")
         return 0
 
@@ -413,15 +419,16 @@ def main(argv: list[str] | None = None) -> int:
         targets = escpos.list_targets()
         log(f"检测到 {len(targets)} 个打印目标，默认 = {CONFIG.get('defaultPrinter') or '(未设置)'}")
         for t in targets:
+            target = t["port"] if t["kind"] == "serial" else t["name"]
             marks = []
             if t.get("isThermal"):
                 marks.append("票据机")
             if t["kind"] == "serial":
                 marks.append("蓝牙")
-            if t.get("isDefault"):
+            # 注意：这里标的是「本服务的默认目标」，不是 Windows 的默认打印机
+            if target and target == (CONFIG.get("defaultPrinter") or ""):
                 marks.append("默认")
             suffix = f"  ← {'/'.join(marks)}" if marks else ""
-            target = t["port"] if t["kind"] == "serial" else t["name"]
             log(f"    · {t['name']}  [{target}]{suffix}")
     except Exception as exc:
         log(f"枚举打印目标失败：{exc}")
