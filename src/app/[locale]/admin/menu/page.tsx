@@ -45,6 +45,7 @@ interface MenuItem {
   stockQty?: number | null;
   lowStockAlert?: number | null;
   costPrice?: number | null;
+  targetMargin?: number | null;
 }
 
 export default function AdminMenuPage() {
@@ -158,6 +159,7 @@ export default function AdminMenuPage() {
     stockQty: '' as string,
     lowStockAlert: '' as string,
     costPrice: '' as string,
+    targetMargin: '' as string,
   });
 
   const [imageUploading, setImageUploading] = useState(false);
@@ -196,6 +198,10 @@ export default function AdminMenuPage() {
           item.costPrice === null || item.costPrice === undefined
             ? ''
             : String(item.costPrice),
+        targetMargin:
+          item.targetMargin === null || item.targetMargin === undefined
+            ? ''
+            : String(Math.round(item.targetMargin * 100)),
       });
     } else {
       setEditingItem(null);
@@ -215,6 +221,7 @@ export default function AdminMenuPage() {
         stockQty: '',
         lowStockAlert: '',
         costPrice: '',
+        targetMargin: '',
       });
     }
     setShowItemForm(true);
@@ -235,6 +242,10 @@ export default function AdminMenuPage() {
         itemForm.lowStockAlert === '' ? null : Number(itemForm.lowStockAlert);
       const costPrice =
         itemForm.costPrice === '' ? null : Number(itemForm.costPrice);
+      const targetMargin =
+        itemForm.targetMargin === ''
+          ? null
+          : Number(itemForm.targetMargin) / 100;
       if (editingItem) {
         await updateMenuItem(editingItem.id, {
           categoryId: itemForm.catId,
@@ -252,6 +263,7 @@ export default function AdminMenuPage() {
           stockQty,
           lowStockAlert,
           costPrice,
+          targetMargin,
         });
       } else {
         await createMenuItem({
@@ -270,6 +282,7 @@ export default function AdminMenuPage() {
           stockQty,
           lowStockAlert,
           costPrice,
+          targetMargin,
         });
       }
       setShowItemForm(false);
@@ -724,22 +737,86 @@ export default function AdminMenuPage() {
                       }
                       className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm"
                     />
-                    <input
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      placeholder={t('adminStock.costPrice')}
-                      value={itemForm.costPrice}
-                      onChange={(e) =>
-                        setItemForm((f) => ({
-                          ...f,
-                          costPrice: e.target.value,
-                        }))
-                      }
-                      className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm"
-                    />
+                        <input
+                          type="number"
+                          min={0}
+                          placeholder={t('adminStock.lowStockAlertLine')}
+                          value={itemForm.lowStockAlert}
+                          onChange={(e) =>
+                            setItemForm((f) => ({
+                              ...f,
+                              lowStockAlert: e.target.value,
+                            }))
+                          }
+                          className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm"
+                        />
                   </>
                 )}
+              </div>
+
+              {/* Cost & margin / 成本与毛利 —— 任何菜品都能填，用于算毛利 */}
+              <div className="space-y-2 border-t border-neutral-100 pt-3">
+                <label className="block text-xs font-medium text-neutral-500">
+                  {t('adminReports.costAndMargin')}
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  placeholder={t('adminReports.costPricePlaceholder')}
+                  value={itemForm.costPrice}
+                  onChange={(e) =>
+                    setItemForm((f) => ({ ...f, costPrice: e.target.value }))
+                  }
+                  className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm"
+                />
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  placeholder={t('adminReports.targetMarginPlaceholder')}
+                  value={itemForm.targetMargin}
+                  onChange={(e) =>
+                    setItemForm((f) => ({ ...f, targetMargin: e.target.value }))
+                  }
+                  className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm"
+                />
+                {(() => {
+                  const p = parseFloat(itemForm.price);
+                  const c = parseFloat(itemForm.costPrice);
+                  if (!Number.isFinite(p) || p <= 0 || !Number.isFinite(c)) {
+                    return (
+                      <p className="text-xs text-neutral-400">
+                        {t('adminReports.marginPreviewEmpty')}
+                      </p>
+                    );
+                  }
+                  const profit = p - c;
+                  const rate = profit / p;
+                  const target =
+                    itemForm.targetMargin === ''
+                      ? 0.6
+                      : Number(itemForm.targetMargin) / 100;
+                  const below = rate < target;
+                  return (
+                    <div
+                      className={`flex items-center justify-between rounded-xl px-3 py-2.5 text-sm ${
+                        below
+                          ? 'bg-amber-50 text-accent-600'
+                          : 'bg-success-50 text-success-700'
+                      }`}
+                    >
+                      <span>
+                        {t('adminReports.grossProfit')} ฿
+                        {profit.toFixed(2)}
+                      </span>
+                      <span className="font-bold">
+                        {(rate * 100).toFixed(1)}%
+                        {below ? ` · ${t('adminReports.belowTarget')}` : ''}
+                      </span>
+                    </div>
+                  );
+                })()}
               </div>
 
               <button

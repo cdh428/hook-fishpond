@@ -158,6 +158,7 @@ model MenuItem {
   stockQty       Int?                          // 外购：当前库存（持久计数）
   lowStockAlert  Int?                          // 外购：低库存预警线
   costPrice      Float?                        // 成本价（用于毛利）
+  targetMargin   Float?                        // 单品目标毛利率（0-1，空=用全局默认）
   soldOut        Boolean      @default(false)  // 手动强制售罄
   movements      StockMovement[]
   orderItems     OrderItem[]

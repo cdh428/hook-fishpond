@@ -56,6 +56,7 @@ export async function POST(request: NextRequest) {
       stockQty,
       lowStockAlert,
       costPrice,
+      targetMargin,
     } = body;
 
     if (!categoryId || !name_zh || !name_en || !name_th || price === undefined) {
@@ -94,6 +95,12 @@ export async function POST(request: NextRequest) {
               : null,
         costPrice:
           typeof costPrice === "number" ? costPrice : costPrice ? Number(costPrice) : null,
+        targetMargin:
+          targetMargin === undefined || targetMargin === null || targetMargin === ""
+            ? null
+            : Number.isFinite(Number(targetMargin))
+              ? Number(targetMargin)
+              : null,
       },
       include: { category: true },
     });

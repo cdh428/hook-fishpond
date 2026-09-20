@@ -21,6 +21,8 @@ export const MENU_COLUMNS: { key: string; header: string; required: boolean }[] 
   { key: "isActive", header: "在售", required: false },
   { key: "stockType", header: "库存类型", required: false },
   { key: "dailyLimit", header: "每日限量", required: false },
+  { key: "costPrice", header: "成本价", required: false },
+  { key: "targetMargin", header: "目标毛利率(%)", required: false },
   { key: "action", header: "操作", required: false },
 ];
 
@@ -49,6 +51,9 @@ export interface MenuImportRow {
   isActive?: boolean;
   stockType?: "NONE" | "MADE" | "PURCHASED";
   dailyLimit?: number | null;
+  costPrice?: number | null;
+  /** 目标毛利率，小数（0.6 = 60%）；表格里填百分数，解析时 /100 */
+  targetMargin?: number | null;
   autoTranslated: string[]; // e.g. ['name_en','name_th']
   changes: string[]; // human-readable diff for UPDATE
   error?: string; // set when action === 'ERROR'
@@ -234,6 +239,8 @@ type MenuItemRecord = {
   isActive: boolean;
   stockType: string;
   dailyLimit: number | null;
+  costPrice: number | null;
+  targetMargin: number | null;
   categoryId: string;
 };
 
@@ -394,6 +401,31 @@ export async function buildPreview(
       }
     }
 
+    // --- cost / margin columns（成本价用于算毛利；目标毛利率表格里填百分数） ---
+    let costPrice: number | null | undefined;
+    const costRaw = (raw.costPrice ?? "").trim();
+    if (costRaw !== "") {
+      const cleaned = costRaw.replace(/[,\s฿]/g, "");
+      const n = Number(cleaned);
+      if (cleaned === "" || !Number.isFinite(n) || n < 0) {
+        errorList.push("成本价不是有效数字");
+      } else {
+        costPrice = n;
+      }
+    }
+
+    let targetMargin: number | null | undefined;
+    const marginRaw = (raw.targetMargin ?? "").trim();
+    if (marginRaw !== "") {
+      const cleaned = marginRaw.replace(/[%\s]/g, "");
+      const n = Number(cleaned);
+      if (cleaned === "" || !Number.isFinite(n) || n < 0 || n > 100) {
+        errorList.push("目标毛利率应为 0-100 的百分数");
+      } else {
+        targetMargin = n / 100;
+      }
+    }
+
     // base action
     const matchedItem = itemByKey.get(`${category.trim()}|${name_zh.trim()}`);
     let action: ImportAction;
@@ -532,6 +564,24 @@ export async function buildPreview(
       ) {
         changes.push(`每日限量 ${dailyLimit}`);
       }
+      if (
+        costPrice !== undefined &&
+        costPrice !== null &&
+        costPrice !== (matchedItem.costPrice ?? null)
+      ) {
+        changes.push(
+          `成本价 ${matchedItem.costPrice == null ? "未设" : "฿" + fmtPrice(matchedItem.costPrice)}→฿${fmtPrice(costPrice)}`,
+        );
+      }
+      if (
+        targetMargin !== undefined &&
+        targetMargin !== null &&
+        targetMargin !== (matchedItem.targetMargin ?? null)
+      ) {
+        changes.push(
+          `目标毛利 ${matchedItem.targetMargin == null ? "默认" : Math.round(matchedItem.targetMargin * 100) + "%"}→${Math.round(targetMargin * 100)}%`,
+        );
+      }
       const catName = catById.get(matchedItem.categoryId)?.name_zh;
       if (catName && category && category !== catName) {
         changes.push(`分类 ${catName}→${category}`);
@@ -561,6 +611,8 @@ export async function buildPreview(
       isActive,
       stockType,
       dailyLimit,
+      costPrice,
+      targetMargin,
       autoTranslated,
       changes,
       error: errorMsg,
@@ -635,6 +687,14 @@ export function buildExportRows(
         case "dailyLimit":
           line.push(item.dailyLimit ?? "");
           break;
+        case "costPrice":
+          line.push(item.costPrice ?? "");
+          break;
+        case "targetMargin":
+          line.push(
+            item.targetMargin == null ? "" : Math.round(item.targetMargin * 100),
+          );
+          break;
         case "action":
           line.push("");
           break;
@@ -665,6 +725,8 @@ export function buildTemplateRows(): (string | number)[][] {
     "是",
     "",
     "",
+    26,
+    60,
     "",
   ]);
   return rows;

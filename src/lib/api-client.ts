@@ -553,6 +553,7 @@ export async function createMenuItem(input: {
   stockQty?: number | null;
   lowStockAlert?: number | null;
   costPrice?: number | null;
+  targetMargin?: number | null;
 }): Promise<any> {
   return request<any>(`/api/admin/menu/items`, {
     method: 'POST',
@@ -581,6 +582,7 @@ export async function updateMenuItem(
     stockQty?: number | null;
     lowStockAlert?: number | null;
     costPrice?: number | null;
+    targetMargin?: number | null;
   },
 ): Promise<any> {
   return request<any>(`/api/admin/menu/items/${id}`, {
@@ -954,4 +956,132 @@ export async function postStockSoldOut(
       body: JSON.stringify({ soldOut }),
     },
   );
+}
+
+// ---------- Reports (销售报表 / 菜品成本毛利) ----------
+
+export type ReportRange = 'today' | 'week' | 'month' | 'custom';
+export type TrendGrain = 'day' | 'week' | 'month';
+
+export interface ReportPeriodRevenue {
+  orderRevenue: number;
+  bookingRevenue: number;
+  totalRevenue: number;
+  orderCount: number;
+  bookingCount: number;
+  cancelledOrders: number;
+  avgTicket: number;
+  coveredRevenue: number;
+  cogs: number;
+  grossProfit: number;
+  marginRate: number | null;
+  wasteCost: number;
+  itemsSold: number;
+}
+
+export interface ReportOverview extends ReportPeriodRevenue {
+  itemsWithoutCost: number;
+  prev: ReportPeriodRevenue;
+  deltas: {
+    totalRevenue: number | null;
+    orderRevenue: number | null;
+    bookingRevenue: number | null;
+    grossProfit: number | null;
+    orderCount: number | null;
+    marginRate: number | null;
+  };
+  period: {
+    range: ReportRange;
+    fromDate: string;
+    toDate: string;
+    days: number;
+    grain: TrendGrain;
+    targetMargin: number;
+  };
+}
+
+export interface ReportTrendPoint {
+  key: string;
+  orderRevenue: number;
+  bookingRevenue: number;
+  revenue: number;
+  profit: number;
+  orders: number;
+}
+
+export interface ReportItemStat {
+  id: string;
+  name_zh: string;
+  name_en: string;
+  name_th: string;
+  category: string;
+  price: number;
+  costPrice: number | null;
+  targetMargin: number | null;
+  effectiveTarget: number;
+  qty: number;
+  revenue: number;
+  profit: number | null;
+  marginRate: number | null;
+  belowTarget: boolean;
+  stockType: 'NONE' | 'MADE' | 'PURCHASED';
+}
+
+export interface ReportStructure {
+  hourly: { hour: number; orders: number }[];
+  payments: { method: string; count: number; amount: number }[];
+  ordersWithoutPayment: number;
+  ponds: {
+    type: string;
+    name_zh: string;
+    name_en: string;
+    name_th: string;
+    bookings: number;
+    revenue: number;
+    participants: number;
+  }[];
+  orderTypes: { type: string; orders: number; revenue: number }[];
+  tables: { code: string; name: string; orders: number }[];
+}
+
+export interface ReportPayload {
+  overview: ReportOverview;
+  trend: ReportTrendPoint[];
+  topItems: ReportItemStat[];
+  margins: ReportItemStat[];
+  structure: ReportStructure;
+}
+
+export async function fetchAdminReport(params: {
+  range?: ReportRange;
+  from?: string;
+  to?: string;
+  grain?: TrendGrain;
+}): Promise<ReportPayload> {
+  const qs = new URLSearchParams();
+  qs.set('range', params.range || 'today');
+  if (params.from) qs.set('from', params.from);
+  if (params.to) qs.set('to', params.to);
+  if (params.grain) qs.set('grain', params.grain);
+  return request<ReportPayload>(`/api/admin/reports?${qs.toString()}`);
+}
+
+export function reportExportUrl(params: {
+  format?: 'xlsx' | 'csv';
+  range?: ReportRange;
+  from?: string;
+  to?: string;
+  grain?: TrendGrain;
+  content?: string[];
+  sheet?: string;
+}): string {
+  const qs = new URLSearchParams();
+  qs.set('format', params.format || 'xlsx');
+  qs.set('range', params.range || 'today');
+  if (params.from) qs.set('from', params.from);
+  if (params.to) qs.set('to', params.to);
+  if (params.grain) qs.set('grain', params.grain);
+  if (params.content?.length) qs.set('content', params.content.join(','));
+  if (params.sheet) qs.set('sheet', params.sheet);
+  return `/api/admin/reports/export?${qs.toString()}`;
 }

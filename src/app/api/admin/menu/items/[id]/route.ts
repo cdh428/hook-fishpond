@@ -35,6 +35,7 @@ export async function PUT(
       stockQty,
       lowStockAlert,
       costPrice,
+      targetMargin,
     } = body;
 
     const updateData: Record<string, any> = {};
@@ -70,6 +71,13 @@ export async function PUT(
     if (costPrice !== undefined)
       updateData.costPrice =
         typeof costPrice === "number" ? costPrice : costPrice ? Number(costPrice) : null;
+    if (targetMargin !== undefined)
+      updateData.targetMargin =
+        targetMargin === null || targetMargin === ""
+          ? null
+          : Number.isFinite(Number(targetMargin))
+            ? Number(targetMargin)
+            : null;
 
     const item = await prisma.menuItem.update({
       where: { id },

@@ -105,6 +105,8 @@ export async function POST(request: NextRequest) {
               isActive: r.isActive ?? true,
               stockType: r.stockType ?? "NONE",
               dailyLimit: r.dailyLimit ?? null,
+              costPrice: r.costPrice ?? null,
+              targetMargin: r.targetMargin ?? null,
               sortOrder: nextSort++,
             },
           });
@@ -132,9 +134,11 @@ export async function POST(request: NextRequest) {
           if (r.isActive !== undefined) data.isActive = r.isActive;
           // Only write stock fields when the row actually carries them, so a
           // partial import never overwrites existing stock configuration.
-          // stockQty / lowStockAlert / costPrice are intentionally untouched.
+          // stockQty / lowStockAlert are intentionally untouched (实时库存).
           if (r.stockType !== undefined) data.stockType = r.stockType;
           if (r.dailyLimit !== undefined) data.dailyLimit = r.dailyLimit;
+          if (r.costPrice !== undefined) data.costPrice = r.costPrice;
+          if (r.targetMargin !== undefined) data.targetMargin = r.targetMargin;
           if (category) data.categoryId = category.id;
 
           const upd = await tx.menuItem.update({
