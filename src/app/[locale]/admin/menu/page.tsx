@@ -469,8 +469,8 @@ export default function AdminMenuPage() {
 
       {/* Category Form Modal */}
       {showCategoryForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center overflow-y-auto bg-black/50 p-4">
+          <div className="my-auto max-h-[calc(100dvh-2rem)] w-full max-w-sm overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
             <div className="mb-2 flex items-center justify-between">
               <h3 className="text-lg font-bold text-neutral-900">
                 {editingCategory ? t('common.edit') : t('admin.addCategory')}
@@ -522,8 +522,8 @@ export default function AdminMenuPage() {
 
       {/* Item Form Modal */}
       {showItemForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center overflow-y-auto bg-black/50 p-4">
+          <div className="my-auto max-h-[calc(100dvh-2rem)] w-full max-w-sm overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
             <div className="mb-2 flex items-center justify-between">
               <h3 className="text-lg font-bold text-neutral-900">
                 {editingItem ? t('admin.editItem') : t('admin.addItem')}

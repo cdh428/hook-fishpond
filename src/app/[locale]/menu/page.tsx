@@ -529,7 +529,7 @@ export default function MenuPage() {
       {/* Image Zoom Modal */}
       {zoomImage && (
         <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4"
+          className="fixed inset-0 z-[70] flex items-center justify-center overflow-y-auto bg-black/80 p-4"
           onClick={() => setZoomImage(null)}
         >
           <button

@@ -97,7 +97,7 @@ export default function TablePicker({
     );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40" onClick={onClose}>
+    <div className="fixed inset-0 z-[70] flex items-end justify-center overflow-y-auto bg-black/40" onClick={onClose}>
       <div
         className="max-h-[80vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-bg-page px-4 pb-6 pt-4"
         onClick={(e) => e.stopPropagation()}

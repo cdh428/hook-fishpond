@@ -214,3 +214,39 @@
 ---
 
 *设计系统由 fishpond-redesign 团队设计师创建 · 2026-07-09*
+
+---
+
+## ⛔ 硬性规定：页面与弹层必须完整可达（2026-09-20，由菜单编辑弹窗被底导航遮挡事故确立）
+
+任何页面、弹窗、底部弹层、抽屉，其**全部内容（尤其是主操作按钮）必须在任何屏幕尺寸下都能看到、够到**。这是全站强约束，新增任何浮层必须遵守：
+
+### 规则 1：弹窗/弹层统一结构（Modal Hard Rule）
+```tsx
+{/* 遮罩层：z-[70]（必须高于 Header/BottomNav 的 z-50）+ overflow-y-auto */}
+<div className="fixed inset-0 z-[70] flex items-center justify-center overflow-y-auto bg-black/50 p-4">
+  {/* 卡片：限高 + 内部滚动，内容再长也只滚卡片，永不裁切按钮 */}
+  <div className="my-auto max-h-[calc(100dvh-2rem)] w-full max-w-sm overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
+    ...表单内容 + 保存按钮...
+  </div>
+</div>
+```
+- 底部弹层（bottom sheet，`items-end`）：卡片必须 `max-h-[80vh] overflow-y-auto`（参考 `TablePicker.tsx`）
+- 图片预览弹窗：图片必须 `max-h-[80vh] object-contain`，禁止原始尺寸溢出
+- 高度用 `dvh` 不用 `vh`（手机软键盘弹起时 vh 不缩小）
+- **禁止**：不带 `max-h`/`overflow` 的 `fixed inset-0` 居中弹窗——屏幕一矮就会上下同时被裁
+
+### 规则 2：层级（Z-Index）约定
+| 层 | z-index | 说明 |
+|---|---|---|
+| Header / BottomNav | z-50 | 常驻导航 |
+| 所有弹窗/弹层/抽屉 | **z-[70]** | 必须盖过一切常驻导航 |
+| 图片全屏预览 | z-[70] | 同上 |
+
+### 规则 3：后台不渲染顾客导航
+顾客底导航（BottomNav）在 `/admin/**` 路由下一律不渲染（组件内已按 pathname 拦截）。后台有自己的 tab 导航；顾客导航出现在后台既无功能意义，还会与后台弹窗重叠。
+
+### 规则 4：普通页面天然可滚
+页面内容放在正常文档流（`main` 内），由浏览器自然滚动；`main` 已有 `pb-20` 给底导航让位。**禁止**给整页容器加 `h-screen overflow-hidden` 之类裁切滚动的写法。
+
+> Code review / 自检清单：新增浮层时逐条核对 —— ① z-[70]？② 遮罩 overflow-y-auto？③ 卡片 max-h + 内滚？④ 按钮在小屏（如 375×667）可见？

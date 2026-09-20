@@ -350,11 +350,11 @@ export default function AdminCollectPage() {
       {/* QR Code Modal */}
       {showQR && qrDataUrl && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          className="fixed inset-0 z-[70] flex items-center justify-center overflow-y-auto bg-black/60 p-4"
           onClick={() => setShowQR(false)}
         >
           <div
-            className="relative w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl"
+            className="relative my-auto max-h-[calc(100dvh-2rem)] w-full max-w-sm overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Close button */}

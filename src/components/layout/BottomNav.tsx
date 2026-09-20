@@ -45,6 +45,11 @@ export default function BottomNav() {
   const t = useTranslations('common');
   const pathname = usePathname();
 
+  // Hard rule: the customer bottom nav must never render inside /admin —
+  // the admin shell has its own navigation, and this nav would otherwise
+  // overlap full-screen admin modals.
+  if (pathname.startsWith('/admin')) return null;
+
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-neutral-200 bg-white/95 backdrop-blur-md">
       <div className="mx-auto flex h-16 max-w-lg items-center justify-around">

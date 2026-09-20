@@ -292,9 +292,9 @@ export default function HomePage() {
 
       {/* Admin Login Modal */}
       {showAdminModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4" onClick={() => setShowAdminModal(false)}>
+        <div className="fixed inset-0 z-[70] flex items-center justify-center overflow-y-auto bg-black/50 px-4" onClick={() => setShowAdminModal(false)}>
           <div
-            className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl"
+            className="my-auto max-h-[calc(100dvh-2rem)] w-full max-w-sm overflow-y-auto rounded-2xl bg-white p-6 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-4 flex items-center justify-between">

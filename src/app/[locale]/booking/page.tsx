@@ -577,8 +577,8 @@ export default function BookingPage() {
 
       {/* Success Modal */}
       {showSuccess && activePond && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-xl">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center overflow-y-auto bg-black/50 p-4">
+          <div className="my-auto max-h-[calc(100dvh-2rem)] w-full max-w-sm overflow-y-auto rounded-2xl bg-white p-6 text-center shadow-xl">
             <div className="mb-4 flex justify-center">
               <div className="flex h-16 w-16 items-center justify-center rounded-full bg-success-50">
                 <svg
