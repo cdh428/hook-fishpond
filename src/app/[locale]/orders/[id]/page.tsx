@@ -1,15 +1,29 @@
 'use client';
 
 import { useTranslations, useLocale } from 'next-intl';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { Link } from '@/i18n/routing';
 import { fetchOrder } from '@/lib/api-client';
-import { ORDER_STATUS_COLOR, ORDER_STATUS_I18N, pickName } from '@/lib/order-view';
+import {
+  ORDER_STATUS_COLOR,
+  ORDER_STATUS_I18N,
+  pickName,
+  toReceiptOrder,
+} from '@/lib/order-view';
+import {
+  buildKitchenTicketHtml,
+  buildBillHtml,
+  type PrintLabels,
+} from '@/lib/print-receipt';
+import { submitPrint, describeOutcome } from '@/lib/print-agent';
 
 /**
  * 顾客订单详情 —— 下单成功后落地页，也是「我的订单」点进来的详情页。
  * 显示客户下单的内容、当前进度与结算状态。
+ *
+ * 打印入口：收银机/前台电脑上开着本地打印桥时，可以一键静默打后厨单或预结单；
+ * 没有桥（员工用手机打开）时自动退回浏览器打印对话框，功能不中断。
  */
 export default function OrderDetailPage() {
   const t = useTranslations();
@@ -20,6 +34,60 @@ export default function OrderDetailPage() {
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [printing, setPrinting] = useState<'kitchen' | 'bill' | null>(null);
+  const [printMsg, setPrintMsg] = useState('');
+
+  const printLabels: PrintLabels = useMemo(
+    () => ({
+      brand: t('common.siteName'),
+      brandSub: t('printLabels.brandSub'),
+      kitchenTicket: t('printLabels.kitchenTicket'),
+      bill: t('printLabels.bill'),
+      receipt: t('printLabels.receipt'),
+      orderNo: t('orders.orderNumber'),
+      table: t('printLabels.table'),
+      takeaway: t('orderType.takeaway'),
+      dineIn: t('orderType.dineIn'),
+      customer: t('admin.customer'),
+      time: t('printLabels.time'),
+      item: t('printLabels.item'),
+      qty: t('printLabels.qty'),
+      amount: t('admin.amount'),
+      subtotal: t('adminOrders.subtotal'),
+      fishCharge: t('adminOrders.fishCharge'),
+      fishWeight: t('adminOrders.weightKg'),
+      discount: t('adminOrders.discount'),
+      total: t('payment.total'),
+      note: t('cart.orderNote'),
+      status: t('orders.status'),
+      settlementMode: t('adminOrders.settlementMode'),
+      prepaid: t('adminOrders.prepaid'),
+      postpaid: t('adminOrders.postpaid'),
+      scanToPay: t('adminOrders.scanToPay'),
+      paidAt: t('adminOrders.settledAt'),
+      thanks: t('printLabels.thanks'),
+    }),
+    [t],
+  );
+
+  const doPrint = async (purpose: 'kitchen' | 'bill') => {
+    if (!order) return;
+    setPrinting(purpose);
+    setPrintMsg('');
+    try {
+      const ro = toReceiptOrder(order, locale);
+      const html =
+        purpose === 'kitchen'
+          ? buildKitchenTicketHtml(ro, printLabels)
+          : buildBillHtml(ro, { qrDataUrl: null, labels: printLabels });
+      const outcome = await submitPrint(html, purpose);
+      setPrintMsg(describeOutcome(outcome, t));
+    } catch (e: any) {
+      setPrintMsg(e?.message || t('common.error'));
+    } finally {
+      setPrinting(null);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -190,6 +258,32 @@ export default function OrderDetailPage() {
           <p className="mt-3 text-[11px] leading-relaxed text-neutral-400">
             {t('cart.fishChargeNotice')}
           </p>
+        )}
+      </div>
+
+      {/* 打印（收银机上有本地打印桥时静默出纸） */}
+      <div className="mb-4 rounded-xl bg-white p-4 shadow-md">
+        <h3 className="mb-3 text-sm font-semibold text-neutral-700">
+          🖨️ {t('orderDetail.print')}
+        </h3>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={() => void doPrint('kitchen')}
+            disabled={printing !== null}
+            className="rounded-xl bg-primary-700 py-2.5 text-xs font-semibold text-white transition hover:bg-primary-800 disabled:opacity-50"
+          >
+            {printing === 'kitchen' ? t('adminPrint.testing') : t('adminPrint.kitchen')}
+          </button>
+          <button
+            onClick={() => void doPrint('bill')}
+            disabled={printing !== null}
+            className="rounded-xl bg-neutral-100 py-2.5 text-xs font-semibold text-neutral-700 transition hover:bg-neutral-200 disabled:opacity-50"
+          >
+            {printing === 'bill' ? t('adminPrint.testing') : t('adminPrint.bill')}
+          </button>
+        </div>
+        {printMsg && (
+          <p className="mt-2 text-xs text-neutral-500">{printMsg}</p>
         )}
       </div>
 

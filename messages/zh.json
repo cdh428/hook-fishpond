@@ -395,6 +395,43 @@
     "selected": "已选 {count} 项",
     "moveSelected": "移动所选"
   },
+  "adminPrint": {
+    "entry": "打印设置",
+    "title": "打印设置与测试",
+    "refresh": "重新检测",
+    "checking": "检测中…",
+    "online": "在线",
+    "offline": "未启动",
+    "bridgeStatus": "本地打印服务",
+    "version": "服务版本",
+    "widthDots": "纸宽",
+    "targetCount": "可用打印目标",
+    "offlineTitle": "本地打印服务未启动",
+    "offlineHint": "在收银机上运行下面这条命令，即可静默打印（不弹系统对话框）：",
+    "mode": "打印方式",
+    "modeBridge": "静默打印（推荐）",
+    "modeBrowser": "浏览器对话框",
+    "modeHint": "静默打印需要本机运行打印服务；服务不在时自动退回对话框，功能不中断。",
+    "assign": "打印目标分配",
+    "kitchen": "后厨单",
+    "bill": "预结单",
+    "receipt": "收据",
+    "autoPick": "自动选择",
+    "bluetooth": "蓝牙",
+    "usb": "USB",
+    "thermal": "热敏",
+    "targetList": "本机打印目标",
+    "test": "测试打印",
+    "testing": "打印中…",
+    "testHint": "测试单为示例数据，不会写入数据库。蓝牙小票机受带宽限制，一张预结单约需 10 秒。",
+    "testSent": "已发送到 {target}（{ms}ms）",
+    "testFailed": "测试打印失败：{error}",
+    "needBridge": "请先启动本地打印服务",
+    "needTarget": "请先选择打印目标",
+    "advanced": "高级",
+    "bridgeUrl": "打印服务地址",
+    "bridgeUrlHint": "默认 http://127.0.0.1:17777。只在换了机器或改了端口时才需要改。"
+  },
   "adminStock": {
     "entry": "库存",
     "title": "库存管理",
@@ -567,7 +604,8 @@
     "placedDesc": "已通知后厨，请稍候。",
     "postpaidHint": "已通知后厨。用完餐后到收银台一次结清即可。",
     "prepaidHint": "请完成付款，后厨随后开始备餐。",
-    "seat": "桌号"
+    "seat": "桌号",
+    "print": "打印"
   },
   "adminOrders": {
     "entry": "订单",
@@ -643,5 +681,12 @@
     "item": "品名",
     "qty": "数量",
     "thanks": "谢谢光临，欢迎再来"
+  },
+  "printAgent": {
+    "sentTo": "🖨️ 已发送到 {target}",
+    "browserMode": "已弹出浏览器打印对话框",
+    "bridgeOffline": "未检测到本地打印服务，已改为弹出对话框打印",
+    "noTarget": "未指定打印目标，已改为弹出对话框打印",
+    "bridgeError": "打印服务出错（{error}），已改为弹出对话框打印"
   }
 }

@@ -395,6 +395,43 @@
     "selected": "{count} selected",
     "moveSelected": "Move selected"
   },
+  "adminPrint": {
+    "entry": "Printing",
+    "title": "Printing setup & test",
+    "refresh": "Re-check",
+    "checking": "Checking…",
+    "online": "Online",
+    "offline": "Not running",
+    "bridgeStatus": "Local print service",
+    "version": "Service version",
+    "widthDots": "Paper width",
+    "targetCount": "Available targets",
+    "offlineTitle": "Local print service is not running",
+    "offlineHint": "Run this command on the POS machine to enable silent printing (no dialog):",
+    "mode": "Print mode",
+    "modeBridge": "Silent (recommended)",
+    "modeBrowser": "Browser dialog",
+    "modeHint": "Silent printing needs the local service. When it is unavailable, printing falls back to the dialog automatically.",
+    "assign": "Target assignment",
+    "kitchen": "Kitchen ticket",
+    "bill": "Bill",
+    "receipt": "Receipt",
+    "autoPick": "Auto",
+    "bluetooth": "Bluetooth",
+    "usb": "USB",
+    "thermal": "Thermal",
+    "targetList": "Print targets on this machine",
+    "test": "Test print",
+    "testing": "Printing…",
+    "testHint": "Test tickets use sample data and are not saved. Over Bluetooth a full bill takes about 10 seconds.",
+    "testSent": "Sent to {target} ({ms}ms)",
+    "testFailed": "Test print failed: {error}",
+    "needBridge": "Start the local print service first",
+    "needTarget": "Choose a print target first",
+    "advanced": "Advanced",
+    "bridgeUrl": "Print service URL",
+    "bridgeUrlHint": "Default http://127.0.0.1:17777. Change only when the machine or port changes."
+  },
   "adminStock": {
     "entry": "Inventory",
     "title": "Inventory",
@@ -567,7 +604,8 @@
     "placedDesc": "The kitchen has been notified.",
     "postpaidHint": "Sent to the kitchen. Settle once at the counter when you are done.",
     "prepaidHint": "Please complete payment — the kitchen starts right after.",
-    "seat": "Table"
+    "seat": "Table",
+    "print": "Print"
   },
   "adminOrders": {
     "entry": "Orders",
@@ -643,5 +681,12 @@
     "item": "Item",
     "qty": "Qty",
     "thanks": "Thank you, please come again"
+  },
+  "printAgent": {
+    "sentTo": "🖨️ Sent to {target}",
+    "browserMode": "Browser print dialog opened",
+    "bridgeOffline": "Local print service not found — opened the browser dialog instead",
+    "noTarget": "No print target set — opened the browser dialog instead",
+    "bridgeError": "Print service error ({error}) — opened the browser dialog instead"
   }
 }

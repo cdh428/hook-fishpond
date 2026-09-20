@@ -30,9 +30,9 @@ import {
   buildBillHtml,
   buildReceiptHtml,
   makeQrDataUrl,
-  printHtml,
   type PrintLabels,
 } from '@/lib/print-receipt';
+import { submitPrint, describeOutcome } from '@/lib/print-agent';
 import TablePicker from '@/components/TablePicker';
 
 type Tab = 'open' | 'awaiting' | 'settled' | 'cancelled';
@@ -139,7 +139,9 @@ export default function AdminOrdersPage() {
 
   // ---------- 动作 ----------
   const doPrintKitchen = async (order: any) => {
-    await printHtml(buildKitchenTicketHtml(toReceiptOrder(order, locale), printLabels));
+    const html = buildKitchenTicketHtml(toReceiptOrder(order, locale), printLabels);
+    const outcome = await submitPrint(html, 'kitchen');
+    flash(describeOutcome(outcome, t));
   };
 
   const doPrintBill = async (order: any, qrString?: string | null) => {
@@ -151,13 +153,15 @@ export default function AdminOrdersPage() {
         qrDataUrl = null;
       }
     }
-    await printHtml(
-      buildBillHtml(toReceiptOrder(order, locale), { qrDataUrl, labels: printLabels }),
-    );
+    const html = buildBillHtml(toReceiptOrder(order, locale), { qrDataUrl, labels: printLabels });
+    const outcome = await submitPrint(html, 'bill');
+    flash(describeOutcome(outcome, t));
   };
 
   const doPrintReceipt = async (order: any) => {
-    await printHtml(buildReceiptHtml(toReceiptOrder(order, locale), { labels: printLabels }));
+    const html = buildReceiptHtml(toReceiptOrder(order, locale), { labels: printLabels });
+    const outcome = await submitPrint(html, 'receipt');
+    flash(describeOutcome(outcome, t));
   };
 
   const advanceStatus = async (order: any) => {
@@ -1072,8 +1076,9 @@ function SettleModal({
       const res = await settleAdminOrder(current.id, { action: 'mark-paid', method: m });
       if (res.order) {
         setCurrent(res.order);
-        await printHtml(
+        await submitPrint(
           buildReceiptHtml(toReceiptOrder(res.order, locale), { labels: printLabels }),
+          'receipt',
         );
         onSettled(res.order);
       }
@@ -1090,8 +1095,9 @@ function SettleModal({
       const res = await settleAdminOrder(current.id, { action: 'confirm', method });
       if (res.order) {
         setCurrent(res.order);
-        await printHtml(
+        await submitPrint(
           buildReceiptHtml(toReceiptOrder(res.order, locale), { labels: printLabels }),
+          'receipt',
         );
         onSettled(res.order);
       }
@@ -1103,11 +1109,12 @@ function SettleModal({
   };
 
   const printBill = async () => {
-    await printHtml(
+    await submitPrint(
       buildBillHtml(toReceiptOrder(current, locale), {
         qrDataUrl: qr?.dataUrl ?? null,
         labels: printLabels,
       }),
+      'bill',
     );
   };
 

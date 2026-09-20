@@ -51,18 +51,42 @@
 ```
 src/app/[locale]/
 ├── page.tsx              # 首页（鱼塘介绍）
-├── menu/page.tsx        # 菜单（分类tab + 加购）
-├── booking/page.tsx     # 预约（选塘/选位/选时段）
-├── cart/page.tsx        # 购物车 + 结算
-├── orders/page.tsx      # 订单历史
-├── profile/page.tsx     # 个人中心（注册/登录/历史）
-└── admin/               # 管理后台
-    ├── page.tsx         # 仪表盘（KPI + 近期订单）
+├── menu/page.tsx         # 菜单（分类tab + 加购）
+├── booking/page.tsx      # 预约（选塘/选位/选时段）
+├── cart/page.tsx         # 购物车 + 结算方式 + 确认下单
+├── orders/page.tsx       # 订单历史
+├── orders/[id]/page.tsx  # 订单详情（含打印入口）
+├── profile/page.tsx      # 个人中心（注册/登录/历史）
+├── payment/[id]/page.tsx # PromptPay 扫码支付
+└── admin/               # 管理后台（登录一次全站通行）
+    ├── page.tsx         # 仪表盘（KPI + 待收款 + 近期订单）
+    ├── orders/          # 订单看板（状态流转/改单/称重/折扣/结算/打印）
+    ├── collect/         # 收款（含待结算订单）
+    ├── print/           # 打印设置与测试（USB / 蓝牙小票机）
+    ├── menu/            # 菜品 CRUD + 跨大类移动
+    ├── stock/           # 库存（预占/低库存提醒）
+    ├── reports/         # 报表（营收/渔获/折扣）
+    ├── tables/          # 餐桌二维码
+    ├── rest-days/       # 休息日
     ├── bookings/        # 预约管理（确认/取消）
-    ├── transactions/    # 交易报表
-    ├── menu/            # 菜品CRUD
-    └── collect/         # 收款码生成
+    └── transactions/    # 交易报表
 ```
+
+## 小票打印（80mm 热敏）
+
+网页端做不到「按名称静默出纸」（`window.print()` 只能弹对话框），也打不出泰文
+（热敏机内置字库没有泰文字形）。所以票据统一渲染成位图，用 ESC/POS 原始指令直发。
+
+| 组件 | 位置 | 说明 |
+|---|---|---|
+| 票据模板 | `src/lib/print-receipt.ts` | 后厨单 / 预结单 / 收据（80mm，576 点） |
+| 网页代理 | `src/lib/print-agent.ts` | 桥优先、探测不到自动回退浏览器对话框 |
+| 本地桥 | `tools/print-bridge/` | Python 服务，支持 USB 队列与**蓝牙串口 SPP** |
+| 设置页 | `/[locale]/admin/print` | 检测状态、分配目标、打测试页 |
+
+蓝牙小票机在 Windows 上通常**不会**出现在打印机列表里，只暴露一个 SPP 虚拟串口
+（如 GLPrinter → `COM8`），桥接服务直接往该串口写 ESC/POS 字节。详见
+`tools/print-bridge/README.md`。
 
 ## API 路由 (24个)
 
@@ -141,16 +165,19 @@ vercel --prod --yes
 |---|---|---|
 | 架构设计 | `docs/ARCHITECTURE_V2.md` | V2 架构详述 |
 | 设计系统 | `docs/DESIGN_SYSTEM.md` | 配色/字体/组件规范 |
+| 订单流程 | `docs/ORDER-FLOW-PROPOSAL.md` | 下单→预占→称重→结算 全流程 |
 | 部署指南 | `docs/SETUP_GUIDE.md` | 环境变量/Omise/数据库配置 |
+| 小票打印 | `tools/print-bridge/README.md` | 打印桥部署、蓝牙 SPP、排错 |
 | 归档文档 | `docs/archive/` | 过期文档（DEV_SUMMARY, CONNECT_GUIDE） |
 
 ## 开发状态
 
 - ✅ V2 改版完成（2塘模式 + 用户管理 + 管理后台）
-- ✅ 24个API路由全部接通 Supabase REST API
-- ✅ 前端6用户页 + 4管理员页全部接通真实API
-- ✅ 三语翻译对齐（222 key × 3 语言）
-- ✅ Neon 主库 + Prisma 直连（23个API路由全部迁移完成）
+- ✅ Neon 主库 + Prisma 直连（全部 API 路由已迁移，Vercel 无 IPv6 问题）
+- ✅ 前端全部页面接通真实 API（三语 zh/en/th）
+- ✅ 三语翻译对齐（642 key × 3 语言，`npm run check:i18n`）
+- ✅ 订单流程 Phase 1+2：确认下单 → 库存预占 → 称重 → 折扣 → 结算 → 80mm 打印
+- ✅ 小票打印：USB 队列 + 蓝牙 SPP 双通道，网页端桥优先/自动回退
 - ✅ GitHub Actions 每日备份工作流就绪
 - ⬜ Omise 真实支付对接
 - ⬜ 手机号 OTP 验证
