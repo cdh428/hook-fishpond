@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
+import { runTx } from "@/lib/tx";
 import { buildStockViews } from "@/lib/stock";
+import { reverseMovement, ledgerErrorResponse } from "@/lib/stock-ledger";
 
 const VALID_STOCK_TYPES = ["NONE", "MADE", "PURCHASED"];
 
@@ -18,6 +20,8 @@ function toItemShape(it: any, v: any) {
     stockType: it.stockType,
     dailyLimit: it.dailyLimit,
     stockQty: it.stockQty,
+    stockValue: it.stockValue,
+    avgCost: it.avgCost,
     lowStockAlert: it.lowStockAlert,
     soldOut: it.soldOut,
     view: v,
@@ -50,29 +54,67 @@ export async function GET(
     const movementRows = await prisma.stockMovement.findMany({
       where: { itemId },
       orderBy: { createdAt: "desc" },
-      take: 50,
+      take: 80,
     });
+
+    // 已冲销的分录 id（用于在列表上打「已冲销」标记）
+    const reversedIds = new Set(
+      (
+        await prisma.stockMovement.findMany({
+          where: { itemId, reversalOf: { not: null } },
+          select: { reversalOf: true },
+        })
+      ).map((m) => m.reversalOf as string),
+    );
 
     const movements = movementRows.map((m) => ({
       id: m.id,
       type: m.type,
       quantity: m.quantity,
+      unitCost: m.unitCost,
+      amount: m.amount,
+      balanceAfter: m.balanceAfter,
+      docType: m.docType,
+      docId: m.docId,
+      reversalOf: m.reversalOf,
+      reversed: reversedIds.has(m.id),
       note: m.note,
       orderId: m.orderId,
       adminName: m.adminName,
       createdAt: m.createdAt,
     }));
 
-    return NextResponse.json({ item: toItemShape(item, v), movements });
-  } catch (error: any) {
-    console.error("Get stock item error:", error);
-    return NextResponse.json(
-      { error: error.message || "Failed to load stock item" },
-      { status: 500 },
-    );
+    // 数量账 / 金额账 / 分录汇总（对账口径）
+    const agg = await prisma.stockMovement.aggregate({
+      where: { itemId },
+      _sum: { quantity: true, amount: true },
+      _count: { _all: true },
+    });
+    const ledgerQty = agg._sum.quantity ?? 0;
+    const ledgerValue = Math.round((agg._sum.amount ?? 0) * 100) / 100;
+    const bookQty = item.stockQty ?? 0;
+    const bookValue = Math.round((item.stockValue ?? 0) * 100) / 100;
+
+    return NextResponse.json({
+      item: toItemShape(item, v),
+      movements,
+      ledger: {
+        entryCount: agg._count._all ?? 0,
+        qty: ledgerQty,
+        value: ledgerValue,
+        bookQty,
+        bookValue,
+        qtyDiff: bookQty - ledgerQty,
+        valueDiff: Math.round((bookValue - ledgerValue) * 100) / 100,
+        ok: bookQty === ledgerQty && Math.abs(bookValue - ledgerValue) < 0.01,
+      },
+    });
+  } catch (error) {
+    return ledgerErrorResponse(error, "Get stock item error");
   }
 }
 
+/** 库存设置（类型 / 限量 / 预警线 / 参考成本 / 强制售罄）—— 均不直接改余额 */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ itemId: string }> },
@@ -142,16 +184,19 @@ export async function PATCH(
       updateData.soldOut = body.soldOut;
     }
 
-    // 首次切换为外购时把库存初始化为 0（避免 NULL 影响扣减与展示）
+    // ⚠️ 这里**不接受** stockQty / stockValue —— 库存余额只能由过账引擎维护。
+    // 首次切换为外购时把两本账初始化为 0（NULL 会让展示与扣减口径不一致）。
     if (updateData.stockType === "PURCHASED") {
       const cur = await prisma.menuItem.findUnique({
         where: { id: itemId },
-        select: { stockQty: true },
+        select: { stockQty: true, stockValue: true, avgCost: true, costPrice: true },
       });
       if (!cur) {
         return NextResponse.json({ error: "Menu item not found" }, { status: 404 });
       }
       if (cur.stockQty === null) updateData.stockQty = 0;
+      if (cur.stockValue === null) updateData.stockValue = 0;
+      if (cur.avgCost === null) updateData.avgCost = cur.costPrice ?? 0;
     }
 
     const item = await prisma.menuItem.update({
@@ -168,10 +213,46 @@ export async function PATCH(
     if (error?.code === "P2025") {
       return NextResponse.json({ error: "Menu item not found" }, { status: 404 });
     }
-    console.error("Patch stock item error:", error);
-    return NextResponse.json(
-      { error: error.message || "Failed to update stock item" },
-      { status: 500 },
-    );
+    return ledgerErrorResponse(error, "Patch stock item error");
+  }
+}
+
+/**
+ * 红字冲销某条手工分录（调整 / 损耗 / 期初）。
+ * 历史分录永不修改，只追加一条反向分录。
+ */
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ itemId: string }> },
+) {
+  try {
+    const admin = await requireAdmin(request);
+    if (!admin) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { itemId } = await params;
+    const body = await request.json().catch(() => ({}));
+    if (body?.action !== "reverse" || !body?.movementId) {
+      return NextResponse.json({ error: "Unsupported action" }, { status: 400 });
+    }
+
+    const result = await runTx(async (tx) => {
+      const origin = await tx.stockMovement.findUnique({
+        where: { id: String(body.movementId) },
+        select: { itemId: true },
+      });
+      if (!origin || origin.itemId !== itemId) {
+        throw new Error("NOT_FOUND");
+      }
+      return reverseMovement(tx, String(body.movementId), {
+        adminName: admin.username,
+        note: body.note ?? null,
+      });
+    });
+
+    return NextResponse.json({ ok: true, ...result });
+  } catch (error) {
+    return ledgerErrorResponse(error, "Reverse movement error");
   }
 }

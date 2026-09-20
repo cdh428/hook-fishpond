@@ -59,7 +59,6 @@ export async function POST(request: NextRequest) {
       sortOrder,
       stockType,
       dailyLimit,
-      stockQty,
       lowStockAlert,
       costPrice,
       targetMargin,
@@ -71,6 +70,11 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     }
+
+    const num = (v: any) =>
+      typeof v === "number" ? v : v ? Number(v) : null;
+    const type = stockType ?? "NONE";
+    const cost = num(costPrice);
 
     const item = await prisma.menuItem.create({
       data: {
@@ -88,25 +92,21 @@ export async function POST(request: NextRequest) {
         isVegetarian: isVegetarian || false,
         spiceLevel: spiceLevel || 0,
         sortOrder: sortOrder || 0,
-        stockType: stockType ?? "NONE",
-        dailyLimit:
-          typeof dailyLimit === "number" ? dailyLimit : dailyLimit ? Number(dailyLimit) : null,
-        stockQty:
-          typeof stockQty === "number" ? stockQty : stockQty ? Number(stockQty) : null,
-        lowStockAlert:
-          typeof lowStockAlert === "number"
-            ? lowStockAlert
-            : lowStockAlert
-              ? Number(lowStockAlert)
-              : null,
-        costPrice:
-          typeof costPrice === "number" ? costPrice : costPrice ? Number(costPrice) : null,
+        stockType: type,
+        dailyLimit: num(dailyLimit),
+        lowStockAlert: num(lowStockAlert),
+        costPrice: cost,
         targetMargin:
           targetMargin === undefined || targetMargin === null || targetMargin === ""
             ? null
             : Number.isFinite(Number(targetMargin))
               ? Number(targetMargin)
               : null,
+        // ⚠️ 库存两本账不在这里接受外部数值 ——
+        // 只有切到「外购」时做一次初始化，之后一律由过账引擎维护。
+        stockQty: type === "PURCHASED" ? 0 : null,
+        stockValue: type === "PURCHASED" ? 0 : null,
+        avgCost: type === "PURCHASED" ? (cost ?? 0) : null,
       },
       include: { category: true },
     });

@@ -3,27 +3,36 @@ import { prisma } from "@/lib/prisma";
 import { runTx } from "@/lib/tx";
 import { bangkokDateString } from "@/lib/date-utils";
 import { normalizeOptionKey, round2 } from "@/lib/menu-options";
+import { postMovement, StockLedgerError } from "@/lib/stock-ledger";
 
 /**
- * 库存核心库 —— 全站库存余量、预占、扣减、回补的唯一真相来源。
+ * 库存核心库 —— 全站库存**余量、预占、校验**的唯一真相来源。
  *
- * 两类库存：
+ * ## 账套归属（2026-09-20 起）
+ *
+ * ⚠️ 本文件**不再直接 UPDATE `stockQty`**。所有余额变动一律经
+ * `src/lib/stock-ledger.ts` 的 `postMovement()` 过账 —— 那里同时写不可变分录
+ * 并维护数量账 / 金额账，保证 `余额 ≡ Σ分录`（账实核对据此成立）。
+ * 见文件顶部「库存过账引擎」的会计模型说明。
+ *
+ * ## 两类库存
  *  - MADE（自制）：余量 = 每日限量 − 当日已占用（**实时计算**，无需定时任务，跨天自动归零）。
- *  - PURCHASED（外购）：可用量 = 持久计数 stockQty − 未结清订单的预占量。
- *  - NONE（不管理）：不限量、始终可售（仅受 soldOut 手动售罄影响）。
+ *    它没有持久计数，过账时只记备查分录（ledgerOnly）。
+ *  - PURCHASED（外购）：可用量 = 数量账 stockQty − 未结清订单的预占量。
+ *  - NONE（不管理）：不限量、始终可售（仅受 soldOut 手动售罄影响），不入账。
  *
  * ## 预占（reservation）机制 —— 2026-09-20 起
  *
- * 顾客「确认下单」后**立即预占**，但**不改动 stockQty、不写库存流水**；
- * 只有到了结算时点（后付=结清、先付=付款到账）才把预占转为正式扣减。
+ * 顾客「确认下单」后**立即预占**，但**不改动 stockQty、不写分录**；
+ * 只有到了结算时点（后付=结清、先付=付款到账）才把预占转为正式出库过账。
  *
  * 每条 OrderItem 上的 `reservedQty` 即该行尚未转正的预占数量：
  *  - 下单后未结算：reservedQty = quantity（全部是预占）
- *  - 结算后：reservedQty = 0（已转正式扣减）
+ *  - 结算后：reservedQty = 0（已转正式出库）
  *  - 历史订单（旧流程下单即扣）：reservedQty = 0，数量已计入 stockQty
  *
- * 于是「已扣减量」= quantity − reservedQty，这一表达式对历史数据同样成立，
- * 因此取消逻辑可以统一处理：预占部分直接释放，已扣部分回补。
+ * 于是「已出库量」= quantity − reservedQty，这一表达式对历史数据同样成立，
+ * 因此取消逻辑可以统一处理：预占部分直接释放，已出库部分回补入库。
  */
 
 export type StockTypeValue = "NONE" | "MADE" | "PURCHASED";
@@ -376,36 +385,40 @@ export async function consumeReservation(
     const st = oi.menuItem.stockType as StockTypeValue;
     if (st === "NONE") continue;
 
+    // 幂等键 `sale:{订单行 id}`：同一订单行只出库一次，重复结算不会扣两次
+    const idempotencyKey = `sale:${oi.id}`;
+
     if (st === "PURCHASED") {
-      // 只扣「预占」部分：历史订单（旧流程下单即扣）reservedQty 为 0，不重复扣
+      // 只出库「预占」部分：历史订单（旧流程下单即出库）reservedQty 为 0，不重复出库
       if (oi.reservedQty > 0) {
-        await tx.$executeRaw`
-          UPDATE "MenuItem"
-          SET "stockQty" = COALESCE("stockQty", 0) - ${oi.reservedQty}
-          WHERE "id" = ${oi.menuItemId}
-        `;
-        await tx.stockMovement.create({
-          data: {
-            itemId: oi.menuItemId,
-            type: "SALE",
-            quantity: -oi.reservedQty,
-            orderId,
-            adminName: opts.adminName ?? null,
-          },
+        await postMovement(tx, {
+          itemId: oi.menuItemId,
+          type: "SALE",
+          quantity: -oi.reservedQty,
+          docType: "ORDER",
+          docId: orderId,
+          orderId,
+          adminName: opts.adminName ?? null,
+          note: "订单结算出库",
+          // 菜已上桌，不因账面异常卡住结算（超卖在预占阶段就已拦下）
+          allowNegative: true,
+          idempotencyKey,
         });
         consumed += oi.reservedQty;
       }
     } else {
-      // MADE：数量本就在当日占用里，转正时补记一条流水备查
-      await tx.stockMovement.create({
-        data: {
-          itemId: oi.menuItemId,
-          type: "SALE",
-          quantity: -oi.quantity,
-          orderId,
-          adminName: opts.adminName ?? null,
-          note: "预占转正式扣减",
-        },
+      // MADE：数量本就在当日占用里，转正时补记一条备查分录（不动持久余额）
+      await postMovement(tx, {
+        itemId: oi.menuItemId,
+        type: "SALE",
+        quantity: -oi.quantity,
+        docType: "ORDER",
+        docId: orderId,
+        orderId,
+        adminName: opts.adminName ?? null,
+        note: "预占转正式出库",
+        ledgerOnly: true,
+        idempotencyKey,
       });
       consumed += oi.quantity;
     }
@@ -446,24 +459,35 @@ export async function releaseOrderStock(
     released += held;
 
     if (alreadyDeducted > 0 && st !== "NONE") {
+      // 回补按「原出库成本」入账，而不是回补当时的平均成本 —— 否则金额账会漂
+      let originUnitCost: number | null = null;
+      let originId: string | null = null;
       if (st === "PURCHASED") {
-        await tx.$executeRaw`
-          UPDATE "MenuItem"
-          SET "stockQty" = COALESCE("stockQty", 0) + ${alreadyDeducted}
-          WHERE "id" = ${oi.menuItemId}
-        `;
+        const originSale = await tx.stockMovement.findFirst({
+          where: { orderId, itemId: oi.menuItemId, type: "SALE" },
+          orderBy: { createdAt: "desc" },
+          select: { id: true, unitCost: true },
+        });
+        originUnitCost = originSale?.unitCost ?? null;
+        originId = originSale?.id ?? null;
       }
-      await tx.stockMovement.create({
-        data: {
-          itemId: oi.menuItemId,
-          type: "CANCEL",
-          quantity: alreadyDeducted,
-          orderId,
-          adminName: opts.adminName ?? null,
-          note: "订单取消/减量回补",
-        },
+
+      const res = await postMovement(tx, {
+        itemId: oi.menuItemId,
+        type: "CANCEL",
+        quantity: alreadyDeducted,
+        unitCost: originUnitCost,
+        docType: "ORDER",
+        docId: orderId,
+        orderId,
+        reversalOf: originId,
+        adminName: opts.adminName ?? null,
+        note: "订单取消/减量回补",
+        allowNegative: true,
+        // 幂等：同一订单行只回补一次（重复取消不会把库存加成双份）
+        idempotencyKey: `cancel:${oi.id}`,
       });
-      restored += alreadyDeducted;
+      if (!res.duplicated) restored += alreadyDeducted;
     }
   }
 
@@ -540,29 +564,36 @@ export async function applyOrderItemChange(
 
   let restored = 0;
 
-  /** 回补某一行的「已扣减部分」并写流水，返回回补件数 */
+  /** 该行最近一次出库分录的成本快照 —— 回补必须按「原成本」入账，金额账才不会漂 */
+  const originSaleOf = (itemId: string) =>
+    tx.stockMovement.findFirst({
+      where: { itemId, type: "SALE", orderId },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, unitCost: true },
+    });
+
+  /** 回补某一行的「已出库部分」（写红字冲销分录），返回回补件数 */
   const revertRow = async (oi: (typeof incoming)[number]): Promise<number> => {
     const st = ((fresh.get(oi.menuItemId) ?? oi.menuItem).stockType) as StockTypeValue;
     const alreadyDeducted = Math.max(0, oi.quantity - oi.reservedQty);
     if (alreadyDeducted <= 0 || st === "NONE") return 0;
-    if (st === "PURCHASED") {
-      await tx.$executeRaw`
-        UPDATE "MenuItem"
-        SET "stockQty" = COALESCE("stockQty", 0) + ${alreadyDeducted}
-        WHERE "id" = ${oi.menuItemId}
-      `;
-    }
-    await tx.stockMovement.create({
-      data: {
-        itemId: oi.menuItemId,
-        type: "CANCEL",
-        quantity: alreadyDeducted,
-        orderId,
-        adminName: opts.adminName ?? null,
-        note: "后台改单删除菜品回补",
-      },
+
+    const origin = st === "PURCHASED" ? await originSaleOf(oi.menuItemId) : null;
+
+    const res = await postMovement(tx, {
+      itemId: oi.menuItemId,
+      type: "CANCEL",
+      quantity: alreadyDeducted,
+      unitCost: origin?.unitCost ?? null,
+      docType: "ORDER",
+      docId: orderId,
+      orderId,
+      reversalOf: origin?.id ?? null,
+      adminName: opts.adminName ?? null,
+      note: "后台改单删除菜品回补",
+      allowNegative: true,
     });
-    return alreadyDeducted;
+    return res.duplicated ? 0 : alreadyDeducted;
   };
 
   // 当前行按「行匹配键」归组（历史行 optionKey 为 NULL → 归入无选项键）
@@ -599,29 +630,24 @@ export async function applyOrderItemChange(
       await assertCanHold(tx, { ...item, stockType: st }, newReserved, orderId);
     }
 
-    // 目标数量低于已扣减量 → 需要把差额加回库存
-    if (targetQty < alreadyDeducted) {
+    // 目标数量低于已出库量 → 需要把差额回补入库
+    if (targetQty < alreadyDeducted && st !== "NONE") {
       const back = alreadyDeducted - targetQty;
-      if (st === "PURCHASED") {
-        await tx.$executeRaw`
-          UPDATE "MenuItem"
-          SET "stockQty" = COALESCE("stockQty", 0) + ${back}
-          WHERE "id" = ${oi.menuItemId}
-        `;
-      }
-      if (st !== "NONE") {
-        await tx.stockMovement.create({
-          data: {
-            itemId: oi.menuItemId,
-            type: "CANCEL",
-            quantity: back,
-            orderId,
-            adminName: opts.adminName ?? null,
-            note: "后台改单减量回补",
-          },
-        });
-        restored += back;
-      }
+      const origin = st === "PURCHASED" ? await originSaleOf(oi.menuItemId) : null;
+      const res = await postMovement(tx, {
+        itemId: oi.menuItemId,
+        type: "CANCEL",
+        quantity: back,
+        unitCost: origin?.unitCost ?? null,
+        docType: "ORDER",
+        docId: orderId,
+        orderId,
+        reversalOf: origin?.id ?? null,
+        adminName: opts.adminName ?? null,
+        note: "后台改单减量回补",
+        allowNegative: true,
+      });
+      if (!res.duplicated) restored += back;
     }
 
     const src = targetSource.get(key);
@@ -679,7 +705,13 @@ export async function applyOrderItemChange(
 
 /**
  * 手动库存变更（外购入库 / 手动调整 / 损耗自用）。
- * 对 PURCHASED：同步更新 stockQty；其他类型仅记流水。
+ *
+ * ⚠️ 只有 **PURCHASED（外购）** 菜品才有持久账面，其他类型一律**报错**：
+ * 以前这里对非外购「只记流水、静默返回 ok」，前端弹出「已保存」但库存纹丝不动，
+ * 是最容易把人带进沟里的那条路径。
+ *
+ * @throws StockLedgerError STOCK_TYPE_NOT_TRACKED —— 该菜品未启用库存管理
+ *                          NEGATIVE_STOCK —— 会把数量账扣成负数
  */
 export async function applyStockChange(input: {
   itemId: string;
@@ -687,25 +719,25 @@ export async function applyStockChange(input: {
   quantity: number; // 带符号：正=增加，负=减少
   note?: string;
   adminName?: string;
-  /** 入库时可顺便更新成本价 */
+  /** 入库时可顺便更新参考成本价 */
   costPrice?: number;
-}): Promise<{ stockQty: number | null }> {
+  /** 入库单价（移动加权平均按它重算；缺省用参考成本价） */
+  unitCost?: number;
+  docType?: "PURCHASE_RECEIPT" | "STOCK_TAKE" | "ORDER" | "MANUAL" | "OPENING" | null;
+  docId?: string | null;
+}): Promise<{ stockQty: number; stockValue: number; avgCost: number }> {
   return runTx(async (tx) => {
     const item = await tx.menuItem.findUnique({ where: { id: input.itemId } });
-    if (!item) throw new Error("NOT_FOUND");
+    if (!item) throw new StockLedgerError("NOT_FOUND", "Menu item not found", 404);
 
-    let stockQty = item.stockQty ?? null;
-
-    if (item.stockType === "PURCHASED") {
-      // stockQty 可能为 NULL（刚设为外购）—— COALESCE 视为 0
-      await tx.$executeRaw`
-        UPDATE "MenuItem"
-        SET "stockQty" = COALESCE("stockQty", 0) + ${input.quantity}
-        WHERE "id" = ${input.itemId}
-      `;
-      stockQty = (item.stockQty ?? 0) + input.quantity;
+    if (item.stockType !== "PURCHASED") {
+      throw new StockLedgerError(
+        "STOCK_TYPE_NOT_TRACKED",
+        `${item.name_zh} 未启用库存管理（请先把库存类型设为外购）`,
+      );
     }
 
+    // 先更新参考成本价，过账时缺省单价即可直接采用它
     if (input.type === "PURCHASE" && input.costPrice !== undefined) {
       await tx.menuItem.update({
         where: { id: input.itemId },
@@ -713,16 +745,24 @@ export async function applyStockChange(input: {
       });
     }
 
-    await tx.stockMovement.create({
-      data: {
-        itemId: input.itemId,
-        type: input.type,
-        quantity: input.quantity,
-        note: input.note ?? null,
-        adminName: input.adminName ?? null,
-      },
+    const res = await postMovement(tx, {
+      itemId: input.itemId,
+      type: input.type,
+      quantity: input.quantity,
+      unitCost:
+        input.type === "PURCHASE"
+          ? (input.unitCost ?? input.costPrice ?? null)
+          : null,
+      docType: input.docType ?? "MANUAL",
+      docId: input.docId ?? null,
+      note: input.note ?? null,
+      adminName: input.adminName ?? null,
     });
 
-    return { stockQty };
+    return {
+      stockQty: res.balanceQty ?? 0,
+      stockValue: res.balanceValue ?? 0,
+      avgCost: res.avgCost ?? 0,
+    };
   });
 }

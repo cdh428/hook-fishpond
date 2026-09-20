@@ -740,7 +740,6 @@ export async function createMenuItem(input: {
   imageThumbUrl?: string;
   stockType?: 'NONE' | 'MADE' | 'PURCHASED';
   dailyLimit?: number | null;
-  stockQty?: number | null;
   lowStockAlert?: number | null;
   costPrice?: number | null;
   targetMargin?: number | null;
@@ -769,7 +768,6 @@ export async function updateMenuItem(
     imageThumbUrl?: string;
     stockType?: 'NONE' | 'MADE' | 'PURCHASED';
     dailyLimit?: number | null;
-    stockQty?: number | null;
     lowStockAlert?: number | null;
     costPrice?: number | null;
     targetMargin?: number | null;
@@ -1039,20 +1037,56 @@ export interface AdminStockItem {
   imageThumbUrl: string | null;
   stockType: 'NONE' | 'MADE' | 'PURCHASED';
   dailyLimit: number | null;
+  /** 数量账余额（只读，由过账引擎维护） */
   stockQty: number | null;
+  /** 金额账余额（只读，由过账引擎维护） */
+  stockValue: number | null;
+  /** 移动加权平均成本 */
+  avgCost: number | null;
   lowStockAlert: number | null;
   soldOut: boolean;
   view: StockView;
 }
 
+export type StockDocType =
+  | 'PURCHASE_RECEIPT'
+  | 'STOCK_TAKE'
+  | 'ORDER'
+  | 'MANUAL'
+  | 'OPENING';
+
 export interface StockMovement {
   id: string;
   type: 'PURCHASE' | 'SALE' | 'CANCEL' | 'MANUAL' | 'WASTE';
   quantity: number;
+  unitCost: number | null;
+  amount: number | null;
+  balanceAfter: number | null;
+  docType: StockDocType | null;
+  docId: string | null;
+  reversalOf: string | null;
+  /** 该分录是否已被红字冲销 */
+  reversed: boolean;
   note: string | null;
   orderId: string | null;
   adminName: string | null;
   createdAt: string;
+}
+
+/** 账实核对（余额 ≡ 分录汇总） */
+export interface StockLedgerInfo {
+  entryCount: number;
+  /** 分录汇总数量 */
+  qty: number;
+  /** 分录汇总金额 */
+  value: number;
+  /** 账面数量余额 */
+  bookQty: number;
+  /** 账面金额余额 */
+  bookValue: number;
+  qtyDiff: number;
+  valueDiff: number;
+  ok: boolean;
 }
 
 export interface AdminStockSummary {
@@ -1060,6 +1094,8 @@ export interface AdminStockSummary {
   lowStock: number;
   normal: number;
   total: number;
+  /** 外购类存货的金额账合计 */
+  stockValueTotal: number;
 }
 
 export async function fetchAdminStock(): Promise<{
@@ -1074,10 +1110,180 @@ export async function fetchAdminStock(): Promise<{
 export async function fetchStockItem(itemId: string): Promise<{
   item: AdminStockItem;
   movements: StockMovement[];
+  ledger: StockLedgerInfo;
 }> {
-  return request<{ item: AdminStockItem; movements: StockMovement[] }>(
-    `/api/admin/stock/${itemId}`,
+  return request<{
+    item: AdminStockItem;
+    movements: StockMovement[];
+    ledger: StockLedgerInfo;
+  }>(`/api/admin/stock/${itemId}`);
+}
+
+/** 红字冲销某条手工分录（调整 / 损耗 / 期初） */
+export async function reverseStockMovement(
+  itemId: string,
+  movementId: string,
+  note?: string,
+): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>(`/api/admin/stock/${itemId}`, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'reverse', movementId, note }),
+  });
+}
+
+// ---------- 进货单（Purchase Receipt）----------
+
+export interface PurchaseReceiptLine {
+  id?: string;
+  menuItemId: string;
+  name_zh?: string;
+  name_en?: string;
+  name_th?: string;
+  qty: number;
+  unitCost: number;
+  amount: number;
+}
+
+export interface PurchaseReceipt {
+  id: string;
+  code: string;
+  supplier: string | null;
+  docDate: string;
+  totalAmount: number;
+  note: string | null;
+  adminName: string | null;
+  reversedAt: string | null;
+  createdAt: string;
+  lines: PurchaseReceiptLine[];
+}
+
+export async function fetchPurchaseReceipts(): Promise<{
+  receipts: PurchaseReceipt[];
+}> {
+  return request<{ receipts: PurchaseReceipt[] }>(
+    `/api/admin/stock/receipts`,
   );
+}
+
+export async function createPurchaseReceipt(input: {
+  lines: { menuItemId: string; qty: number; unitCost?: number | null }[];
+  supplier?: string | null;
+  docDate?: string | null;
+  note?: string | null;
+}): Promise<{ ok: boolean; id: string; code: string; totalAmount: number }> {
+  return request<{ ok: boolean; id: string; code: string; totalAmount: number }>(
+    `/api/admin/stock/receipts`,
+    { method: 'POST', body: JSON.stringify(input) },
+  );
+}
+
+export async function fetchPurchaseReceipt(id: string): Promise<{
+  receipt: PurchaseReceipt;
+  movements: (StockMovement & { name_zh: string })[];
+}> {
+  return request<{
+    receipt: PurchaseReceipt;
+    movements: (StockMovement & { name_zh: string })[];
+  }>(`/api/admin/stock/receipts/${id}`);
+}
+
+export async function reversePurchaseReceipt(
+  id: string,
+  note?: string,
+): Promise<{ ok: boolean; code: string; reversedLines: number }> {
+  return request<{ ok: boolean; code: string; reversedLines: number }>(
+    `/api/admin/stock/receipts/${id}`,
+    { method: 'POST', body: JSON.stringify({ action: 'reverse', note }) },
+  );
+}
+
+// ---------- 盘点单（Stock Take）----------
+
+export interface StockTakeLine {
+  id?: string;
+  menuItemId: string;
+  name_zh?: string;
+  name_en?: string;
+  name_th?: string;
+  bookQty: number;
+  actualQty: number;
+  diff: number;
+}
+
+export interface StockTake {
+  id: string;
+  code: string;
+  note: string | null;
+  adminName: string | null;
+  createdAt: string;
+  lines: StockTakeLine[];
+}
+
+export async function fetchStockTakes(): Promise<{ takes: StockTake[] }> {
+  return request<{ takes: StockTake[] }>(`/api/admin/stock/stock-takes`);
+}
+
+export async function createStockTake(input: {
+  lines: { menuItemId: string; actualQty: number }[];
+  note?: string | null;
+}): Promise<{ ok: boolean; id: string; code: string; lines: StockTakeLine[] }> {
+  return request<{
+    ok: boolean;
+    id: string;
+    code: string;
+    lines: StockTakeLine[];
+  }>(`/api/admin/stock/stock-takes`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+// ---------- 账实核对 ----------
+
+export interface ReconcileRow {
+  itemId: string;
+  name_zh: string;
+  name_en: string;
+  name_th: string;
+  bookQty: number;
+  ledgerQty: number;
+  qtyDiff: number;
+  bookValue: number;
+  ledgerValue: number;
+  valueDiff: number;
+  avgCost: number;
+  entryCount: number;
+  ok: boolean;
+}
+
+export interface ReconcileResult {
+  rows: ReconcileRow[];
+  summary: {
+    total: number;
+    mismatch: number;
+    ok: number;
+    bookValue: number;
+    ledgerValue: number;
+  };
+}
+
+export async function fetchStockReconcile(): Promise<ReconcileResult> {
+  return request<ReconcileResult>(`/api/admin/stock/reconcile`);
+}
+
+export async function recalcStock(itemIds?: string[]): Promise<{
+  ok: boolean;
+  redone: { itemId: string; name_zh: string; fromQty: number; toQty: number }[];
+  opened: { itemId: string; name_zh: string; qty: number; avgCost: number }[];
+}> {
+  return request<{
+    ok: boolean;
+    redone: { itemId: string; name_zh: string; fromQty: number; toQty: number }[];
+    opened: { itemId: string; name_zh: string; qty: number; avgCost: number }[];
+  }>(`/api/admin/stock/reconcile`, {
+    method: 'POST',
+    body: JSON.stringify({ itemIds }),
+  });
 }
 
 export async function updateStockSettings(
@@ -1099,8 +1305,8 @@ export async function updateStockSettings(
 export async function postStockPurchase(
   itemId: string,
   input: { quantity: number; unitCost?: number; note?: string },
-): Promise<{ ok: boolean; stockQty: number | null }> {
-  return request<{ ok: boolean; stockQty: number | null }>(
+): Promise<{ ok: boolean; stockQty: number | null; stockValue: number | null; avgCost: number | null }> {
+  return request<{ ok: boolean; stockQty: number | null; stockValue: number | null; avgCost: number | null }>(
     `/api/admin/stock/${itemId}/purchase`,
     {
       method: 'POST',
@@ -1112,8 +1318,8 @@ export async function postStockPurchase(
 export async function postStockAdjust(
   itemId: string,
   input: { quantity: number; note?: string },
-): Promise<{ ok: boolean; stockQty: number | null }> {
-  return request<{ ok: boolean; stockQty: number | null }>(
+): Promise<{ ok: boolean; stockQty: number | null; stockValue: number | null; avgCost: number | null }> {
+  return request<{ ok: boolean; stockQty: number | null; stockValue: number | null; avgCost: number | null }>(
     `/api/admin/stock/${itemId}/adjust`,
     {
       method: 'POST',
@@ -1125,8 +1331,8 @@ export async function postStockAdjust(
 export async function postStockWaste(
   itemId: string,
   input: { quantity: number; note?: string },
-): Promise<{ ok: boolean; stockQty: number | null }> {
-  return request<{ ok: boolean; stockQty: number | null }>(
+): Promise<{ ok: boolean; stockQty: number | null; stockValue: number | null; avgCost: number | null }> {
+  return request<{ ok: boolean; stockQty: number | null; stockValue: number | null; avgCost: number | null }>(
     `/api/admin/stock/${itemId}/waste`,
     {
       method: 'POST',

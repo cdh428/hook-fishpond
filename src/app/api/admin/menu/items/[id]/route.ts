@@ -32,7 +32,6 @@ export async function PUT(
       isActive,
       stockType,
       dailyLimit,
-      stockQty,
       lowStockAlert,
       costPrice,
       targetMargin,
@@ -58,9 +57,6 @@ export async function PUT(
     if (dailyLimit !== undefined)
       updateData.dailyLimit =
         typeof dailyLimit === "number" ? dailyLimit : dailyLimit ? Number(dailyLimit) : null;
-    if (stockQty !== undefined)
-      updateData.stockQty =
-        typeof stockQty === "number" ? stockQty : stockQty ? Number(stockQty) : null;
     if (lowStockAlert !== undefined)
       updateData.lowStockAlert =
         typeof lowStockAlert === "number"
@@ -79,6 +75,31 @@ export async function PUT(
             ? Number(targetMargin)
             : null;
 
+    // ⚠️ **绝不在菜单编辑里写库存余额**。
+    // 以前这里会 updateData.stockQty = <表单值>（绝对赋值、且不进台账），
+    // 于是「改个价格」或「用旧表单保存」都会把入库/销售的结果覆盖掉。
+    // 现在只保留一件事：首次切到「外购」时把两本账初始化，避免 NULL 口径混乱。
+    if (stockType === "PURCHASED") {
+      const cur = await prisma.menuItem.findUnique({
+        where: { id },
+        select: {
+          stockType: true,
+          stockQty: true,
+          stockValue: true,
+          avgCost: true,
+          costPrice: true,
+        },
+      });
+      if (!cur) {
+        return NextResponse.json({ error: "Menu item not found" }, { status: 404 });
+      }
+      if (cur.stockType !== "PURCHASED") {
+        updateData.stockQty = 0;
+        updateData.stockValue = 0;
+        updateData.avgCost = updateData.costPrice ?? cur.costPrice ?? 0;
+      }
+    }
+
     const item = await prisma.menuItem.update({
       where: { id },
       data: updateData,
@@ -87,6 +108,9 @@ export async function PUT(
 
     return NextResponse.json(item);
   } catch (error: any) {
+    if (error?.code === "P2025") {
+      return NextResponse.json({ error: "Menu item not found" }, { status: 404 });
+    }
     console.error("Update menu item error:", error);
     return NextResponse.json(
       { error: error.message || "Failed to update menu item" },
@@ -107,18 +131,31 @@ export async function DELETE(
 
     const { id } = await params;
 
-    // Check if item has been ordered
-    const orderItemCount = await prisma.orderItem.count({
-      where: { menuItemId: id },
-    });
+    // 有订单记录 / 库存分录 / 单据明细的菜品都不再物理删除 ——
+    // 会计上「有账的东西不能消失」，一律改为下架（软删除）。
+    // 注意：盘点差异为 0 的明细只留单据行、不产生分录，所以单据明细也要一起看。
+    const [orderItemCount, movementCount, receiptLineCount, takeLineCount] =
+      await Promise.all([
+        prisma.orderItem.count({ where: { menuItemId: id } }),
+        prisma.stockMovement.count({ where: { itemId: id } }),
+        prisma.purchaseReceiptLine.count({ where: { menuItemId: id } }),
+        prisma.stockTakeLine.count({ where: { menuItemId: id } }),
+      ]);
 
-    if (orderItemCount > 0) {
-      // Soft delete
+    if (
+      orderItemCount > 0 ||
+      movementCount > 0 ||
+      receiptLineCount > 0 ||
+      takeLineCount > 0
+    ) {
       await prisma.menuItem.update({
         where: { id },
         data: { isActive: false },
       });
-      return NextResponse.json({ message: "Item deactivated (has order history)", deactivated: true });
+      return NextResponse.json({
+        message: "Item deactivated (has history)",
+        deactivated: true,
+      });
     }
 
     await prisma.menuItem.delete({

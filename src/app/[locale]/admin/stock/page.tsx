@@ -81,6 +81,40 @@ export default function AdminStockPage() {
         {t('adminStock.overview')}
       </h3>
 
+      {/* 单据与对账入口 */}
+      <div className="mb-4 grid grid-cols-3 gap-2">
+        <Link
+          href="/admin/stock/receipts"
+          className="rounded-xl bg-white py-2.5 text-center text-xs font-medium text-neutral-600 shadow-sm hover:bg-neutral-50"
+        >
+          📥 {t('adminStock.receiptsEntry')}
+        </Link>
+        <Link
+          href="/admin/stock/stock-takes"
+          className="rounded-xl bg-white py-2.5 text-center text-xs font-medium text-neutral-600 shadow-sm hover:bg-neutral-50"
+        >
+          📋 {t('adminStock.takesEntry')}
+        </Link>
+        <Link
+          href="/admin/stock/reconcile"
+          className="rounded-xl bg-white py-2.5 text-center text-xs font-medium text-neutral-600 shadow-sm hover:bg-neutral-50"
+        >
+          ⚖️ {t('adminStock.reconcileEntry')}
+        </Link>
+      </div>
+
+      {/* 存货金额账合计 */}
+      <div className="mb-4 flex items-center justify-between rounded-2xl bg-primary-700 px-4 py-3 text-white shadow-sm">
+        <span className="text-xs opacity-90">{t('adminStock.stockValueTotal')}</span>
+        <span className="text-xl font-bold">
+          ฿
+          {(summary?.stockValueTotal ?? 0).toLocaleString(undefined, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })}
+        </span>
+      </div>
+
       {/* Summary cells */}
       <div className="mb-4 grid grid-cols-3 gap-2">
         <div className="rounded-xl bg-white p-3 text-center shadow-sm">
@@ -217,9 +251,11 @@ export default function AdminStockPage() {
                                 remaining: v.remaining ?? 0,
                                 limit: v.dailyLimit ?? 0,
                               })
-                            : `${t('adminStock.currentStock')} ${v.remaining ?? 0} · ${
-                                t('adminStock.lowStockAlertLine')
-                              } ${v.lowStockAlert ?? '—'}`}
+                            : `${t('adminStock.currentStock')} ${v.remaining ?? 0} · ฿${(
+                                item.stockValue ?? 0
+                              ).toFixed(2)} · ${t('adminStock.lowStockAlertLine')} ${
+                                v.lowStockAlert ?? '—'
+                              }`}
                         </div>
                         <div className="h-1.5 w-full overflow-hidden rounded-full bg-neutral-100">
                           <div

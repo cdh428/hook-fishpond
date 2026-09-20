@@ -51,6 +51,8 @@ interface MenuItem {
   stockType?: 'NONE' | 'MADE' | 'PURCHASED';
   dailyLimit?: number | null;
   stockQty?: number | null;
+  stockValue?: number | null;
+  avgCost?: number | null;
   lowStockAlert?: number | null;
   costPrice?: number | null;
   targetMargin?: number | null;
@@ -164,7 +166,6 @@ export default function AdminMenuPage() {
     imageThumbUrl: '' as string,
     stockType: 'NONE' as 'NONE' | 'MADE' | 'PURCHASED',
     dailyLimit: '' as string,
-    stockQty: '' as string,
     lowStockAlert: '' as string,
     costPrice: '' as string,
     targetMargin: '' as string,
@@ -194,10 +195,6 @@ export default function AdminMenuPage() {
           item.dailyLimit === null || item.dailyLimit === undefined
             ? ''
             : String(item.dailyLimit),
-        stockQty:
-          item.stockQty === null || item.stockQty === undefined
-            ? ''
-            : String(item.stockQty),
         lowStockAlert:
           item.lowStockAlert === null || item.lowStockAlert === undefined
             ? ''
@@ -226,7 +223,6 @@ export default function AdminMenuPage() {
         imageThumbUrl: '',
         stockType: 'NONE',
         dailyLimit: '',
-        stockQty: '',
         lowStockAlert: '',
         costPrice: '',
         targetMargin: '',
@@ -244,8 +240,6 @@ export default function AdminMenuPage() {
       const stockType = itemForm.stockType;
       const dailyLimit =
         itemForm.dailyLimit === '' ? null : Number(itemForm.dailyLimit);
-      const stockQty =
-        itemForm.stockQty === '' ? null : Number(itemForm.stockQty);
       const lowStockAlert =
         itemForm.lowStockAlert === '' ? null : Number(itemForm.lowStockAlert);
       const costPrice =
@@ -268,7 +262,6 @@ export default function AdminMenuPage() {
           imageThumbUrl,
           stockType,
           dailyLimit,
-          stockQty,
           lowStockAlert,
           costPrice,
           targetMargin,
@@ -287,7 +280,6 @@ export default function AdminMenuPage() {
           imageThumbUrl,
           stockType,
           dailyLimit,
-          stockQty,
           lowStockAlert,
           costPrice,
           targetMargin,
@@ -973,12 +965,43 @@ export default function AdminMenuPage() {
                 )}
                 {itemForm.stockType === 'PURCHASED' && (
                   <>
-                    <div className="rounded-xl bg-neutral-50 px-3 py-2.5 text-sm text-neutral-700">
-                      {t('adminStock.currentStock')}:{' '}
-                      {itemForm.stockQty === ''
-                        ? '—'
-                        : `${itemForm.stockQty} ${t('adminStock.unitPieces')}`}
+                    <div className="space-y-1 rounded-xl bg-neutral-50 px-3 py-2.5 text-xs text-neutral-600">
+                      <div className="flex items-center justify-between">
+                        <span>{t('adminStock.currentStock')}</span>
+                        <span className="font-semibold text-neutral-900">
+                          {editingItem?.stockQty == null
+                            ? '—'
+                            : `${editingItem.stockQty} ${t('adminStock.unitPieces')}`}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span>{t('adminStock.avgCost')}</span>
+                        <span className="font-semibold text-neutral-900">
+                          {editingItem?.avgCost == null
+                            ? '—'
+                            : `฿${editingItem.avgCost.toFixed(2)}`}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span>{t('adminStock.stockValue')}</span>
+                        <span className="font-semibold text-neutral-900">
+                          {editingItem?.stockValue == null
+                            ? '—'
+                            : `฿${editingItem.stockValue.toFixed(2)}`}
+                        </span>
+                      </div>
                     </div>
+                    <p className="text-[11px] leading-relaxed text-neutral-400">
+                      {t('adminStock.balanceReadonlyHint')}
+                    </p>
+                    {editingItem && (
+                      <Link
+                        href={`/admin/stock/${editingItem.id}`}
+                        className="block rounded-xl border border-primary-200 bg-primary-50 px-3 py-2 text-center text-xs font-medium text-primary-700 hover:bg-primary-100"
+                      >
+                        📦 {t('adminStock.goToStock')}
+                      </Link>
+                    )}
                     <input
                       type="number"
                       min={0}

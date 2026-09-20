@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
-import { applyStockChange } from "@/lib/stock";
+import { createPurchaseReceipt } from "@/lib/stock-docs";
+import { ledgerErrorResponse } from "@/lib/stock-ledger";
 
+/**
+ * 单品快捷入库。
+ * 语义上是「开一张只含这一行的进货单」—— 所以每次入库都会留下单据号与分录，
+ * 可在「进货单」页查看/冲销。
+ */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ itemId: string }> },
@@ -21,24 +26,22 @@ export async function POST(
       return NextResponse.json({ error: "入库数量必须为正整数" }, { status: 400 });
     }
 
-    const result = await applyStockChange({
-      itemId,
-      type: "PURCHASE",
-      quantity,
-      note: note || undefined,
+    const result = await createPurchaseReceipt({
+      lines: [{ menuItemId: itemId, qty: quantity, unitCost }],
+      note: note || null,
       adminName: admin.username,
-      costPrice: unitCost,
     });
 
-    return NextResponse.json({ ok: true, stockQty: result.stockQty });
-  } catch (error: any) {
-    if (error instanceof Error && error.message === "NOT_FOUND") {
-      return NextResponse.json({ error: "Menu item not found" }, { status: 404 });
-    }
-    console.error("Purchase stock error:", error);
-    return NextResponse.json(
-      { error: error.message || "Failed to purchase stock" },
-      { status: 500 },
-    );
+    const snap = result.stock[0];
+    return NextResponse.json({
+      ok: true,
+      receiptId: result.id,
+      receiptCode: result.code,
+      stockQty: snap?.stockQty ?? null,
+      stockValue: snap?.stockValue ?? null,
+      avgCost: snap?.avgCost ?? null,
+    });
+  } catch (error) {
+    return ledgerErrorResponse(error, "Purchase stock error");
   }
 }

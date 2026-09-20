@@ -11,8 +11,10 @@ import {
   postStockAdjust,
   postStockWaste,
   postStockSoldOut,
+  reverseStockMovement,
   type AdminStockItem,
   type StockMovement,
+  type StockLedgerInfo,
 } from '@/lib/api-client';
 
 type StockType = 'NONE' | 'MADE' | 'PURCHASED';
@@ -27,6 +29,9 @@ const MOVE_META: Record<
   MANUAL: { labelKey: 'adminStock.moveManual', icon: '✋' },
   WASTE: { labelKey: 'adminStock.moveWaste', icon: '🗑️' },
 };
+
+/** 哪些分录允许「红字冲销」（订单产生的分录由订单状态机管理，不在此处冲销） */
+const REVERSIBLE_TYPES: StockMovement['type'][] = ['MANUAL', 'WASTE', 'CANCEL'];
 
 const TYPE_OPTIONS: { value: StockType; labelKey: string }[] = [
   { value: 'NONE', labelKey: 'adminStock.typeNone' },
@@ -45,6 +50,14 @@ function formatDateTime(locale: string, iso: string): string {
   }
 }
 
+function money(n: number | null | undefined): string {
+  if (n === null || n === undefined) return '—';
+  return `฿${n.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
 export default function AdminStockItemPage() {
   const t = useTranslations();
   const locale = useLocale();
@@ -53,6 +66,7 @@ export default function AdminStockItemPage() {
 
   const [item, setItem] = useState<AdminStockItem | null>(null);
   const [movements, setMovements] = useState<StockMovement[]>([]);
+  const [ledger, setLedger] = useState<StockLedgerInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -75,6 +89,7 @@ export default function AdminStockItemPage() {
   const [wasteNote, setWasteNote] = useState('');
 
   const [busy, setBusy] = useState(false);
+  const [reversingId, setReversingId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ ok: boolean; msg: string } | null>(null);
 
   const showToast = (ok: boolean, msg: string) => {
@@ -89,6 +104,7 @@ export default function AdminStockItemPage() {
       const data = await fetchStockItem(itemId);
       setItem(data.item);
       setMovements(data.movements || []);
+      setLedger(data.ledger || null);
       setForm({
         stockType: data.item.stockType,
         dailyLimit:
@@ -234,6 +250,20 @@ export default function AdminStockItemPage() {
     }
   };
 
+  const handleReverse = async (movementId: string) => {
+    if (!window.confirm(t('adminStock.reverseConfirm'))) return;
+    setReversingId(movementId);
+    try {
+      await reverseStockMovement(itemId, movementId);
+      showToast(true, t('adminStock.reversedOk'));
+      await load();
+    } catch (err: any) {
+      showToast(false, err?.message || t('adminStock.saveFailed'));
+    } finally {
+      setReversingId(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="py-20 text-center text-sm text-neutral-400">
@@ -293,6 +323,93 @@ export default function AdminStockItemPage() {
         >
           {toast.msg}
         </div>
+      )}
+
+      {/* 存货两本账（数量账 + 金额账）—— 只有外购类才有持久库存 */}
+      {form.stockType === 'PURCHASED' && (
+        <>
+          <div className="mb-4 grid grid-cols-3 gap-2">
+            <div className="rounded-xl bg-white p-3 text-center shadow-sm">
+              <div className="text-xl font-bold text-neutral-900">
+                {item.stockQty ?? 0}
+              </div>
+              <div className="mt-0.5 text-xs text-neutral-500">
+                {t('adminStock.qtyBook')}
+              </div>
+            </div>
+            <div className="rounded-xl bg-white p-3 text-center shadow-sm">
+              <div className="text-lg font-bold text-neutral-900">
+                {money(item.stockValue ?? 0)}
+              </div>
+              <div className="mt-0.5 text-xs text-neutral-500">
+                {t('adminStock.valueBook')}
+              </div>
+            </div>
+            <div className="rounded-xl bg-white p-3 text-center shadow-sm">
+              <div className="text-lg font-bold text-accent-600">
+                {money(item.avgCost ?? 0)}
+              </div>
+              <div className="mt-0.5 text-xs text-neutral-500">
+                {t('adminStock.avgCost')}
+              </div>
+            </div>
+          </div>
+
+          {/* 账实核对状态 */}
+          {ledger && (
+            <div
+              className={`mb-4 flex items-center justify-between rounded-xl px-4 py-2.5 text-sm ${
+                ledger.ok
+                  ? 'bg-success-50 text-success-700'
+                  : 'bg-amber-50 text-accent-600'
+              }`}
+            >
+              <div className="min-w-0">
+                <span className="font-medium">
+                  {ledger.ok
+                    ? `✓ ${t('adminStock.ledgerOk')}`
+                    : `⚠ ${t('adminStock.ledgerMismatch')}`}
+                </span>
+                {!ledger.ok && (
+                  <p className="mt-0.5 text-xs">
+                    {t('adminStock.ledgerDiff', {
+                      qty: ledger.qtyDiff,
+                      value: ledger.valueDiff.toFixed(2),
+                    })}
+                  </p>
+                )}
+              </div>
+              <Link
+                href="/admin/stock/reconcile"
+                className="shrink-0 text-xs font-medium underline"
+              >
+                {t('adminStock.goReconcile')}
+              </Link>
+            </div>
+          )}
+
+          {/* 单据入口 */}
+          <div className="mb-4 grid grid-cols-3 gap-2">
+            <Link
+              href="/admin/stock/receipts"
+              className="rounded-xl bg-neutral-100 py-2 text-center text-xs font-medium text-neutral-600 hover:bg-neutral-200"
+            >
+              📥 {t('adminStock.receiptsEntry')}
+            </Link>
+            <Link
+              href="/admin/stock/stock-takes"
+              className="rounded-xl bg-neutral-100 py-2 text-center text-xs font-medium text-neutral-600 hover:bg-neutral-200"
+            >
+              📋 {t('adminStock.takesEntry')}
+            </Link>
+            <Link
+              href="/admin/stock/reconcile"
+              className="rounded-xl bg-neutral-100 py-2 text-center text-xs font-medium text-neutral-600 hover:bg-neutral-200"
+            >
+              ⚖️ {t('adminStock.reconcileEntry')}
+            </Link>
+          </div>
+        </>
       )}
 
       {/* Settings block */}
@@ -374,14 +491,6 @@ export default function AdminStockItemPage() {
           <div className="space-y-3">
             <div>
               <label className="mb-1 block text-sm font-medium text-neutral-700">
-                {t('adminStock.currentStock')}
-              </label>
-              <div className="rounded-xl bg-neutral-50 px-3 py-2.5 text-sm font-semibold text-neutral-900">
-                {item.stockQty ?? 0} {t('adminStock.unitPieces')}
-              </div>
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-neutral-700">
                 {t('adminStock.lowStockAlertLine')}
               </label>
               <input
@@ -444,13 +553,15 @@ export default function AdminStockItemPage() {
         </button>
         <button
           onClick={() => setPanel(panel === 'adjust' ? null : 'adjust')}
-          className="rounded-xl bg-primary-700 py-2.5 text-sm font-medium text-white"
+          disabled={form.stockType === 'NONE'}
+          className="rounded-xl bg-primary-700 py-2.5 text-sm font-medium text-white disabled:opacity-40"
         >
           {t('adminStock.adjust')}
         </button>
         <button
           onClick={() => setPanel(panel === 'waste' ? null : 'waste')}
-          className="rounded-xl bg-neutral-700 py-2.5 text-sm font-medium text-white"
+          disabled={form.stockType === 'NONE'}
+          className="rounded-xl bg-neutral-700 py-2.5 text-sm font-medium text-white disabled:opacity-40"
         >
           {t('adminStock.waste')}
         </button>
@@ -488,7 +599,7 @@ export default function AdminStockItemPage() {
             step="0.01"
             value={inboundUnitCost}
             onChange={(e) => setInboundUnitCost(e.target.value)}
-            placeholder="—"
+            placeholder={item.avgCost != null ? item.avgCost.toFixed(2) : '—'}
             className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm"
           />
           <label className="block text-sm font-medium text-neutral-700">
@@ -584,12 +695,20 @@ export default function AdminStockItemPage() {
         </div>
       )}
 
-      {/* Movements list */}
+      {/* Movements ledger */}
       <div className="mb-2 flex items-center justify-between">
         <h4 className="font-semibold text-neutral-900">
           {t('adminStock.movements')}
         </h4>
+        {ledger && (
+          <span className="text-xs text-neutral-400">
+            {t('adminStock.entryCount', { n: ledger.entryCount })}
+          </span>
+        )}
       </div>
+      <p className="mb-2 text-[11px] text-neutral-400">
+        {t('adminStock.immutableHint')}
+      </p>
       {movements.length === 0 ? (
         <p className="py-6 text-center text-sm text-neutral-400">
           {t('common.noData')}
@@ -599,16 +718,34 @@ export default function AdminStockItemPage() {
           {movements.map((m) => {
             const meta = MOVE_META[m.type];
             const positive = m.quantity > 0;
+            const canReverse =
+              !m.reversed &&
+              !m.reversalOf &&
+              REVERSIBLE_TYPES.includes(m.type);
             return (
               <div
                 key={m.id}
-                className="flex items-center gap-3 rounded-lg bg-white p-3 shadow-sm"
+                className={`flex items-center gap-3 rounded-lg bg-white p-3 shadow-sm ${
+                  m.reversed || m.reversalOf ? 'opacity-60' : ''
+                }`}
               >
                 <span className="text-lg">{meta.icon}</span>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-neutral-900">
-                    {t(meta.labelKey)}
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium text-neutral-900">
+                      {t(meta.labelKey)}
+                    </p>
+                    {m.reversalOf && (
+                      <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] text-neutral-500">
+                        {t('adminStock.tagReversal')}
+                      </span>
+                    )}
+                    {m.reversed && (
+                      <span className="rounded bg-error-50 px-1.5 py-0.5 text-[10px] text-error-600">
+                        {t('adminStock.tagReversed')}
+                      </span>
+                    )}
+                  </div>
                   <p className="truncate text-xs text-neutral-400">
                     {m.adminName ? `${m.adminName} · ` : ''}
                     {formatDateTime(locale, m.createdAt)}
@@ -617,15 +754,33 @@ export default function AdminStockItemPage() {
                   {m.note && (
                     <p className="truncate text-xs text-neutral-500">{m.note}</p>
                   )}
+                  <p className="truncate text-[11px] text-neutral-400">
+                    {m.unitCost != null && `@${money(m.unitCost)}`}
+                    {m.amount != null && ` · ${m.amount >= 0 ? '+' : ''}${money(m.amount)}`}
+                    {m.balanceAfter != null && ` · ${t('adminStock.balanceShort')} ${m.balanceAfter}`}
+                  </p>
                 </div>
-                <span
-                  className={`shrink-0 text-sm font-semibold ${
-                    positive ? 'text-success-600' : 'text-error-600'
-                  }`}
-                >
-                  {positive ? '+' : ''}
-                  {m.quantity}
-                </span>
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  <span
+                    className={`text-sm font-semibold ${
+                      positive ? 'text-success-600' : 'text-error-600'
+                    }`}
+                  >
+                    {positive ? '+' : ''}
+                    {m.quantity}
+                  </span>
+                  {canReverse && (
+                    <button
+                      onClick={() => handleReverse(m.id)}
+                      disabled={reversingId === m.id}
+                      className="rounded px-1.5 py-0.5 text-[10px] font-medium text-error-600 hover:bg-error-50 disabled:opacity-50"
+                    >
+                      {reversingId === m.id
+                        ? '…'
+                        : `↩ ${t('adminStock.reverse')}`}
+                    </button>
+                  )}
+                </div>
               </div>
             );
           })}

@@ -112,6 +112,11 @@ export async function POST(request: NextRequest) {
               dailyLimit: r.dailyLimit ?? null,
               costPrice: r.costPrice ?? null,
               targetMargin: r.targetMargin ?? null,
+              // 与菜单表单同口径：切到「外购」时初始化两本账，之后由过账引擎维护
+              stockQty: (r.stockType ?? "NONE") === "PURCHASED" ? 0 : null,
+              stockValue: (r.stockType ?? "NONE") === "PURCHASED" ? 0 : null,
+              avgCost:
+                (r.stockType ?? "NONE") === "PURCHASED" ? (r.costPrice ?? 0) : null,
               sortOrder: nextSort++,
             },
           });
@@ -137,9 +142,9 @@ export async function POST(request: NextRequest) {
           if (r.isPopular !== undefined) data.isPopular = r.isPopular;
           if (r.isVegetarian !== undefined) data.isVegetarian = r.isVegetarian;
           if (r.isActive !== undefined) data.isActive = r.isActive;
-          // Only write stock fields when the row actually carries them, so a
-          // partial import never overwrites existing stock configuration.
-          // stockQty / lowStockAlert are intentionally untouched (实时库存).
+          // 只在行内确实带值时写库存**配置**，避免部分导入把已有设置清空。
+          // ⚠️ stockQty / stockValue / avgCost 一律不写 ——
+          // 库存余额只能由过账引擎（src/lib/stock-ledger.ts）维护。
           if (r.stockType !== undefined) data.stockType = r.stockType;
           if (r.dailyLimit !== undefined) data.dailyLimit = r.dailyLimit;
           if (r.costPrice !== undefined) data.costPrice = r.costPrice;

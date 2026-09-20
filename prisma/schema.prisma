@@ -155,12 +155,16 @@ model MenuItem {
   // ----- 库存管理 -----
   stockType      StockType    @default(NONE)   // NONE=不管理 / MADE=自制 / PURCHASED=外购
   dailyLimit     Int?                          // 自制：每日限量（空=不限量）
-  stockQty       Int?                          // 外购：当前库存（持久计数）
+  stockQty       Int?                          // 外购：数量账余额（= Σ分录 quantity，只由过账引擎维护）
+  stockValue     Float?                        // 外购：金额账余额（= Σ分录 amount，只由过账引擎维护）
+  avgCost        Float?                        // 外购：移动加权平均成本（= stockValue / stockQty）
   lowStockAlert  Int?                          // 外购：低库存预警线
-  costPrice      Float?                        // 成本价（用于毛利）
+  costPrice      Float?                        // 参考成本价（仅用于估算毛利；入账成本以 avgCost 为准）
   targetMargin   Float?                        // 单品目标毛利率（0-1，空=用全局默认）
   soldOut        Boolean      @default(false)  // 手动强制售罄
   movements      StockMovement[]
+  receiptLines   PurchaseReceiptLine[]
+  takeLines      StockTakeLine[]
   orderItems     OrderItem[]
   optionGroups   MenuItemOptionGroup[]  // 规格 / 面型 / 加料 等可选项
   createdAt      DateTime     @default(now())
@@ -228,24 +232,110 @@ enum StockMovementType {
   PURCHASE  // 外购入库
   SALE      // 订单卖出（扣减）
   CANCEL    // 取消/拒单回补
-  MANUAL    // 手动调整（盘点增减）
+  MANUAL    // 手动调整（盘点增减 / 期初对齐）
   WASTE     // 损耗 / 自用
 }
 
-// ===== STOCK MOVEMENT (库存流水，可对账) =====
+// 分录挂靠的业务单据类型（凭证字）
+enum StockDocType {
+  PURCHASE_RECEIPT  // 🧾 进货单
+  STOCK_TAKE        // 📋 盘点单
+  ORDER             // 🍽️ 订单（销售/回补）
+  MANUAL            // ✋ 手工调整
+  OPENING           // 🏁 期初对齐
+}
+
+// ===== STOCK MOVEMENT (库存分录 —— 不可变台账，只允许 INSERT) =====
+//
+// 会计口径：
+//  - 符号即借贷方向，quantity 正 = 入库（借：存货），负 = 出库（贷：存货）。
+//  - 金额与数量成对记录：amount 正 = 存货金额增加，负 = 转出。
+//  - 改错一律「红字冲销」：新增一条反向分录并用 reversalOf 指回原分录，
+//    历史分录永不修改/删除（数据库触发器强制 append-only）。
+//  - balanceAfter 记录过账后的数量账余额，便于逐笔对账。
 model StockMovement {
-  id        String            @id @default(cuid())
-  itemId    String
-  item      MenuItem          @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  type      StockMovementType
-  quantity  Int               // 带符号：正=入库/回补，负=扣减/损耗
-  note      String?
-  orderId   String?
-  adminName String?
-  createdAt DateTime          @default(now())
+  id             String            @id @default(cuid())
+  itemId         String
+  item           MenuItem          @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  type           StockMovementType
+  quantity       Int               // 带符号：正=入库/回补，负=出库/扣减/损耗
+  unitCost       Float?            // 本次单价（入库=进货价；出库=移动加权成本快照）
+  amount         Float?            // 金额（带符号，与 quantity 同向）：正=金额流入存货
+  balanceAfter   Int?              // 过账后的数量账余额（外购才有）
+  docType        StockDocType?     // 单据类型
+  docId          String?           // 单据 id（进货单 / 盘点单 / 订单）
+  reversalOf     String?           // 冲销指针：本条是某条分录的红字冲销
+  idempotencyKey String?           @unique  // 幂等键：同一业务只允许过账一次
+  note           String?
+  orderId        String?
+  adminName      String?
+  createdAt      DateTime          @default(now())
 
   @@index([itemId, createdAt])
   @@index([createdAt])
+  @@index([docType, docId])
+  @@index([reversalOf])
+}
+
+// ===== 进货单（凭证头 + 明细）=====
+// 一张单可以进多个菜品，形成一组有共同单据号的分录；
+// 作废单据 = 生成一组反向分录（reversalOf 指回原分录），原分录不动。
+model PurchaseReceipt {
+  id          String                @id @default(cuid())
+  code        String                @unique   // RC-YYYYMMDD-001
+  supplier    String?                         // 供应商（可空）
+  docDate     DateTime              @default(now())
+  totalAmount Float                 @default(0) // 单据金额合计
+  note        String?
+  adminName   String?
+  lines       PurchaseReceiptLine[]
+  reversedAt  DateTime?                       // 已作废时刻（非空表示本单已冲销）
+  createdAt   DateTime              @default(now())
+
+  @@index([docDate])
+}
+
+model PurchaseReceiptLine {
+  id         String          @id @default(cuid())
+  receiptId  String
+  receipt    PurchaseReceipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  menuItemId String
+  menuItem   MenuItem        @relation(fields: [menuItemId], references: [id])
+  qty        Int             // 恒正
+  unitCost   Float           // 进货单价
+  amount     Float           // = qty × unitCost
+  createdAt  DateTime        @default(now())
+
+  @@index([receiptId])
+  @@index([menuItemId])
+}
+
+// ===== 盘点单（凭证头 + 明细）=====
+// 录入实盘数，系统按「实盘 − 账面」自动生成盘盈/盘亏分录。
+model StockTake {
+  id        String         @id @default(cuid())
+  code      String         @unique   // ST-YYYYMMDD-001
+  note      String?
+  adminName String?
+  lines     StockTakeLine[]
+  createdAt DateTime       @default(now())
+
+  @@index([createdAt])
+}
+
+model StockTakeLine {
+  id          String    @id @default(cuid())
+  takeId      String
+  take        StockTake @relation(fields: [takeId], references: [id], onDelete: Cascade)
+  menuItemId  String
+  menuItem    MenuItem  @relation(fields: [menuItemId], references: [id])
+  bookQty     Int       // 账面数（盘点时刻）
+  actualQty   Int       // 实盘数
+  diff        Int       // 实盘 − 账面（正=盘盈，负=盘亏）
+  createdAt   DateTime  @default(now())
+
+  @@index([takeId])
+  @@index([menuItemId])
 }
 
 // ===== DINING TABLE (餐桌二维码点餐) =====
