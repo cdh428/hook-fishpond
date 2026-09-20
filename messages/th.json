@@ -106,7 +106,13 @@
     "fullDayNote": "ซื้อครั้งเดียวสำหรับทั้งวัน ไม่แบ่งช่วงเวลา",
     "mondayClosed": "ปิดทุกวันจันทร์",
     "closedDay": "วันนี้เป็นวันหยุด ไม่สามารถจองได้",
-    "upcomingClosed": "วันหยุดที่กำลังจะมาถึง"
+    "upcomingClosed": "วันหยุดที่กำลังจะมาถึง",
+    "restTag": "หยุด",
+    "legendAvailable": "จองได้",
+    "legendMonday": "จันทร์หยุด",
+    "legendHoliday": "วันหยุดนักขัตฤกษ์",
+    "legendPast": "ผ่านไปแล้ว",
+    "closedThisMonth": "เดือนนี้หยุด {count} วัน"
   },
   "menu": {
     "title": "เมนูอาหาร",

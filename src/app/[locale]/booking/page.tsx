@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslations, useLocale } from 'next-intl';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from '@/i18n/routing';
 import {
   fetchPonds,
@@ -12,7 +12,7 @@ import {
   ApiSpot,
 } from '@/lib/api-client';
 import { bangkokDateString, isMonday } from '@/lib/date-utils';
-import DatePicker from '@/components/DatePicker';
+import DatePicker, { type DayState } from '@/components/DatePicker';
 import { useApp } from '@/contexts/AppContext';
 
 type PondType = 'LEISURE' | 'COMPETITION';
@@ -41,11 +41,84 @@ export default function BookingPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  // Closed-day tracking for the date picker
-  const [closedDates, setClosedDates] = useState<Set<string>>(new Set());
+  // ── Closed-day rules ──────────────────────────────────────────────────
+  // Must mirror the server (src/lib/closed-days.ts): every Monday is closed,
+  // plus whatever statutory holidays the admin configured.
+  // Map of `YYYY-MM-DD` -> holiday name (undefined when the admin left it blank).
+  const [holidays, setHolidays] = useState<Map<string, string | undefined>>(
+    new Map(),
+  );
   const todayStr = bangkokDateString();
-  const isDateDisabled = (s: string) =>
-    s < todayStr || isMonday(s) || closedDates.has(s);
+  const loadedYears = useRef<Set<number>>(new Set());
+
+  // Holidays are stored per calendar year server-side, so load them lazily for
+  // whichever year the visitor browses to — otherwise navigating past December
+  // would silently re-enable next year's holidays.
+  const loadHolidaysForYear = useCallback(
+    async (year: number) => {
+      if (loadedYears.current.has(year)) return;
+      loadedYears.current.add(year);
+      try {
+        const res = await fetchClosedDays(year);
+        setHolidays((prev) => {
+          const next = new Map(prev);
+          for (const d of res.days) {
+            next.set(
+              d.date,
+              locale === 'en'
+                ? d.reason_en
+                : locale === 'th'
+                  ? d.reason_th
+                  : d.reason_zh,
+            );
+          }
+          return next;
+        });
+      } catch {
+        loadedYears.current.delete(year); // allow a retry on a later visit
+      }
+    },
+    [locale],
+  );
+
+  useEffect(() => {
+    loadHolidaysForYear(Number(todayStr.slice(0, 4)));
+  }, [loadHolidaysForYear, todayStr]);
+
+  /** Single source of truth for both the picker's colours and the submit guard. */
+  const getDayState = (s: string): DayState => {
+    if (s < todayStr) return 'past';
+    if (isMonday(s)) return 'monday';
+    if (holidays.has(s)) return 'holiday';
+    return 'available';
+  };
+
+  const getDayNote = (s: string): string | undefined => {
+    if (isMonday(s)) return t('booking.mondayClosed');
+    if (holidays.has(s)) return holidays.get(s) || t('booking.legendHoliday');
+    return undefined;
+  };
+
+  const isDateDisabled = (s: string) => getDayState(s) !== 'available';
+
+  // Upcoming rest days at a glance — actual dates, not just "every Monday".
+  const upcomingClosed: { date: string; label: string; holiday: boolean }[] = [];
+  const cursor = new Date(`${todayStr}T00:00:00Z`).getTime();
+  for (let i = 0; i < 92 && upcomingClosed.length < 5; i++) {
+    const s = new Date(cursor + i * 86400000).toISOString().slice(0, 10);
+    const mon = isMonday(s);
+    const isHoliday = !mon && holidays.has(s);
+    if (mon || isHoliday) {
+      const holidayName = holidays.get(s);
+      upcomingClosed.push({
+        date: s,
+        label:
+          holidayName ||
+          (mon ? t('booking.mondayClosed') : t('booking.legendHoliday')),
+        holiday: isHoliday,
+      });
+    }
+  }
 
   // Prefill customer details from the logged-in user
   useEffect(() => {
@@ -67,24 +140,6 @@ export default function BookingPage() {
         /* keep empty; UI shows unavailable */
       } finally {
         if (!cancelled) setPondsLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // Load closed days (statutory holidays) to disable them in the picker
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetchClosedDays();
-        if (!cancelled) {
-          setClosedDates(new Set(res.days.map((d) => d.date)));
-        }
-      } catch {
-        /* ignore — picker still blocks Mondays + past dates */
       }
     })();
     return () => {
@@ -141,20 +196,12 @@ export default function BookingPage() {
 
   const availableCount = spots.filter(isSpotAvailable).length;
 
-  // Upcoming closed days: Mondays (recurring) + the next statutory holidays
-  const upcomingClosedChips: string[] = [
-    t('booking.mondayClosed'),
-    ...Array.from(closedDates)
-      .filter((d) => d >= todayStr)
-      .sort()
-      .slice(0, 4)
-      .map((d) =>
-        new Intl.DateTimeFormat(locale, {
-          month: 'short',
-          day: 'numeric',
-        }).format(new Date(`${d}T00:00:00`)),
-      ),
-  ];
+  const formatClosedDate = (d: string) =>
+    new Intl.DateTimeFormat(locale, {
+      month: 'short',
+      day: 'numeric',
+      weekday: 'short',
+    }).format(new Date(`${d}T00:00:00`));
 
   const canConfirm = !activePond
     ? false
@@ -291,27 +338,36 @@ export default function BookingPage() {
             setSelectedSpot(null);
           }}
           minDate={todayStr}
-          isDisabled={isDateDisabled}
+          getDayState={getDayState}
+          getDayNote={getDayNote}
+          onYearChange={loadHolidaysForYear}
           locale={locale}
         />
         <p className="mt-2 text-xs text-neutral-500">
           {t('booking.businessHours')} · {t('booking.mondayClosed')}
         </p>
-        <div className="mt-3">
-          <p className="mb-1.5 text-xs font-medium text-neutral-600">
-            {t('booking.upcomingClosed')}
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {upcomingClosedChips.map((chip, i) => (
-              <span
-                key={i}
-                className="rounded-full bg-neutral-100 px-2.5 py-1 text-[11px] font-medium text-neutral-500"
-              >
-                {chip}
-              </span>
-            ))}
+        {upcomingClosed.length > 0 && (
+          <div className="mt-3">
+            <p className="mb-1.5 text-xs font-medium text-neutral-600">
+              {t('booking.upcomingClosed')}
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {upcomingClosed.map((c) => (
+                <span
+                  key={c.date}
+                  title={c.label}
+                  className={`rounded-full px-2.5 py-1 text-[11px] font-medium ring-1 ${
+                    c.holiday
+                      ? 'bg-error-50 text-error-500 ring-error-100'
+                      : 'bg-neutral-100 text-neutral-500 ring-neutral-200'
+                  }`}
+                >
+                  {formatClosedDate(c.date)}
+                </span>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {!isLeisure && (
@@ -368,7 +424,7 @@ export default function BookingPage() {
             <>
               <div className="mb-2 flex items-center gap-4 text-xs text-neutral-500">
                 <span className="flex items-center gap-1">
-                  <span className="inline-block h-3 w-3 rounded border border-primary-200 bg-primary-50" />
+                  <span className="inline-block h-3 w-3 rounded border border-primary-300 bg-primary-100" />
                   {t('booking.available')}
                 </span>
                 <span className="flex items-center gap-1">
@@ -386,10 +442,10 @@ export default function BookingPage() {
                       onClick={() => setSelectedSpot(spot.id)}
                       className={`flex h-11 w-full items-center justify-center rounded-lg text-sm font-medium transition ${
                         !available
-                          ? 'cursor-not-allowed bg-error-100 text-error-400'
+                          ? 'cursor-not-allowed bg-error-100 text-error-700'
                           : selectedSpot === spot.id
                             ? 'bg-primary-700 text-white shadow-brand'
-                            : 'bg-primary-50 text-primary-700 hover:bg-primary-100'
+                            : 'bg-primary-100 text-primary-800 ring-1 ring-primary-300 hover:bg-primary-200'
                       }`}
                     >
                       {spot.number}

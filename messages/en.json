@@ -106,7 +106,13 @@
     "fullDayNote": "One-time full-day purchase — no time slots",
     "mondayClosed": "Closed every Monday",
     "closedDay": "This day is a rest day — booking unavailable",
-    "upcomingClosed": "Upcoming closed days"
+    "upcomingClosed": "Upcoming closed days",
+    "restTag": "OFF",
+    "legendAvailable": "Available",
+    "legendMonday": "Monday closed",
+    "legendHoliday": "Holiday",
+    "legendPast": "Past",
+    "closedThisMonth": "Rest days this month: {count}"
   },
   "menu": {
     "title": "Menu",

@@ -106,7 +106,13 @@
     "fullDayNote": "全天一次性购买，不分时段",
     "mondayClosed": "每周一休息",
     "closedDay": "该日为休息日，暂不可预约",
-    "upcomingClosed": "近期休息日"
+    "upcomingClosed": "近期休息日",
+    "restTag": "休",
+    "legendAvailable": "可预约",
+    "legendMonday": "周一休息",
+    "legendHoliday": "节假日",
+    "legendPast": "已过期",
+    "closedThisMonth": "本月休息 {count} 天"
   },
   "menu": {
     "title": "美食菜单",
