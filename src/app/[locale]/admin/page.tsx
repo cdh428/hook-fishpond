@@ -9,6 +9,7 @@ import {
   updateAdminOrderTable,
 } from '@/lib/api-client';
 import TablePicker from '@/components/TablePicker';
+import { Link } from '@/i18n/routing';
 
 const statusColors: Record<string, string> = {
   PENDING: 'bg-warning-100 text-warning-600',
@@ -17,6 +18,8 @@ const statusColors: Record<string, string> = {
   PAID: 'bg-primary-100 text-primary-700',
   PREPARING: 'bg-accent-100 text-accent-700',
   READY: 'bg-success-100 text-success-600',
+  SERVED: 'bg-primary-100 text-primary-700',
+  SETTLED: 'bg-neutral-100 text-neutral-500',
 };
 
 const statusI18n: Record<string, string> = {
@@ -26,6 +29,8 @@ const statusI18n: Record<string, string> = {
   PAID: 'orders.paid',
   PREPARING: 'orders.preparing',
   READY: 'orders.ready',
+  SERVED: 'orders.served',
+  SETTLED: 'orders.settled',
 };
 
 // time slot + pond helpers
@@ -47,6 +52,8 @@ export default function AdminDashboard() {
     todayRevenue: 0,
     pendingOrders: 0,
     activeSpots: 0,
+    awaitingSettlementCount: 0,
+    awaitingSettlementAmount: 0,
   });
   const [recentBookings, setRecentBookings] = useState<any[]>([]);
   const [recentOrders, setRecentOrders] = useState<any[]>([]);
@@ -67,18 +74,18 @@ export default function AdminDashboard() {
       const [statsRes, bookingsRes, ordersRes] = await Promise.all([
         fetchAdminStats(),
         fetchAdminBookings({}),
-        fetchAdminOrders({}),
+        fetchAdminOrders({ scope: 'open' }),
       ]);
       setStats({
         todayBookings: statsRes.todayBookings ?? 0,
         todayRevenue: statsRes.todayRevenue ?? 0,
         pendingOrders: statsRes.pendingOrders ?? 0,
         activeSpots: statsRes.activeSpots ?? 0,
+        awaitingSettlementCount: statsRes.awaitingSettlementCount ?? 0,
+        awaitingSettlementAmount: statsRes.awaitingSettlementAmount ?? 0,
       });
       setRecentBookings((bookingsRes || []).slice(0, 5));
-      // orders require userId or phone; try fetching via admin bookings' orders
-      // Since admin has no direct orders list, derive from payments transactions if available
-      setRecentOrders((ordersRes || []).slice(0, 5));
+      setRecentOrders((ordersRes?.orders || []).slice(0, 5));
     } catch (err: any) {
       setDataError(err?.message || t('common.error'));
     } finally {
@@ -161,7 +168,7 @@ export default function AdminDashboard() {
       ) : (
         <>
           {/* KPI Cards */}
-          <div className="mb-6 grid grid-cols-2 gap-3">
+          <div className="mb-4 grid grid-cols-2 gap-3">
             {statCards.map((stat) => (
               <div key={stat.labelKey} className={`rounded-xl p-4 ${stat.color}`}>
                 <div className="mb-2">{stat.icon}</div>
@@ -170,6 +177,22 @@ export default function AdminDashboard() {
               </div>
             ))}
           </div>
+
+          {/* 待收款提醒 —— 后付订单还没结清 */}
+          {stats.awaitingSettlementCount > 0 && (
+            <Link
+              href="/admin/orders"
+              className="mb-6 flex items-center justify-between rounded-xl bg-accent-500 px-4 py-3 text-white shadow-cta"
+            >
+              <span className="text-sm font-semibold">
+                💰 {t('adminOrders.tabAwaiting')} · {stats.awaitingSettlementCount}{' '}
+                {t('adminOrders.ordersUnit')}
+              </span>
+              <span className="text-base font-bold">
+                ฿{stats.awaitingSettlementAmount.toLocaleString()}
+              </span>
+            </Link>
+          )}
 
           {/* Recent Bookings */}
           <div className="mb-6 rounded-xl bg-white p-4 shadow-md">

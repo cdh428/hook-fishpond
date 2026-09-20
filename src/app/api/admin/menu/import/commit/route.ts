@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { runTx } from "@/lib/tx";
 import { requireAdmin } from "@/lib/auth";
 import type { MenuImportRow } from "@/lib/menu-io";
 import type { MenuTypeValue } from "@/lib/menu-types";
@@ -28,7 +29,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await runTx(async (tx) => {
       const added: string[] = [];
       const updated: string[] = [];
       const deleted: string[] = [];

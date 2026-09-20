@@ -462,6 +462,31 @@ export default function AdminReportsPage() {
                 </>
               )}
 
+              {(o.fishRevenue > 0 || o.discountTotal > 0) && (
+                <div className="mb-3 rounded-xl bg-white p-4 shadow-md">
+                  <p className="mb-2 text-xs font-semibold text-neutral-700">
+                    🐟 {t('adminReports.fishTitle')}
+                  </p>
+                  <div className="space-y-1 text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-neutral-500">{t('adminReports.fishWeight')}</span>
+                      <span className="font-medium">{o.fishWeightKg} kg</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-neutral-500">{t('adminReports.fishRevenue')}</span>
+                      <span className="font-medium text-primary-700">{money2(o.fishRevenue)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-neutral-500">{t('adminReports.discountTotal')}</span>
+                      <span className="font-medium text-error-600">−{money2(o.discountTotal)}</span>
+                    </div>
+                  </div>
+                  <p className="mt-2 text-[11px] leading-relaxed text-neutral-400">
+                    {t('adminReports.fishFootnote')}
+                  </p>
+                </div>
+              )}
+
               {o.cancelledOrders > 0 && (
                 <div className="mb-3 rounded-xl bg-neutral-100 px-4 py-2 text-xs text-neutral-500">
                   {t('adminReports.cancelledNote', { n: o.cancelledOrders })}

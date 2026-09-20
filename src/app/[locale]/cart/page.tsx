@@ -4,7 +4,7 @@ import { useTranslations, useLocale } from 'next-intl';
 import { useState, useEffect } from 'react';
 import { Link, useRouter } from '@/i18n/routing';
 import { useApp } from '@/contexts/AppContext';
-import { createOrder, createPayment } from '@/lib/api-client';
+import { createOrder, createPayment, type SettlementModeValue } from '@/lib/api-client';
 import TablePicker from '@/components/TablePicker';
 import {
   getStoredTableCode,
@@ -55,12 +55,9 @@ export default function CartPage() {
     user,
   } = useApp();
 
-  const [selectedPayment, setSelectedPayment] =
-    useState<PaymentMethodType | null>(null);
   const [note, setNote] = useState('');
   const [showPayment, setShowPayment] = useState(false);
   const [processing, setProcessing] = useState(false);
-  const [paymentSuccess, setPaymentSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Dining table + order type. Dine-in requires a table; takeaway skips it.
@@ -69,9 +66,19 @@ export default function CartPage() {
   const [showTableError, setShowTableError] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
 
+  // 结算方式：堂食默认最后结算；外带默认立即付款。顾客都能改。
+  const [settlementMode, setSettlementMode] =
+    useState<SettlementModeValue>('POSTPAID');
+  const [modeTouched, setModeTouched] = useState(false);
+
   useEffect(() => {
     setTableCode(getStoredTableCode());
   }, []);
+
+  useEffect(() => {
+    if (modeTouched) return;
+    setSettlementMode(orderType === 'TAKEAWAY' ? 'PREPAID' : 'POSTPAID');
+  }, [orderType, modeTouched]);
 
   const selectTable = (code: string) => {
     setTableCode(code);
@@ -111,9 +118,13 @@ export default function CartPage() {
     setFoodQuantity(id, item.quantity + delta);
   };
 
-  const handlePay = async () => {
-    if (!selectedPayment) return;
-    // Dine-in orders must be tied to a table so staff can serve & settle them.
+  /**
+   * 「确认下单」—— 生成订单（不付款），库存立即预占。
+   *  - 最后结算 → 跳订单详情页（等用完再统一结清）
+   *  - 立即付款 + PromptPay → 生成支付单并跳支付页
+   *  - 立即付款 + 其他方式 → 跳订单详情页，到收银台付
+   */
+  const handleConfirmOrder = async (method?: PaymentMethodType) => {
     if (orderType === 'DINE_IN' && !tableCode) {
       setShowTableError(true);
       setShowPicker(true);
@@ -125,30 +136,24 @@ export default function CartPage() {
       const customerName = user?.name || t('common.siteName');
       const customerPhone = user?.phone || '0000000000';
 
-      let orderId: string | null = null;
+      const order = await createOrder({
+        userId: user?.id,
+        customerName,
+        customerPhone,
+        items: foodCart.map((i) => ({
+          menuItemId: i.id,
+          quantity: i.quantity,
+        })),
+        note: note || undefined,
+        orderType,
+        settlementMode,
+        tableCode: orderType === 'DINE_IN' ? tableCode || undefined : undefined,
+      });
 
-      // Create a food order if there are food items
-      if (foodCart.length > 0) {
-        const order = await createOrder({
-          userId: user?.id,
-          customerName,
-          customerPhone,
-          items: foodCart.map((i) => ({
-            menuItemId: i.id,
-            quantity: i.quantity,
-          })),
-          note: note || undefined,
-          orderType,
-          // Takeaway orders never carry a table, even if one is stored.
-          tableCode: orderType === 'DINE_IN' ? tableCode || undefined : undefined,
-        });
-        orderId = order.id;
-      }
-
-      // If we have an order, create a PromptPay payment and redirect to payment page
-      if (orderId && selectedPayment === 'PROMPTPAY') {
+      // 立即付款 + PromptPay → 直接进支付页
+      if (settlementMode === 'PREPAID' && method === 'PROMPTPAY') {
         const payment = await createPayment({
-          orderId,
+          orderId: order.id,
           amount: total,
           method: 'PROMPTPAY',
         });
@@ -157,47 +162,13 @@ export default function CartPage() {
         return;
       }
 
-      // Non-PromptPay or booking-only: complete checkout
       clearCart();
-      setPaymentSuccess(true);
+      router.push(`/orders/${order.id}`);
     } catch (e: any) {
       setError(e.message || t('payment.errorTitle'));
-    } finally {
       setProcessing(false);
     }
   };
-
-  if (paymentSuccess) {
-    return (
-      <div className="mx-auto flex min-h-[60vh] max-w-lg flex-col items-center justify-center px-4">
-        <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-success-50">
-          <svg
-            className="h-10 w-10 text-success-600"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M5 13l4 4L19 7"
-            />
-          </svg>
-        </div>
-        <h2 className="text-xl font-bold text-neutral-900">
-          {t('payment.success')}
-        </h2>
-        <p className="mt-2 text-lg font-semibold text-accent-600">฿{total}</p>
-        <button
-          onClick={() => router.push('/orders')}
-          className="mt-6 rounded-xl bg-primary-700 px-6 py-3 text-sm font-semibold text-white transition hover:bg-primary-800"
-        >
-          {t('common.orders')}
-        </button>
-      </div>
-    );
-  }
 
   return (
     <div className="mx-auto max-w-lg px-4 py-6">
@@ -392,6 +363,45 @@ export default function CartPage() {
             )}
           </div>
 
+          {/* 结算方式 */}
+          <div className="mb-4 rounded-xl bg-white p-4 shadow-md">
+            <p className="mb-2 text-xs font-semibold text-neutral-500">
+              {t('cart.settlementMode')}
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              {(['POSTPAID', 'PREPAID'] as SettlementModeValue[]).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => {
+                    setSettlementMode(m);
+                    setModeTouched(true);
+                    setShowPayment(m === 'PREPAID');
+                  }}
+                  className={`rounded-xl border-2 px-3 py-2.5 text-left transition ${
+                    settlementMode === m
+                      ? 'border-accent-500 bg-accent-50'
+                      : 'border-neutral-200 bg-white hover:border-neutral-300'
+                  }`}
+                >
+                  <span
+                    className={`block text-sm font-semibold ${
+                      settlementMode === m ? 'text-accent-700' : 'text-neutral-700'
+                    }`}
+                  >
+                    {m === 'POSTPAID'
+                      ? t('cart.settleLater')
+                      : t('cart.settleNow')}
+                  </span>
+                  <span className="mt-0.5 block text-[11px] leading-tight text-neutral-400">
+                    {m === 'POSTPAID'
+                      ? t('cart.settleLaterHint')
+                      : t('cart.settleNowHint')}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Order Note */}
           <div className="mb-4">
             <textarea
@@ -428,6 +438,9 @@ export default function CartPage() {
                   ฿{total}
                 </span>
               </div>
+              <p className="mt-2 text-[11px] leading-relaxed text-neutral-400">
+                {t('cart.fishChargeNotice')}
+              </p>
             </div>
           </div>
 
@@ -437,19 +450,9 @@ export default function CartPage() {
             </div>
           )}
 
-          {/* Checkout Button */}
-          {!showPayment && (
-            <button
-              onClick={() => setShowPayment(true)}
-              className="mt-4 w-full rounded-xl bg-accent-500 py-3 text-sm font-semibold text-white shadow-cta transition hover:bg-accent-600"
-            >
-              {t('cart.checkout')} — ฿{total}
-            </button>
-          )}
-
-          {/* Payment Selection */}
-          {showPayment && (
-            <div className="mt-6">
+          {/* 支付方式（仅在「立即付款」时展示） */}
+          {settlementMode === 'PREPAID' && showPayment && (
+            <div id="pay-methods" className="mt-6">
               <h3 className="mb-3 text-base font-bold text-neutral-900">
                 {t('payment.title')}
               </h3>
@@ -457,30 +460,17 @@ export default function CartPage() {
                 {paymentMethods.map((method) => (
                   <button
                     key={method.key}
-                    onClick={() => setSelectedPayment(method.key)}
-                    className={`flex w-full items-center gap-3 rounded-xl border-2 p-3 text-left transition ${
-                      selectedPayment === method.key
-                        ? 'border-primary-500 bg-primary-50'
-                        : 'border-neutral-200 bg-white hover:border-neutral-300'
-                    }`}
+                    onClick={() => handleConfirmOrder(method.key)}
+                    disabled={processing}
+                    className="flex w-full items-center gap-3 rounded-xl border-2 border-neutral-200 bg-white p-3 text-left transition hover:border-primary-300 disabled:opacity-50"
                   >
                     <span className="text-xl">{method.icon}</span>
                     <span className="text-sm font-medium text-neutral-900">
                       {t(method.labelKey)}
                     </span>
-                    {selectedPayment === method.key && (
-                      <svg
-                        className="ml-auto h-5 w-5 text-primary-600"
-                        fill="currentColor"
-                        viewBox="0 0 20 20"
-                      >
-                        <path
-                          fillRule="evenodd"
-                          d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                    )}
+                    <span className="ml-auto text-xs font-semibold text-accent-600">
+                      ฿{total}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -489,23 +479,38 @@ export default function CartPage() {
         </>
       )}
 
-      {/* Sticky CTA for payment */}
-      {showPayment && itemCount > 0 && (
+      {/* Sticky CTA：确认下单 */}
+      {itemCount > 0 && (
         <div className="fixed bottom-16 left-0 right-0 z-40 border-t border-neutral-200 bg-white/95 px-4 py-3 backdrop-blur-md">
           <div className="mx-auto flex max-w-lg items-center justify-between gap-4">
             <div>
               <p className="text-xs text-neutral-500">{t('payment.total')}</p>
               <p className="text-lg font-bold text-neutral-900">฿{total}</p>
             </div>
-            <button
-              onClick={handlePay}
-              disabled={!selectedPayment || processing}
-              className="flex-1 rounded-xl bg-accent-500 py-3 text-sm font-semibold text-white shadow-cta transition hover:bg-accent-600 disabled:cursor-not-allowed disabled:bg-neutral-300"
-            >
-              {processing
-                ? t('payment.processing')
-                : `${t('payment.total')}: ฿${total}`}
-            </button>
+            {settlementMode === 'POSTPAID' ? (
+              <button
+                onClick={() => handleConfirmOrder()}
+                disabled={processing}
+                className="flex-1 rounded-xl bg-accent-500 py-3 text-sm font-semibold text-white shadow-cta transition hover:bg-accent-600 disabled:cursor-not-allowed disabled:bg-neutral-300"
+              >
+                {processing
+                  ? t('payment.processing')
+                  : `${t('cart.confirmOrder')} — ฿${total}`}
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  setShowPayment(true);
+                  document
+                    .getElementById('pay-methods')
+                    ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }}
+                disabled={processing}
+                className="flex-1 rounded-xl bg-accent-500 py-3 text-sm font-semibold text-white shadow-cta transition hover:bg-accent-600 disabled:cursor-not-allowed disabled:bg-neutral-300"
+              >
+                {processing ? t('payment.processing') : t('cart.choosePayment')}
+              </button>
+            )}
           </div>
         </div>
       )}

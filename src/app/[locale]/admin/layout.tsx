@@ -25,6 +25,7 @@ import {
 
 const adminTabs = [
   { href: '/admin', labelKey: 'admin.dashboard', icon: '📊' },
+  { href: '/admin/orders', labelKey: 'adminOrders.entry', icon: '🧾' },
   { href: '/admin/collect', labelKey: 'admin.collectPayment', icon: '💳' },
   { href: '/admin/menu', labelKey: 'admin.menu', icon: '🍽️' },
   { href: '/admin/stock', labelKey: 'adminStock.entry', icon: '📦' },

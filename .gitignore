@@ -50,4 +50,4 @@ cookies*.txt
 *.log
 _probe.txt
 _out.txt
-scripts/_*.js
+scripts/_*

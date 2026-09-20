@@ -158,6 +158,12 @@ export interface PeriodRevenue {
   marginRate: number | null;
   wasteCost: number;
   itemsSold: number;
+  /** 期间渔获费合计（已包含在 orderRevenue 里） */
+  fishRevenue: number;
+  /** 期间渔获总重（kg） */
+  fishWeightKg: number;
+  /** 期间折扣合计（正数=已减免，已从 orderRevenue 中扣除） */
+  discountTotal: number;
 }
 
 export interface ReportOverview extends PeriodRevenue {
@@ -241,10 +247,19 @@ async function fetchPeriodRevenue(
   toDate: string,
 ): Promise<PeriodRevenue> {
   const [orderAgg] = await prisma.$queryRaw<
-    { orders: number; revenue: number }[]
+    {
+      orders: number;
+      revenue: number;
+      fish: number;
+      fishkg: number;
+      discount: number;
+    }[]
   >(Prisma.sql`
     SELECT COUNT(*)::int AS orders,
-           COALESCE(SUM("totalPrice"), 0)::float8 AS revenue
+           COALESCE(SUM("totalPrice"), 0)::float8 AS revenue,
+           COALESCE(SUM("fishCharge"), 0)::float8 AS fish,
+           COALESCE(SUM("fishWeightKg"), 0)::float8 AS fishkg,
+           COALESCE(SUM("discountAmount"), 0)::float8 AS discount
     FROM "Order"
     WHERE "status" <> 'CANCELLED'
       AND "createdAt" >= ${from} AND "createdAt" < ${to}
@@ -310,6 +325,9 @@ async function fetchPeriodRevenue(
     marginRate: coveredRevenue > 0 ? grossProfit / coveredRevenue : null,
     wasteCost: wasteAgg?.cost ?? 0,
     itemsSold: salesAgg?.qty ?? 0,
+    fishRevenue: orderAgg?.fish ?? 0,
+    fishWeightKg: orderAgg?.fishkg ?? 0,
+    discountTotal: orderAgg?.discount ?? 0,
   };
 }
 

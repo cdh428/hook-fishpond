@@ -46,19 +46,30 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Generate PromptPay QR
+    // Generate PromptPay QR（金额取订单应付净额，含渔获、已扣折扣）
     const promptPayId = getPromptPayId();
     const qrString = generatePromptPayQR(promptPayId, order.totalPrice);
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
 
-    // Create payment record
-    const payment = await prisma.payment.create({
-      data: {
+    // Create (or refresh) the payment record for this order.
+    // orderId 上有唯一约束，所以这里必须 upsert：既避免失败后重建撞约束，
+    // 也能让已经在看支付页的顾客继续用同一个 paymentId。
+    const payment = await prisma.payment.upsert({
+      where: { orderId },
+      create: {
         orderId,
         method: method || "PROMPTPAY",
         amount: order.totalPrice,
         currency: "THB",
         status: "PENDING",
+        expiresAt,
+        metadata: { qrString, merchantName: getMerchantName() },
+      },
+      update: {
+        method: method || "PROMPTPAY",
+        amount: order.totalPrice,
+        status: "PENDING",
+        paidAt: null,
         expiresAt,
         metadata: { qrString, merchantName: getMerchantName() },
       },

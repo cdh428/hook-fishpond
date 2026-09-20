@@ -29,6 +29,8 @@ interface Labels {
   bookingPart: string;
   avgTicket: string;
   grossProfit: string;
+  fish: string;
+  discount: string;
   target: string;
   belowTarget: string;
   topItems: string;
@@ -53,6 +55,8 @@ const L: Record<ReportLocale, Labels> = {
     bookingPart: '预约',
     avgTicket: '客单价',
     grossProfit: '毛利',
+    fish: '渔获',
+    discount: '折扣',
     target: '目标',
     belowTarget: '毛利率低于目标',
     topItems: '热销 TOP5（按营收）',
@@ -75,6 +79,8 @@ const L: Record<ReportLocale, Labels> = {
     bookingPart: 'จอง',
     avgTicket: 'ยอดเฉลี่ย/บิล',
     grossProfit: 'กำไรขั้นต้น',
+    fish: 'ค่าปลา',
+    discount: 'ส่วนลด',
     target: 'เป้า',
     belowTarget: 'กำไรต่ำกว่าเป้า',
     topItems: 'ขายดี TOP5 (ตามรายได้)',
@@ -97,6 +103,8 @@ const L: Record<ReportLocale, Labels> = {
     bookingPart: 'Bookings',
     avgTicket: 'Avg ticket',
     grossProfit: 'Gross profit',
+    fish: 'Catch',
+    discount: 'Discounts',
     target: 'target',
     belowTarget: 'Margin below target',
     topItems: 'Top 5 by revenue',
@@ -184,6 +192,12 @@ export function composeDailyReportText(
   lines.push(
     `· ${t.bookingPart} ${money(o.bookingRevenue)}（${o.bookingCount}）`,
   );
+  if (o.fishRevenue > 0) {
+    lines.push(`· ${t.fish} ${money(o.fishRevenue)}（${o.fishWeightKg} kg）`);
+  }
+  if (o.discountTotal > 0) {
+    lines.push(`· ${t.discount} −${money(o.discountTotal)}`);
+  }
   if (o.orderCount > 0) lines.push(`· ${t.avgTicket} ${money(o.avgTicket)}`);
   lines.push('');
 
@@ -344,6 +358,9 @@ export function demoReportPayload(): ReportPayload {
       marginRate: 0.494,
       wasteCost: 260,
       itemsSold: 74,
+      fishRevenue: 1860,
+      fishWeightKg: 42,
+      discountTotal: 350,
       itemsWithoutCost: 5,
       prev: {
         orderRevenue: 12100,
@@ -359,6 +376,9 @@ export function demoReportPayload(): ReportPayload {
         marginRate: 0.445,
         wasteCost: 180,
         itemsSold: 66,
+        fishRevenue: 1200,
+        fishWeightKg: 28,
+        discountTotal: 120,
       },
       deltas: {
         totalRevenue: 0.146,

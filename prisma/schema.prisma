@@ -247,35 +247,84 @@ model Order {
   customerPhone String
   items         OrderItem[]
   bookings      Booking[]
-  subtotal      Float
-  totalPrice    Float
+  weighings     Weighing[]
+  subtotal      Float         // 菜品小计（不含渔获、不含折扣）
+  totalPrice    Float         // 应付净额 = subtotal + fishCharge − discountAmount
   note          String?
   orderType     OrderType     @default(DINE_IN)
   status        OrderStatus   @default(PENDING)
+  // ----- 结算方式：先付 / 后付（用完后统一结算） -----
+  settlementMode SettlementMode @default(POSTPAID)
+  // ----- 渔获称重（前 1kg 免费，超出部分 60฿/kg） -----
+  fishWeightKg  Float         @default(0)
+  fishCharge    Float         @default(0)
+  // ----- 折扣 / 改价（可审计：原价、折扣、实收三者都留痕） -----
+  discountType  DiscountType  @default(NONE)
+  discountValue Float         @default(0)   // PERCENT=百分比(0-100) / AMOUNT=固定减免金额
+  discountAmount Float        @default(0)   // 实际减免的泰铢金额（正数=减免）
+  discountNote  String?                     // 折扣原因（必填，便于对账）
+  adjustedBy    String?                     // 最后改价/折扣操作人（管理员用户名）
+  adjustedAt    DateTime?
+  // ----- 结算与库存消耗时点 -----
+  stockConsumedAt DateTime?   // 预占转正式扣减的时刻（先付=付款到账，后付=结清）
+  settledAt     DateTime?     // 账单结清时刻（status=SETTLED）
   payment       Payment?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 }
 
 model OrderItem {
+  id          String   @id @default(cuid())
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id])
+  menuItemId  String
+  menuItem    MenuItem @relation(fields: [menuItemId], references: [id])
+  quantity    Int
+  unitPrice   Float
+  totalPrice  Float
+  // 下单即预占的数量（不改变 stockQty、不写流水）；结算时预占转正式扣减后归零
+  reservedQty Int      @default(0)
+  note        String?
+  createdAt   DateTime @default(now())
+}
+
+// ===== 渔获称重记录（可多次称重，便于追溯与对账） =====
+// 免费额度（前 1kg）在**订单层面**统一扣除，因此这里只记录毛重与毛额快照。
+model Weighing {
   id         String   @id @default(cuid())
   orderId    String
-  order      Order    @relation(fields: [orderId], references: [id])
-  menuItemId String
-  menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
-  quantity   Int
-  unitPrice  Float
-  totalPrice Float
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  weightKg   Float
+  pricePerKg Float    @default(60)   // 超出部分单价快照
+  amount     Float                   // 本条毛额快照 = weightKg * pricePerKg（不含免费额度）
   note       String?
+  operator   String?
   createdAt  DateTime @default(now())
+
+  @@index([orderId])
 }
 
 enum OrderStatus {
-  PENDING
-  PAID
-  PREPARING
-  READY
-  CANCELLED
+  PENDING    // 已下单，待后厨处理
+  PAID       // 旧版：已付款（历史数据保留，新流程不再写入）
+  PREPARING  // 备餐中
+  READY      // 已备好
+  SERVED     // 已送出给客户
+  SETTLED    // 已结清（终态）
+  CANCELLED  // 已取消
+}
+
+// ===== 结算方式（顾客下单时自选） =====
+enum SettlementMode {
+  PREPAID   // 立即付款
+  POSTPAID  // 最后结算（用完后统一结清）
+}
+
+// ===== 折扣类型 =====
+enum DiscountType {
+  NONE
+  PERCENT   // 按比例打折
+  AMOUNT    // 固定金额减免
 }
 
 // ===== ORDER TYPE (点餐方式：堂食 / 外带) =====
@@ -302,6 +351,7 @@ model Payment {
 }
 
 enum PaymentMethod {
+  CASH        // 现金（收银台当面收款）
   PROMPTPAY
   TRUEMONEY
   BANK_TRANSFER

@@ -261,6 +261,8 @@ export async function fetchBookings(params: {
 // ---------- Orders ----------
 
 export type OrderTypeValue = 'DINE_IN' | 'TAKEAWAY';
+export type SettlementModeValue = 'PREPAID' | 'POSTPAID';
+export type DiscountTypeValue = 'NONE' | 'PERCENT' | 'AMOUNT';
 
 export interface CreateOrderInput {
   userId?: string;
@@ -271,6 +273,8 @@ export interface CreateOrderInput {
   note?: string;
   orderType?: OrderTypeValue;
   tableCode?: string;
+  /** 结算方式：立即付款 / 最后结算 */
+  settlementMode?: SettlementModeValue;
 }
 
 export async function createOrder(input: CreateOrderInput): Promise<any> {
@@ -288,6 +292,21 @@ export async function fetchOrders(params: {
   if (params.userId) qs.set('userId', params.userId);
   if (params.phone) qs.set('phone', params.phone);
   return request<any[]>(`/api/orders?${qs.toString()}`);
+}
+
+/** 公开：读取单个订单（顾客下单成功页 / 订单详情） */
+export async function fetchOrder(orderId: string): Promise<any> {
+  return request<any>(`/api/orders/${orderId}`);
+}
+
+export async function updateOrderStatus(
+  orderId: string,
+  status: string,
+): Promise<any> {
+  return request<any>(`/api/orders/${orderId}`, {
+    method: 'PUT',
+    body: JSON.stringify({ status }),
+  });
 }
 
 // ---------- Auth (user) ----------
@@ -426,17 +445,33 @@ export async function fetchAdminTransactions(params?: {
   return request<any>(`/api/admin/transactions${query}`);
 }
 
+export interface AdminOrderSummary {
+  open: number;
+  awaitingCount: number;
+  awaitingAmount: number;
+  unsettledPrepaid: number;
+}
+
 export async function fetchAdminOrders(params?: {
   status?: string;
+  scope?: 'open' | 'awaiting' | 'today';
   startDate?: string;
   endDate?: string;
-}): Promise<any[]> {
+}): Promise<{ orders: any[]; summary: AdminOrderSummary }> {
   const qs = new URLSearchParams();
   if (params?.status) qs.set('status', params.status);
+  if (params?.scope) qs.set('scope', params.scope);
   if (params?.startDate) qs.set('startDate', params.startDate);
   if (params?.endDate) qs.set('endDate', params.endDate);
   const query = qs.toString() ? `?${qs.toString()}` : '';
-  return request<any[]>(`/api/admin/orders${query}`);
+  const raw = await request<any>(`/api/admin/orders${query}`);
+  if (Array.isArray(raw)) {
+    return { orders: raw, summary: { open: 0, awaitingCount: 0, awaitingAmount: 0, unsettledPrepaid: 0 } };
+  }
+  return {
+    orders: raw?.orders ?? [],
+    summary: raw?.summary ?? { open: 0, awaitingCount: 0, awaitingAmount: 0, unsettledPrepaid: 0 },
+  };
 }
 
 /**
@@ -450,6 +485,108 @@ export async function updateAdminOrderTable(
   return request<any>(`/api/admin/orders/${orderId}`, {
     method: 'PATCH',
     body: JSON.stringify({ tableCode }),
+  });
+}
+
+/** Admin — 后厨状态流转（PREPARING / READY / SERVED） */
+export async function updateAdminOrderStatus(
+  orderId: string,
+  status: 'PENDING' | 'PREPARING' | 'READY' | 'SERVED',
+): Promise<any> {
+  return request<any>(`/api/admin/orders/${orderId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ action: 'status', status }),
+  });
+}
+
+/** Admin — 改单：传入改后的完整菜品行；减量会自动把库存加回去 */
+export async function updateAdminOrderItems(
+  orderId: string,
+  items: { menuItemId: string; quantity: number }[],
+): Promise<{ order: any; restored: number }> {
+  return request<any>(`/api/admin/orders/${orderId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ action: 'items', items }),
+  });
+}
+
+/** Admin — 折扣 / 改价。超出店员额度时服务端返回 403 + code=NEEDS_ADMIN */
+export async function applyAdminOrderDiscount(
+  orderId: string,
+  input: {
+    discountType: DiscountTypeValue;
+    discountValue: number;
+    note?: string;
+    adminPassword?: string;
+  },
+): Promise<any> {
+  return request<any>(`/api/admin/orders/${orderId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ action: 'discount', ...input }),
+  });
+}
+
+/** Admin — 取消订单（释放预占 / 回补已扣库存） */
+export async function cancelAdminOrder(orderId: string): Promise<any> {
+  return request<any>(`/api/admin/orders/${orderId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ action: 'cancel' }),
+  });
+}
+
+/** Admin — 录入渔获称重（前 1kg 免费，超出 60฿/kg） */
+export async function addOrderWeighing(
+  orderId: string,
+  input: { weightKg: number; note?: string },
+): Promise<any> {
+  return request<any>(`/api/admin/orders/${orderId}/weigh`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+/** Admin — 撤销一次称重 */
+export async function deleteOrderWeighing(
+  orderId: string,
+  weighingId: string,
+): Promise<any> {
+  return request<any>(
+    `/api/admin/orders/${orderId}/weigh?weighingId=${encodeURIComponent(weighingId)}`,
+    { method: 'DELETE' },
+  );
+}
+
+export interface SettleResult {
+  order: any;
+  status?: string;
+  totals?: {
+    subtotal: number;
+    fishWeightKg: number;
+    fishCharge: number;
+    gross: number;
+    discountAmount: number;
+    totalPrice: number;
+  };
+  paymentId?: string;
+  qrString?: string | null;
+  amount?: number;
+  merchantName?: string;
+  maskedPromptPayId?: string;
+  expiresAt?: string;
+}
+
+/**
+ * Admin — 结算收款。
+ *  action: "create" 生成/刷新收款单（返回二维码）｜"confirm" 顾客已付款｜"mark-paid" 直接记已收款
+ *  method: "CASH" | "PROMPTPAY"
+ */
+export async function settleAdminOrder(
+  orderId: string,
+  input: { action?: 'create' | 'confirm' | 'mark-paid'; method?: 'CASH' | 'PROMPTPAY' },
+): Promise<SettleResult> {
+  return request<SettleResult>(`/api/admin/orders/${orderId}/settle`, {
+    method: 'POST',
+    body: JSON.stringify(input),
   });
 }
 
@@ -978,6 +1115,12 @@ export interface ReportPeriodRevenue {
   marginRate: number | null;
   wasteCost: number;
   itemsSold: number;
+  /** 渔获费合计（已含在 orderRevenue 内） */
+  fishRevenue: number;
+  /** 渔获总重 kg */
+  fishWeightKg: number;
+  /** 折扣合计（正数=已减免） */
+  discountTotal: number;
 }
 
 export interface ReportOverview extends ReportPeriodRevenue {

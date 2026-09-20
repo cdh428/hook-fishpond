@@ -1,9 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { runTx } from "@/lib/tx";
 import { bangkokDateString } from "@/lib/date-utils";
 import { isClosedDate } from "@/lib/closed-days";
-import { decrementStock, InsufficientStockError } from "@/lib/stock";
+import { reserveStock, InsufficientStockError } from "@/lib/stock";
+import { generateOrderNumber } from "@/lib/orders";
 
+// Neon(us-east-2) ← 泰国：往返延迟较高，放宽函数执行上限
+export const maxDuration = 60;
+
+/**
+ * POST /api/orders —— 顾客「确认下单」
+ *
+ * 与旧流程的区别：
+ *  - 不再「下单即付款」，而是下单即**预占库存**（不动 stockQty、不写流水）；
+ *  - 顾客可自选结算方式：PREPAID（立即付款）/ POSTPAID（最后结算）；
+ *  - 正式扣库存发生在结算时点（后付=结清、先付=付款到账）。
+ */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -19,6 +32,15 @@ export async function POST(request: NextRequest) {
     // Order type: DINE_IN (default) must be tied to a table, TAKEAWAY never is.
     const orderType: "DINE_IN" | "TAKEAWAY" =
       body.orderType === "TAKEAWAY" ? "TAKEAWAY" : "DINE_IN";
+
+    // 结算方式：堂食默认最后结算，外带默认立即付款（顾客都能改）
+    const requested = body.settlementMode;
+    const settlementMode: "PREPAID" | "POSTPAID" =
+      requested === "PREPAID" || requested === "POSTPAID"
+        ? requested
+        : orderType === "TAKEAWAY"
+          ? "PREPAID"
+          : "POSTPAID";
 
     // Block same-day (on-site) ordering when the venue is closed today
     if (await isClosedDate(bangkokDateString())) {
@@ -77,62 +99,55 @@ export async function POST(request: NextRequest) {
       };
     });
 
-    // Generate order number: FP-{YYYYMMDD}-{3-digit-sequence}
-    const now = new Date();
-    const dateStr = now.toISOString().slice(0, 10).replace(/-/g, "");
-    const prefix = `FP-${dateStr}-`;
+    // Create order with items in a transaction; link booking if provided.
+    // 订单号按当日流水生成，并发下可能撞号 —— 重试三次。
+    let order: { id: string } | null = null;
+    let lastError: any = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        order = await runTx(async (tx) => {
+          const orderNumber = await generateOrderNumber(tx, attempt);
+          const newOrder = await tx.order.create({
+            data: {
+              orderNumber,
+              userId: userId || null,
+              tableId,
+              customerName,
+              customerPhone,
+              subtotal,
+              totalPrice: subtotal,
+              note: note || null,
+              orderType,
+              settlementMode,
+              status: "PENDING",
+              items: { create: orderItemsData },
+            },
+          });
 
-    // Find today's orders to get next sequence
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-    const todayCount = await prisma.order.count({
-      where: {
-        createdAt: {
-          gte: todayStart,
-          lt: todayEnd,
-        },
-      },
-    });
+          if (bookingId) {
+            await tx.booking.updateMany({
+              where: { id: bookingId },
+              data: { orderId: newOrder.id },
+            });
+          }
 
-    const seq = String(todayCount + 1).padStart(3, "0");
-    const orderNumber = `${prefix}${seq}`;
+          // 下单即预占库存（不足时事务内抛 InsufficientStockError，整体回滚）
+          await reserveStock(
+            tx,
+            newOrder.id,
+            orderItemsData.map((i) => ({ menuItemId: i.menuItemId, quantity: i.quantity })),
+          );
 
-    // Create order with items in a transaction; link booking if provided
-    const order = await prisma.$transaction(async (tx) => {
-      const newOrder = await tx.order.create({
-        data: {
-          orderNumber,
-          userId: userId || null,
-          tableId,
-          customerName,
-          customerPhone,
-          subtotal,
-          totalPrice: subtotal,
-          note: note || null,
-          orderType,
-          status: "PENDING",
-          items: {
-            create: orderItemsData,
-          },
-        },
-      });
-
-      if (bookingId) {
-        await tx.booking.updateMany({
-          where: { id: bookingId },
-          data: { orderId: newOrder.id },
+          return newOrder;
         });
+        break;
+      } catch (e: any) {
+        lastError = e;
+        if (e?.code === "P2002") continue;
+        throw e;
       }
-
-      // 扣减库存（不足时事务内抛 InsufficientStockError，整体回滚）
-      await decrementStock(
-        tx,
-        orderItemsData.map((i) => ({ menuItemId: i.menuItemId, quantity: i.quantity })),
-        { orderId: newOrder.id },
-      );
-
-      return newOrder;
-    });
+    }
+    if (!order) throw lastError ?? new Error("Failed to create order");
 
     // Fetch complete order with relations
     const fullOrder = await prisma.order.findUnique({
@@ -140,6 +155,7 @@ export async function POST(request: NextRequest) {
       include: {
         items: { include: { menuItem: true } },
         bookings: true,
+        weighings: true,
         table: true,
       },
     });
@@ -181,6 +197,7 @@ export async function GET(request: NextRequest) {
         items: { include: { menuItem: true } },
         payment: true,
         bookings: true,
+        weighings: true,
         table: true,
       },
       orderBy: { createdAt: "desc" },

@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { decrementStock, restoreStock, InsufficientStockError } from "@/lib/stock";
+import { runTx } from "@/lib/tx";
+import { reserveStock, releaseOrderStock, InsufficientStockError } from "@/lib/stock";
+import { settleOrder } from "@/lib/orders";
+
+// Neon(us-east-2) ← 泰国：往返延迟较高，放宽函数执行上限
+export const maxDuration = 60;
 
 export async function GET(
   request: NextRequest,
@@ -15,6 +20,8 @@ export async function GET(
         items: { include: { menuItem: true } },
         payment: true,
         bookings: { include: { pond: true, spot: true } },
+        weighings: { orderBy: { createdAt: "asc" } },
+        table: true,
       },
     });
 
@@ -32,6 +39,16 @@ export async function GET(
   }
 }
 
+const VALID_STATUSES = [
+  "PENDING",
+  "PAID",
+  "PREPARING",
+  "READY",
+  "SERVED",
+  "SETTLED",
+  "CANCELLED",
+];
+
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -40,15 +57,13 @@ export async function PUT(
     const { id } = await params;
     const { status } = await request.json();
 
-    const validStatuses = ["PENDING", "PAID", "PREPARING", "READY", "CANCELLED"];
-    if (!validStatuses.includes(status)) {
+    if (!VALID_STATUSES.includes(status)) {
       return NextResponse.json(
-        { error: `Invalid status. Must be one of: ${validStatuses.join(", ")}` },
+        { error: `Invalid status. Must be one of: ${VALID_STATUSES.join(", ")}` },
         { status: 400 },
       );
     }
 
-    // 先读取当前订单状态，决定库存回补/重扣
     const current = await prisma.order.findUnique({ where: { id } });
     if (!current) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
@@ -57,13 +72,26 @@ export async function PUT(
 
     const movingIntoCancelled = status === "CANCELLED" && prevStatus !== "CANCELLED";
     const movingOutOfCancelled = prevStatus === "CANCELLED" && status !== "CANCELLED";
+    const movingIntoSettled = status === "SETTLED" && prevStatus !== "SETTLED";
 
     let order;
     try {
-      order = await prisma.$transaction(async (tx) => {
+      order = await runTx(async (tx) => {
+        if (movingIntoSettled) {
+          // 结清：预占转正式扣减 + 状态置 SETTLED
+          await settleOrder(tx, id);
+          return tx.order.findUnique({
+            where: { id },
+            include: { items: { include: { menuItem: true } }, payment: true },
+          });
+        }
+
         const updated = await tx.order.update({
           where: { id },
-          data: { status },
+          data: {
+            status,
+            ...(status !== "SETTLED" ? { settledAt: null } : {}),
+          },
           include: {
             items: { include: { menuItem: true } },
             payment: true,
@@ -71,19 +99,16 @@ export async function PUT(
         });
 
         if (movingIntoCancelled) {
-          // 取消/拒单：回补库存（PURCHASED 增库存；MADE 记冲正流水）
-          await restoreStock(tx, id);
+          // 取消：释放预占，已扣减部分回补
+          await releaseOrderStock(tx, id);
         } else if (movingOutOfCancelled) {
-          // 从取消恢复：重新扣减库存
-          const ois = await tx.orderItem.findMany({
-            where: { orderId: id },
-            include: { menuItem: true },
-          });
-          const lines = ois.map((oi) => ({
-            menuItemId: oi.menuItemId,
-            quantity: oi.quantity,
-          }));
-          await decrementStock(tx, lines, { orderId: id });
+          // 从取消恢复：重新预占
+          const ois = await tx.orderItem.findMany({ where: { orderId: id } });
+          await reserveStock(
+            tx,
+            id,
+            ois.map((oi) => ({ menuItemId: oi.menuItemId, quantity: oi.quantity })),
+          );
         }
 
         return updated;

@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { runTx } from "@/lib/tx";
 import { requireAdmin } from "@/lib/auth";
 import { generatePromptPayQR, getPromptPayId, maskPromptPayId } from "@/lib/promptpay";
+import { consumeReservation } from "@/lib/stock";
+import { settleOrder } from "@/lib/orders";
+
+// Neon(us-east-2) ← 泰国：往返延迟较高，放宽函数执行上限
+export const maxDuration = 60;
 
 // GET — check payment status (public, used by payment page polling)
 export async function GET(
@@ -129,17 +135,29 @@ export async function PUT(
       if (!admin) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
-      const updated = await prisma.payment.update({
-        where: { id },
-        data: {
-          status: "SUCCESSFUL",
-          paidAt: new Date(),
-        },
-      });
-      // Also update the order status to PAID
-      await prisma.order.update({
-        where: { id: payment.orderId },
-        data: { status: "PAID" },
+      const updated = await runTx(async (tx) => {
+        const p = await tx.payment.update({
+          where: { id },
+          data: {
+            status: "SUCCESSFUL",
+            paidAt: new Date(),
+          },
+        });
+
+        const order = await tx.order.findUnique({
+          where: { id: payment.orderId },
+          select: { settlementMode: true },
+        });
+
+        if (order?.settlementMode === "PREPAID") {
+          // 先付订单：付款到账即把「预占」转为正式库存扣减，后厨流程照常继续
+          await consumeReservation(tx, payment.orderId, { adminName: admin.username });
+        } else {
+          // 后付订单：这一步就是结清
+          await settleOrder(tx, payment.orderId, { adminName: admin.username });
+        }
+
+        return p;
       });
       return NextResponse.json({ status: updated.status });
     }

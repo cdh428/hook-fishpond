@@ -11,6 +11,8 @@ const statusColors: Record<string, string> = {
   PAID: 'bg-primary-100 text-primary-700',
   PREPARING: 'bg-accent-100 text-accent-700',
   READY: 'bg-success-100 text-success-600',
+  SERVED: 'bg-primary-100 text-primary-700',
+  SETTLED: 'bg-neutral-100 text-neutral-500',
   CANCELLED: 'bg-error-100 text-error-600',
 };
 
@@ -19,6 +21,8 @@ const statusI18n: Record<string, string> = {
   PAID: 'orders.paid',
   PREPARING: 'orders.preparing',
   READY: 'orders.ready',
+  SERVED: 'orders.served',
+  SETTLED: 'orders.settled',
   CANCELLED: 'orders.cancelled',
 };
 
@@ -144,9 +148,9 @@ export default function OrdersPage() {
 
   const filteredOrders = orders.filter((order) => {
     if (filter === 'active')
-      return ['PENDING', 'PAID', 'PREPARING'].includes(order.status);
+      return ['PENDING', 'PAID', 'PREPARING', 'READY', 'SERVED'].includes(order.status);
     if (filter === 'completed')
-      return ['READY', 'CANCELLED'].includes(order.status);
+      return ['SETTLED', 'CANCELLED'].includes(order.status);
     return true;
   });
 
@@ -342,9 +346,17 @@ export default function OrdersPage() {
               {/* Footer */}
               <div className="mt-3 flex items-center justify-between border-t border-neutral-100 pt-3">
                 <span className="text-xs text-neutral-400">{order.date}</span>
-                <span className="font-bold text-accent-600">
-                  ฿{order.total}
-                </span>
+                <div className="flex items-center gap-3">
+                  <span className="font-bold text-accent-600">
+                    ฿{order.total}
+                  </span>
+                  <Link
+                    href={`/orders/${order.id}`}
+                    className="rounded-lg bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-700 hover:bg-primary-100"
+                  >
+                    {t('orders.details')}
+                  </Link>
+                </div>
               </div>
             </div>
           ))}

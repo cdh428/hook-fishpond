@@ -4,6 +4,11 @@ import { useTranslations } from 'next-intl';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import QRCode from 'qrcode';
 import { generatePromptPayPayload } from '@/lib/promptpay-qr';
+import {
+  fetchAdminOrders,
+  settleAdminOrder,
+  type AdminOrderSummary,
+} from '@/lib/api-client';
 
 type PaymentMethod = 'promptpay' | 'alipay' | 'wechat';
 
@@ -30,6 +35,29 @@ export default function AdminCollectPage() {
   const [tempPhone, setTempPhone] = useState('');
   const alipayFileRef = useRef<HTMLInputElement>(null);
   const wechatFileRef = useRef<HTMLInputElement>(null);
+
+  // ----- 待结算订单（订单驱动收款） -----
+  const [pendingOrders, setPendingOrders] = useState<any[]>([]);
+  const [summary, setSummary] = useState<AdminOrderSummary | null>(null);
+  const [showPending, setShowPending] = useState(true);
+  const [linkedOrder, setLinkedOrder] = useState<any | null>(null);
+  const [linkedPaymentId, setLinkedPaymentId] = useState<string | null>(null);
+  const [collectBusy, setCollectBusy] = useState(false);
+  const [collectMsg, setCollectMsg] = useState('');
+
+  const loadPending = useCallback(async () => {
+    try {
+      const res = await fetchAdminOrders({ scope: 'awaiting' });
+      setPendingOrders(res.orders);
+      setSummary(res.summary);
+    } catch {
+      /* 收款页不因订单接口异常而不可用 */
+    }
+  }, []);
+
+  useEffect(() => {
+    loadPending();
+  }, [loadPending]);
 
   // Load config from localStorage on mount
   useEffect(() => {
@@ -80,10 +108,62 @@ export default function AdminCollectPage() {
     reader.readAsDataURL(file);
   };
 
+  /** 选中一笔待结算订单：把金额带出来，并记住订单以便结清 */
+  const linkOrder = (order: any) => {
+    setLinkedOrder(order);
+    setLinkedPaymentId(null);
+    setAmount(String(order.totalPrice));
+    setMethod('promptpay');
+    setQrDataUrl('');
+    setShowQR(false);
+    setCollectMsg('');
+  };
+
+  const unlinkOrder = () => {
+    setLinkedOrder(null);
+    setLinkedPaymentId(null);
+    setQrDataUrl('');
+    setShowQR(false);
+    setCollectMsg('');
+  };
+
   const generateQR = useCallback(async () => {
     const numAmount = parseFloat(amount);
     if (!numAmount || numAmount <= 0) {
       alert(t('admin.enterAmountFirst'));
+      return;
+    }
+
+    // 关联了订单 + PromptPay：走订单结算接口，生成与订单绑定的收款码
+    if (linkedOrder && method === 'promptpay') {
+      setCollectBusy(true);
+      try {
+        const res = await settleAdminOrder(linkedOrder.id, {
+          action: 'create',
+          method: 'PROMPTPAY',
+        });
+        setLinkedPaymentId(res.paymentId ?? null);
+        if (res.qrString) {
+          const dataUrl = await QRCode.toDataURL(res.qrString, {
+            width: 420,
+            margin: 2,
+            color: { dark: '#000000', light: '#ffffff' },
+          });
+          setQrDataUrl(dataUrl);
+        } else {
+          setQrDataUrl('');
+          setCollectMsg(t('admin.enterAmountFirst'));
+        }
+        setShowQR(true);
+        if (res.order) {
+          setLinkedOrder(res.order);
+          setAmount(String(res.order.totalPrice));
+        }
+      } catch (e: any) {
+        alert(e?.message || t('common.error'));
+      } finally {
+        setCollectBusy(false);
+      }
       return;
     }
 
@@ -118,7 +198,24 @@ export default function AdminCollectPage() {
       setQrDataUrl(config.wechatQrImage);
       setShowQR(true);
     }
-  }, [amount, method, config, t]);
+  }, [amount, method, config, t, linkedOrder]);
+
+  /** 确认已收款：记支付成功并把订单结清（预占转正式扣减） */
+  const confirmCollected = async () => {
+    if (!linkedOrder) return;
+    setCollectBusy(true);
+    try {
+      await settleAdminOrder(linkedOrder.id, { action: 'confirm', method: 'PROMPTPAY' });
+      setShowQR(false);
+      setCollectMsg(t('admin.collectConfirmed'));
+      unlinkOrder();
+      await loadPending();
+    } catch (e: any) {
+      alert(e?.message || t('common.error'));
+    } finally {
+      setCollectBusy(false);
+    }
+  };
 
   const methodLabels: Record<PaymentMethod, string> = {
     promptpay: t('payment.promptpay'),
@@ -140,6 +237,85 @@ export default function AdminCollectPage() {
 
   return (
     <>
+      {/* ===== 待结算订单：选订单 → 自动带出金额 ===== */}
+      <div className="mb-4 overflow-hidden rounded-xl bg-white shadow-md">
+        <button
+          onClick={() => setShowPending((v) => !v)}
+          className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium text-neutral-700"
+        >
+          <span className="flex items-center gap-2">
+            🧾 {t('admin.collectFromOrder')}
+            {summary && summary.awaitingCount > 0 && (
+              <span className="rounded-full bg-accent-500 px-2 py-0.5 text-[11px] font-bold text-white">
+                {summary.awaitingCount}
+              </span>
+            )}
+          </span>
+          <span className="text-xs text-neutral-400">
+            {summary ? `฿${summary.awaitingAmount.toLocaleString()}` : ''}
+            <span className={`ml-2 inline-block transition-transform ${showPending ? 'rotate-180' : ''}`}>
+              ▾
+            </span>
+          </span>
+        </button>
+
+        {showPending && (
+          <div className="border-t border-neutral-100">
+            {linkedOrder ? (
+              <div className="flex items-center justify-between bg-primary-50 px-4 py-2.5">
+                <span className="text-xs font-medium text-primary-700">
+                  {t('admin.collectLinked')}: {linkedOrder.orderNumber} · ฿{linkedOrder.totalPrice}
+                </span>
+                <button
+                  onClick={unlinkOrder}
+                  className="text-xs text-neutral-500 hover:text-neutral-700"
+                >
+                  {t('admin.collectUnlink')}
+                </button>
+              </div>
+            ) : pendingOrders.length === 0 ? (
+              <p className="px-4 py-3 text-xs text-neutral-400">{t('admin.collectNoPending')}</p>
+            ) : (
+              <div className="max-h-64 divide-y divide-neutral-100 overflow-y-auto">
+                {pendingOrders.map((o) => (
+                  <button
+                    key={o.id}
+                    onClick={() => linkOrder(o)}
+                    className="flex w-full items-center justify-between px-4 py-2.5 text-left transition hover:bg-neutral-50"
+                  >
+                    <span className="min-w-0">
+                      <span className="block text-xs font-semibold text-neutral-800">
+                        {o.orderNumber}
+                      </span>
+                      <span className="block text-[11px] text-neutral-400">
+                        {o.orderType === 'TAKEAWAY' || !o.table
+                          ? t('orderType.takeaway')
+                          : `${o.table.code}`}
+                        {' · '}
+                        {new Date(o.createdAt).toLocaleTimeString([], {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                        {o.fishWeightKg > 0 && ` · 🐟 ${o.fishWeightKg}kg`}
+                      </span>
+                    </span>
+                    <span className="ml-2 shrink-0 text-sm font-bold text-accent-600">
+                      ฿{o.totalPrice}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {collectMsg && (
+        <div className="mb-4 rounded-xl bg-success-50 px-3 py-2 text-xs font-medium text-success-600">
+          {collectMsg}
+        </div>
+      )}
+
       {/* Settings Toggle */}
       <div className="mb-4">
         <button
@@ -412,6 +588,17 @@ export default function AdminCollectPage() {
             >
               {t('common.close')}
             </button>
+
+            {/* 已关联订单 → 一键确认收款并结清 */}
+            {linkedOrder && (
+              <button
+                onClick={confirmCollected}
+                disabled={collectBusy}
+                className="mt-2 w-full rounded-xl bg-accent-500 py-3 text-sm font-semibold text-white shadow-cta transition hover:bg-accent-600 disabled:opacity-50"
+              >
+                {collectBusy ? t('common.saving') : t('admin.collectConfirm')}
+              </button>
+            )}
           </div>
         </div>
       )}
