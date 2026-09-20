@@ -119,7 +119,8 @@
     "drinks": "Drinks",
     "all": "All",
     "searchPlaceholder": "Search menu...",
-    "noResults": "No items found"
+    "noResults": "No items found",
+    "tools": "Tools"
   },
   "cart": {
     "title": "Cart",
@@ -320,7 +321,10 @@
     "restDayDate": "Date",
     "restDayReason": "Note (optional)",
     "noRestDays": "No extra rest days",
-    "yearLabel": "Year"
+    "yearLabel": "Year",
+    "toolType": "Tools",
+    "tableQrPrintTitle": "Happy Fishing Pond — Table QR Codes",
+    "tableQrPrintHint": "Print, cut out and stick on the matching table."
   },
   "adminBulk": {
     "title": "Bulk Management",
@@ -354,7 +358,11 @@
     "backToMenu": "Back to Menu",
     "importAgain": "Import Another Batch",
     "fileTooLarge": "File is too large. Please upload a file under 4 MB.",
-    "readFailed": "Failed to read the file. Please check the format."
+    "readFailed": "Failed to read the file. Please check the format.",
+    "csvRow": "Row",
+    "csvCategory": "Category",
+    "csvName": "Name",
+    "csvReason": "Reason"
   },
   "adminStock": {
     "entry": "Inventory",
@@ -509,5 +517,13 @@
     "lineSendFailed": "Send failed",
     "linePreview": "Message preview",
     "lineScheduleNote": "Schedule: every day 21:00 (Bangkok). Vercel's free plan fires within ±59 minutes, so arrival may be 21:00–21:59."
+  },
+  "tableLanding": {
+    "invalidTitle": "Invalid QR Code",
+    "invalidBody": "Table <mono>{code}</mono> was not found or is inactive.",
+    "continueToMenu": "Continue to menu",
+    "closedTitle": "Closed Today",
+    "closedBody": "We rest every Monday, or today is a statutory holiday. Please visit us another day.",
+    "continue": "Continue"
   }
 }

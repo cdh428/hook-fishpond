@@ -256,8 +256,8 @@ export default function AdminTablesPage() {
           h1 { font-size: 18px; margin-bottom: 12px; }
           @media print { .hint { display: none; } }
         </style></head><body>
-        <h1>Hook Fishpond — Table QR Codes (${active.length})</h1>
-        <p class="hint">打印后裁切，贴到对应餐桌。</p>
+        <h1>${t('admin.tableQrPrintTitle')} (${active.length})</h1>
+        <p class="hint">${t('admin.tableQrPrintHint')}</p>
         <div class="grid">
           ${stickers.map((src) => `<div class="item"><img src="${src}" /></div>`).join('')}
         </div>

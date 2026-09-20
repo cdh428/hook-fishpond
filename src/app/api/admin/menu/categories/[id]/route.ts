@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
+import { isMenuType, MENU_TYPES } from "@/lib/menu-types";
 
 export async function PUT(
   request: NextRequest,
@@ -21,7 +22,15 @@ export async function PUT(
     if (name_zh !== undefined) updateData.name_zh = name_zh;
     if (name_en !== undefined) updateData.name_en = name_en;
     if (name_th !== undefined) updateData.name_th = name_th;
-    if (type !== undefined) updateData.type = type;
+    if (type !== undefined) {
+      if (!isMenuType(type)) {
+        return NextResponse.json(
+          { error: `Invalid type: ${type}. Expected one of ${MENU_TYPES.join(", ")}` },
+          { status: 400 },
+        );
+      }
+      updateData.type = type;
+    }
     if (imageUrl !== undefined) updateData.imageUrl = imageUrl;
     if (sortOrder !== undefined) updateData.sortOrder = sortOrder;
     if (isActive !== undefined) updateData.isActive = isActive;

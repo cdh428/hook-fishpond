@@ -1,6 +1,7 @@
 import ExcelJS from "exceljs";
 import { prisma } from "@/lib/prisma";
 import { translateText } from "@/lib/translate";
+import { MENU_TYPES, type MenuTypeValue } from "@/lib/menu-types";
 
 /* ------------------------------------------------------------------ */
 /* Column definition                                                   */
@@ -8,6 +9,7 @@ import { translateText } from "@/lib/translate";
 
 export const MENU_COLUMNS: { key: string; header: string; required: boolean }[] = [
   { key: "category", header: "分类", required: true },
+  { key: "menuType", header: "大类", required: false },
   { key: "name_zh", header: "名称(中文)", required: true },
   { key: "name_en", header: "名称(英文)", required: false },
   { key: "name_th", header: "名称(ไทย)", required: false },
@@ -36,6 +38,8 @@ export interface MenuImportRow {
   rowNumber: number; // 1-based spreadsheet row (header = 1)
   action: ImportAction;
   category: string; // category name_zh as given in the sheet
+  /** 大类：美食/饮品/工具。新建分类时用它决定归到哪个页签；留空默认美食 */
+  menuType?: MenuTypeValue;
   categoryId?: string; // resolved when the category exists
   itemId?: string; // matched MenuItem id (UPDATE/DELETE)
   name_zh: string;
@@ -86,6 +90,13 @@ function zhStockType(v: string | null | undefined): string {
   if (v === "MADE") return "自制";
   if (v === "PURCHASED") return "外购";
   return "不管理";
+}
+
+/** 导出时的「大类」单元格：写中文标签，方便直接改 */
+function zhMenuType(v: string | null | undefined): string {
+  if (v === "DRINK") return "饮品";
+  if (v === "TOOL") return "工具";
+  return "美食";
 }
 
 function fmtPrice(n: number): string {
@@ -375,6 +386,18 @@ export async function buildPreview(
     isVegetarian = parseBool(raw.isVegetarian);
     isActive = parseBool(raw.isActive);
 
+    // --- 大类（只在"新建分类"时生效；已存在的分类不会被改）---
+    let menuType: MenuTypeValue | undefined;
+    const menuTypeRaw = (raw.menuType ?? "").trim();
+    if (menuTypeRaw !== "") {
+      const norm = menuTypeRaw.toLowerCase();
+      if (["美食", "食品", "food", "อาหาร"].includes(norm)) menuType = "FOOD";
+      else if (["饮品", "饮料", "drink", "drinks", "เครื่องดื่ม"].includes(norm))
+        menuType = "DRINK";
+      else if (["工具", "用具", "tool", "tools", "อุปกรณ์"].includes(norm)) menuType = "TOOL";
+      else errorList.push(`大类无法识别（${MENU_TYPES.join("/")}，或 美食/饮品/工具）`);
+    }
+
     // --- stock columns ---
     let stockType: "NONE" | "MADE" | "PURCHASED" | undefined;
     const stockTypeRaw = (raw.stockType ?? "").trim();
@@ -596,6 +619,7 @@ export async function buildPreview(
       rowNumber: r + 1, // header is spreadsheet row 1
       action,
       category,
+      menuType,
       categoryId,
       itemId: matchedItem?.id,
       name_zh,
@@ -637,7 +661,7 @@ export async function buildPreview(
 /* ------------------------------------------------------------------ */
 
 export function buildExportRows(
-  items: ({ category: { name_zh: string } } & Record<string, any>)[],
+  items: ({ category: { name_zh: string; type?: string } } & Record<string, any>)[],
 ): (string | number)[][] {
   const rows: (string | number)[][] = [];
   rows.push(MENU_COLUMNS.map((c) => c.header));
@@ -647,6 +671,9 @@ export function buildExportRows(
       switch (col.key) {
         case "category":
           line.push(item.category?.name_zh ?? "");
+          break;
+        case "menuType":
+          line.push(zhMenuType(item.category?.type));
           break;
         case "name_zh":
           line.push(item.name_zh ?? "");
@@ -712,6 +739,7 @@ export function buildTemplateRows(): (string | number)[][] {
   rows.push(MENU_COLUMNS.map((c) => c.header));
   rows.push([
     "主食",
+    "美食",
     "泰式打抛饭",
     "Pad Krapow Rice",
     "ข้าวผัดกะเพรา",

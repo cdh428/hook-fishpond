@@ -1,42 +1,23 @@
 import { redirect } from 'next/navigation';
-import { cookies, headers } from 'next/headers';
+import { getTranslations } from 'next-intl/server';
 import { prisma } from '@/lib/prisma';
 import { bangkokDateString } from '@/lib/date-utils';
 import { isClosedDate } from '@/lib/closed-days';
-import { locales, defaultLocale } from '@/i18n/config';
+import { detectRequestLocale } from '@/i18n/detect-locale';
 
 /**
- * Table QR landing page.
+ * 桌上二维码落地页。
  *
- * A customer scans the QR code printed on their table, which points at
- * https://<host>/t/<CODE> (e.g. /t/A01). This page:
- *   1. validates the table code against the database,
- *   2. detects the customer's preferred language (cookie → Accept-Language → zh),
- *   3. forwards them into the normal ordering flow with the table attached:
- *      /{locale}/menu?table=A01
+ * 客人扫桌上二维码 → `/t/<CODE>`（例如 `/t/A01`），本页：
+ *   1. 校验桌号是否存在且启用；
+ *   2. 判断客人语言（Cookie → Accept-Language → zh）；
+ *   3. 带着桌号进入正常点单流程：`/{locale}/menu?table=A01`。
  *
- * The ordering + payment flow itself is unchanged — this route only adds
- * table context to the entry point.
+ * ⚠️ 所有文案必须走 `tableLanding.*` 翻译键。
+ * 曾经这里是把三种语言「/」拼在一起的（"二维码无效 / Invalid QR Code / …"），
+ * 甚至整句只有中文——泰文客人看到的就是这种串味页面。
  */
 export const dynamic = 'force-dynamic';
-
-type Locale = (typeof locales)[number];
-
-function detectLocale(acceptLanguage: string | null, cookieLocale?: string): Locale {
-  if (cookieLocale && (locales as readonly string[]).includes(cookieLocale)) {
-    return cookieLocale as Locale;
-  }
-
-  if (acceptLanguage) {
-    const lower = acceptLanguage.toLowerCase();
-    // Thai first — this is a Thai venue; then English, then Chinese
-    if (lower.includes('th')) return 'th';
-    if (lower.includes('en')) return 'en';
-    if (lower.includes('zh')) return 'zh';
-  }
-
-  return defaultLocale as Locale;
-}
 
 export default async function TableLandingPage({
   params,
@@ -45,6 +26,8 @@ export default async function TableLandingPage({
 }) {
   const { code } = await params;
   const normalized = decodeURIComponent(code).toUpperCase().trim();
+  const locale = await detectRequestLocale();
+  const t = await getTranslations({ locale, namespace: 'tableLanding' });
 
   const table = await prisma.diningTable.findUnique({
     where: { code: normalized },
@@ -69,37 +52,27 @@ export default async function TableLandingPage({
               />
             </svg>
           </div>
-          <h1 className="text-lg font-bold text-neutral-900">
-            二维码无效 / Invalid QR Code / คิวอาร์โค้ดไม่ถูกต้อง
-          </h1>
+          <h1 className="text-lg font-bold text-neutral-900">{t('invalidTitle')}</h1>
           <p className="mt-2 text-sm text-neutral-500">
-            桌号 <span className="font-mono font-semibold">{normalized}</span> 不存在或已停用。
-            <br />
-            Table <span className="font-mono font-semibold">{normalized}</span> was not found or is
-            inactive.
-            <br />
-            ไม่พบโต๊ะ <span className="font-mono font-semibold">{normalized}</span> หรือถูกปิดใช้งาน
+            {t.rich('invalidBody', {
+              code: normalized,
+              mono: (chunks) => (
+                <span className="font-mono font-semibold">{chunks}</span>
+              ),
+            })}
           </p>
           <a
-            href={`/${defaultLocale}/menu`}
+            href={`/${locale}/menu`}
             className="mt-6 inline-block rounded-xl bg-primary-700 px-6 py-3 text-sm font-semibold text-white"
           >
-            继续浏览菜单 / Continue / ดำเนินการต่อ
+            {t('continueToMenu')}
           </a>
         </div>
       </div>
     );
   }
 
-  const cookieStore = await cookies();
-  const headerStore = await headers();
-
-  const locale = detectLocale(
-    headerStore.get('accept-language'),
-    cookieStore.get('NEXT_LOCALE')?.value,
-  );
-
-  // Venue closed today (Monday or statutory holiday) → do not route into ordering
+  // 今日休息（周一或法定休息日）→ 不进入点单
   if (await isClosedDate(bangkokDateString())) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-bg-page px-6">
@@ -119,22 +92,13 @@ export default async function TableLandingPage({
               />
             </svg>
           </div>
-          <h1 className="text-lg font-bold text-neutral-900">
-            今日休息 / Closed Today / วันนี้ปิดทำการ
-          </h1>
-          <p className="mt-2 text-sm text-neutral-500">
-            乐钓鱼塘每周一休息，或今日为法定休息日。欢迎其他时间光临。
-            <br />
-            We rest every Monday, or today is a statutory holiday. Please visit
-            us another day.
-            <br />
-            เราปิดทุกวันจันทร์ หรือวันนี้เป็นวันหยุดนักขัตฤกษ์ กรุณาเยี่ยมชมในวันอื่น
-          </p>
+          <h1 className="text-lg font-bold text-neutral-900">{t('closedTitle')}</h1>
+          <p className="mt-2 text-sm text-neutral-500">{t('closedBody')}</p>
           <a
             href={`/${locale}`}
             className="mt-6 inline-block rounded-xl bg-primary-700 px-6 py-3 text-sm font-semibold text-white"
           >
-            继续浏览 / Continue / ดำเนินการต่อ
+            {t('continue')}
           </a>
         </div>
       </div>

@@ -9,7 +9,8 @@
 
 // ---------- Types returned to the frontend ----------
 
-export type MenuType = 'FOOD' | 'DRINK';
+// 菜单大类：美食 / 饮品 / 工具（用具类商品）
+export type MenuType = 'FOOD' | 'DRINK' | 'TOOL';
 
 export interface ApiCategory {
   id: string;
@@ -466,7 +467,7 @@ export async function updateBookingStatus(
 
 // ---------- Menu admin (categories) ----------
 
-export async function fetchAdminCategories(type?: 'FOOD' | 'DRINK'): Promise<any[]> {
+export async function fetchAdminCategories(type?: MenuType): Promise<any[]> {
   const qs = type ? `?type=${type}` : '';
   const raw = await request<any[]>(`/api/admin/menu/categories${qs}`);
   return raw.map((c) => ({ ...c, itemCount: c._count?.items ?? 0 }));
@@ -476,7 +477,7 @@ export async function createCategory(input: {
   name_zh: string;
   name_en: string;
   name_th: string;
-  type: 'FOOD' | 'DRINK';
+  type: MenuType;
 }): Promise<any> {
   return request<any>(`/api/admin/menu/categories`, {
     method: 'POST',
@@ -490,7 +491,7 @@ export async function updateCategory(
     name_zh?: string;
     name_en?: string;
     name_th?: string;
-    type?: 'FOOD' | 'DRINK';
+    type?: MenuType;
   },
 ): Promise<any> {
   return request<any>(`/api/admin/menu/categories/${id}`, {

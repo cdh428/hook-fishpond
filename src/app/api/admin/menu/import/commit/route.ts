@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
 import type { MenuImportRow } from "@/lib/menu-io";
+import type { MenuTypeValue } from "@/lib/menu-types";
 
 type Skipped = { rowNumber: number; name: string; reason: string };
 
@@ -47,21 +48,24 @@ export async function POST(request: NextRequest) {
       }
 
       // Optionally create missing categories referenced by ADD rows.
+      // 新分类归到哪个页签，由那一行的「大类」决定（留空则美食）。
       if (autoCreateCategories) {
-        const needed = new Set<string>();
+        const needed = new Map<string, MenuTypeValue>();
         for (const r of rows) {
           if (r.action !== "ADD") continue;
           const cat = (r.category || "").trim();
-          if (cat && !catByName.has(cat)) needed.add(cat);
+          if (cat && !catByName.has(cat) && !needed.has(cat)) {
+            needed.set(cat, r.menuType ?? "FOOD");
+          }
         }
         let sort = maxCatSort + 1;
-        for (const name of needed) {
+        for (const [name, catType] of needed) {
           const created = await tx.menuCategory.create({
             data: {
               name_zh: name,
               name_en: name,
               name_th: name,
-              type: "FOOD",
+              type: catType,
               sortOrder: sort++,
             },
           });

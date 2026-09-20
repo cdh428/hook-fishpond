@@ -3,13 +3,19 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
 import { buildStockViews, LOW_STOCK_DISPLAY_THRESHOLD } from "@/lib/stock";
 
+// MenuItem has no top-level type column — its menu type derives from its
+// category. Flatten it onto the item so API consumers get `type` directly.
+function withMenuType<T extends { category?: { type?: string } | null }>(item: T) {
+  return { ...item, type: item.category?.type };
+}
+
 async function withStockField(items: any[]) {
   // Never expose the exact remaining count above the display threshold.
   const views = await buildStockViews(items);
   return items.map((it) => {
     const v = views.get(it.id)!;
     return {
-      ...it,
+      ...withMenuType(it),
       stock: {
         soldOut: v.soldOut,
         remaining:
@@ -110,7 +116,7 @@ export async function POST(request: NextRequest) {
       include: { category: true },
     });
 
-    return NextResponse.json(item, { status: 201 });
+    return NextResponse.json(withMenuType(item), { status: 201 });
   } catch (error: any) {
     console.error("Create menu item error:", error);
     return NextResponse.json(

@@ -169,6 +169,7 @@ model MenuItem {
 enum MenuType {
   FOOD
   DRINK
+  TOOL   // 工具/用具（钓具、鱼饵等非餐饮商品），第三个菜单页签
 }
 
 enum StockType {

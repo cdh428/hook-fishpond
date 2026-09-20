@@ -119,7 +119,8 @@
     "drinks": "饮品",
     "all": "全部",
     "searchPlaceholder": "搜索菜品...",
-    "noResults": "没有找到相关菜品"
+    "noResults": "没有找到相关菜品",
+    "tools": "工具"
   },
   "cart": {
     "title": "购物车",
@@ -320,7 +321,10 @@
     "restDayDate": "日期",
     "restDayReason": "说明（可选）",
     "noRestDays": "暂无额外休息日",
-    "yearLabel": "年份"
+    "yearLabel": "年份",
+    "toolType": "工具",
+    "tableQrPrintTitle": "乐钓鱼塘 —— 餐桌二维码",
+    "tableQrPrintHint": "打印后裁切，贴到对应餐桌。"
   },
   "adminBulk": {
     "title": "批量管理",
@@ -354,7 +358,11 @@
     "backToMenu": "返回菜单",
     "importAgain": "再导一批",
     "fileTooLarge": "文件过大，请上传小于 4MB 的文件",
-    "readFailed": "读取文件失败，请确认文件格式正确"
+    "readFailed": "读取文件失败，请确认文件格式正确",
+    "csvRow": "行号",
+    "csvCategory": "分类",
+    "csvName": "名称",
+    "csvReason": "原因"
   },
   "adminStock": {
     "entry": "库存",
@@ -509,5 +517,13 @@
     "lineSendFailed": "发送失败",
     "linePreview": "消息内容预览",
     "lineScheduleNote": "自动排程：每天 21:00（曼谷时间）推送。Vercel 免费版定时精度为 ±59 分钟，实际到达时间可能在 21:00–21:59 之间。"
+  },
+  "tableLanding": {
+    "invalidTitle": "二维码无效",
+    "invalidBody": "桌号 <mono>{code}</mono> 不存在或已停用。",
+    "continueToMenu": "继续浏览菜单",
+    "closedTitle": "今日休息",
+    "closedBody": "乐钓鱼塘每周一休息，或今日为法定休息日。欢迎其他时间光临。",
+    "continue": "继续浏览"
   }
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
+import { isMenuType, MENU_TYPES } from "@/lib/menu-types";
 
 export async function GET(request: NextRequest) {
   try {
@@ -8,7 +9,7 @@ export async function GET(request: NextRequest) {
     const type = searchParams.get("type");
 
     const where: any = {};
-    if (type) where.type = type;
+    if (type && isMenuType(type)) where.type = type;
 
     const categories = await prisma.menuCategory.findMany({
       where,
@@ -45,12 +46,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (!isMenuType(type)) {
+      return NextResponse.json(
+        { error: `Invalid type: ${type}. Expected one of ${MENU_TYPES.join(", ")}` },
+        { status: 400 },
+      );
+    }
+
     const category = await prisma.menuCategory.create({
       data: {
         name_zh,
         name_en,
         name_th,
-        type: type as "FOOD" | "DRINK",
+        type,
         imageUrl: imageUrl || null,
         sortOrder: sortOrder || 0,
       },

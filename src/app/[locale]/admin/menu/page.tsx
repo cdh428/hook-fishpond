@@ -14,8 +14,13 @@ import {
   deleteMenuItem,
 } from '@/lib/api-client';
 import { processImage } from '@/lib/image-utils';
+import {
+  MENU_TYPES,
+  MENU_TYPE_ADMIN_LABEL_KEY,
+  type MenuTypeValue,
+} from '@/lib/menu-types';
 
-type MenuType = 'FOOD' | 'DRINK';
+type MenuType = MenuTypeValue;
 
 interface Category {
   id: string;
@@ -335,24 +340,21 @@ export default function AdminMenuPage() {
         <div className="py-20 text-center text-sm text-neutral-400">{t('common.loading')}</div>
       ) : (
         <>
-          {/* Food/Drink Tabs */}
+          {/* 大类页签：美食 / 饮品 / 工具 */}
           <div className="mb-4 flex rounded-xl bg-neutral-100 p-1">
-            <button
-              onClick={() => setActiveTab('FOOD')}
-              className={`flex-1 rounded-lg py-2 text-sm font-medium transition ${
-                activeTab === 'FOOD' ? 'bg-white text-primary-700 shadow-sm' : 'text-neutral-500'
-              }`}
-            >
-              {t('admin.foodType')}
-            </button>
-            <button
-              onClick={() => setActiveTab('DRINK')}
-              className={`flex-1 rounded-lg py-2 text-sm font-medium transition ${
-                activeTab === 'DRINK' ? 'bg-white text-primary-700 shadow-sm' : 'text-neutral-500'
-              }`}
-            >
-              {t('admin.drinkType')}
-            </button>
+            {MENU_TYPES.map((type) => (
+              <button
+                key={type}
+                onClick={() => setActiveTab(type)}
+                className={`flex-1 rounded-lg py-2 text-sm font-medium transition ${
+                  activeTab === type
+                    ? 'bg-white text-primary-700 shadow-sm'
+                    : 'text-neutral-500'
+                }`}
+              >
+                {t(MENU_TYPE_ADMIN_LABEL_KEY[type])}
+              </button>
+            ))}
           </div>
 
           {/* Categories */}
@@ -487,8 +489,11 @@ export default function AdminMenuPage() {
                 onChange={(e) => setCatForm((f) => ({ ...f, type: e.target.value as MenuType }))}
                 className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm"
               >
-                <option value="FOOD">{t('admin.foodType')}</option>
-                <option value="DRINK">{t('admin.drinkType')}</option>
+                {MENU_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {t(MENU_TYPE_ADMIN_LABEL_KEY[type])}
+                  </option>
+                ))}
               </select>
               <input
                 placeholder={t('admin.nameZhPlaceholder')}

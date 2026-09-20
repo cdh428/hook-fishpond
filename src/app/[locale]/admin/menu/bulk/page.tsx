@@ -19,8 +19,10 @@ type ImportMode = 'translate' | 'keep';
 const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10MB
 
 // The three name fields that can be auto-translated.
+// 标签刻意用语言代码（ZH/EN/TH）而不是"中文"这类词——否则在泰文后台里
+// 会混进中文，这正是 i18n 检查会抓的串味。
 const NAME_FIELDS = [
-  { key: 'name_zh', label: '中文' },
+  { key: 'name_zh', label: 'ZH' },
   { key: 'name_en', label: 'EN' },
   { key: 'name_th', label: 'TH' },
 ] as const;
@@ -131,7 +133,12 @@ export default function AdminMenuBulkPage() {
   };
 
   const downloadSkippedCsv = (rows: { rowNumber: number; name: string; reason: string }[]) => {
-    const header = ['行号', '分类', '名称', '原因'];
+    const header = [
+      t('adminBulk.csvRow'),
+      t('adminBulk.csvCategory'),
+      t('adminBulk.csvName'),
+      t('adminBulk.csvReason'),
+    ];
     const lines = rows.map((r) => [String(r.rowNumber), '', r.name, r.reason].join(','));
     const csv = '﻿' + [header.join(','), ...lines].join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });

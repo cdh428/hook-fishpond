@@ -15,6 +15,12 @@ import {
 import { useApp } from '@/contexts/AppContext';
 import TablePicker from '@/components/TablePicker';
 import {
+  MENU_TYPES,
+  MENU_TYPE_EMOJI,
+  MENU_TYPE_LABEL_KEY,
+  type MenuTypeValue,
+} from '@/lib/menu-types';
+import {
   getStoredTableCode,
   setStoredTableCode,
   clearStoredTable,
@@ -265,35 +271,25 @@ export default function MenuPage() {
         )}
       </div>
 
-      {/* Food/Drink Tab Bar */}
+      {/* 大类页签：美食 / 饮品 / 工具（顺序与文案统一取自 MENU_TYPES） */}
       <div className="sticky top-14 z-40 bg-bg-page/95 px-4 pt-3 backdrop-blur-md">
         <div className="flex rounded-xl bg-neutral-100 p-1">
-          <button
-            onClick={() => {
-              setActiveTab('FOOD');
-              setActiveCat('popular');
-            }}
-            className={`flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition ${
-              activeTab === 'FOOD'
-                ? 'bg-white text-primary-700 shadow-sm'
-                : 'text-neutral-500 hover:text-neutral-700'
-            }`}
-          >
-            🍽️ {t('menu.food')}
-          </button>
-          <button
-            onClick={() => {
-              setActiveTab('DRINK');
-              setActiveCat('popular');
-            }}
-            className={`flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition ${
-              activeTab === 'DRINK'
-                ? 'bg-white text-primary-700 shadow-sm'
-                : 'text-neutral-500 hover:text-neutral-700'
-            }`}
-          >
-            🥤 {t('menu.drinks')}
-          </button>
+          {MENU_TYPES.map((type) => (
+            <button
+              key={type}
+              onClick={() => {
+                setActiveTab(type);
+                setActiveCat('popular');
+              }}
+              className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition ${
+                activeTab === type
+                  ? 'bg-white text-primary-700 shadow-sm'
+                  : 'text-neutral-500 hover:text-neutral-700'
+              }`}
+            >
+              {MENU_TYPE_EMOJI[type]} {t(MENU_TYPE_LABEL_KEY[type])}
+            </button>
+          ))}
         </div>
 
         {/* Category Tabs */}
@@ -409,7 +405,7 @@ export default function MenuPage() {
                         )}
                       </>
                     ) : (
-                      foodEmojis[item.catId] || '🍽️'
+                      foodEmojis[item.catId] || MENU_TYPE_EMOJI[item.type as MenuType] || '🍽️'
                     )}
                   </div>
                   <div className="min-w-0 flex-1">
