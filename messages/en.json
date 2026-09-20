@@ -120,7 +120,22 @@
     "all": "All",
     "searchPlaceholder": "Search menu...",
     "noResults": "No items found",
-    "tools": "Tools"
+    "tools": "Tools",
+    "hasOptions": "Options",
+    "soldOutAlternatives": "Try instead",
+    "searchResultCount": "{n} found",
+    "callService": "Call staff",
+    "callSending": "Calling…",
+    "callSent": "Sent, please wait",
+    "bill": {
+      "title": "Table bill",
+      "myTable": "This table",
+      "summary": "{items} items · {amount}",
+      "view": "Details",
+      "nothingYet": "No orders yet",
+      "payableHint": "Amount so far (fish extra)",
+      "settleAtCounter": "Please settle at the counter"
+    }
   },
   "cart": {
     "title": "Cart",
@@ -140,7 +155,13 @@
     "settleLaterHint": "Settle once when you are done",
     "confirmOrder": "Confirm order",
     "choosePayment": "Choose payment method",
-    "fishChargeNotice": "The first 1 kg of your catch is free; anything above is charged at ฿60/kg and added when you settle."
+    "fishChargeNotice": "The first 1 kg of your catch is free; anything above is charged at ฿60/kg and added when you settle.",
+    "pickupTime": "Pickup time",
+    "pickupTimeHint": "Set a pickup time for takeaway; leave blank for ASAP",
+    "editLine": "Edit",
+    "itemGone": "Some items are unavailable, please reselect",
+    "loadOptionsFailed": "Failed to load options, please retry",
+    "orderNotePlaceholder": "Order note, e.g. drinks first, pack separately…"
   },
   "payment": {
     "title": "Select Payment Method",
@@ -217,7 +238,9 @@
     "active": "Active",
     "completed": "Completed",
     "served": "Served",
-    "settled": "Settled"
+    "settled": "Settled",
+    "reorder": "Order again",
+    "reordered": "Added to cart"
   },
   "profile": {
     "title": "Profile",
@@ -674,7 +697,10 @@
     "confirmPaidHint": "Confirming closes the bill and converts reserved stock into a real deduction.",
     "markPaidDirect": "Skip the QR — mark as paid directly",
     "settledToast": "Settled",
-    "settledAt": "Settled at"
+    "settledAt": "Settled at",
+    "newLine": "New line (pick options)",
+    "addItem": "Add item",
+    "lineWillBeRemoved": "Quantity 0 — line removed on save"
   },
   "printLabels": {
     "brandSub": "Thailand · Fishing · Dining",
@@ -685,7 +711,9 @@
     "time": "Time",
     "item": "Item",
     "qty": "Qty",
-    "thanks": "Thank you, please come again"
+    "thanks": "Thank you, please come again",
+    "fishCharge": "Fish",
+    "discount": "Discount"
   },
   "printAgent": {
     "sentTo": "🖨️ Sent to {target}",
@@ -693,5 +721,58 @@
     "bridgeOffline": "Local print service not found — opened the browser dialog instead",
     "noTarget": "No print target set — opened the browser dialog instead",
     "bridgeError": "Print service error ({error}) — opened the browser dialog instead"
+  },
+  "options": {
+    "subtitle": "Choose size & preferences",
+    "required": "Required",
+    "optional": "Optional",
+    "single": "Single",
+    "multi": "Multiple",
+    "maxSelect": "Up to {n}",
+    "specialRequest": "Special request",
+    "specialPlaceholder": "e.g. no coriander, less spicy, more noodles…",
+    "needRequired": "Please choose \"{name}\"",
+    "total": "Total",
+    "addToCart": "Add to cart"
+  },
+  "adminOptions": {
+    "action": "Options",
+    "title": "Sizes & options",
+    "subtitle": "Configure portion, noodle type, add-ons for guests",
+    "templateHint": "Tap a template, then adjust the prices",
+    "empty": "No option groups yet",
+    "emptyHint": "Use a template above, or add a group manually",
+    "single": "Single",
+    "multi": "Multiple",
+    "required": "Required",
+    "optional": "Optional",
+    "removeGroup": "Remove group",
+    "maxSelect": "Max select",
+    "unlimited": "Unlimited",
+    "defaultOption": "Set default",
+    "priceDelta": "Price",
+    "addOption": "Add option",
+    "addGroup": "Add group",
+    "nameZhRequired": "Chinese group name is required",
+    "optionNameZhRequired": "Chinese option name is required",
+    "needDefault": "Group \"{name}\" needs a default option",
+    "applyTemplate": "Apply template",
+    "applyTitle": "Apply option templates",
+    "applyTo": "Applies to {count} items",
+    "pickTemplates": "Pick templates",
+    "mode": "Mode",
+    "modeAdd": "Append (skip same)",
+    "modeReplace": "Replace (clear first)",
+    "applySubmit": "Apply",
+    "applyResult": "Processed {items} items, added {created} groups, skipped {skipped}"
+  },
+  "serviceCall": {
+    "assistance": "Assistance",
+    "water": "Water",
+    "tissue": "Tissue",
+    "bill": "Bill",
+    "acknowledge": "Acknowledge",
+    "acknowledged": "In progress",
+    "done": "Done"
   }
 }

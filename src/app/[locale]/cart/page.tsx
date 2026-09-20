@@ -1,11 +1,24 @@
 'use client';
 
 import { useTranslations, useLocale } from 'next-intl';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link, useRouter } from '@/i18n/routing';
-import { useApp } from '@/contexts/AppContext';
-import { createOrder, createPayment, type SettlementModeValue } from '@/lib/api-client';
+import { useApp, lineUnitPrice } from '@/contexts/AppContext';
+import {
+  createOrder,
+  createPayment,
+  fetchMenuItems,
+  type SettlementModeValue,
+} from '@/lib/api-client';
 import TablePicker from '@/components/TablePicker';
+import OptionSheet, { OptionSheetItem } from '@/components/OptionSheet';
+import {
+  formatLineOptions,
+  QUICK_NOTES,
+  quickNoteLabel,
+  composeNote,
+  type OptionGroupPublic,
+} from '@/lib/menu-options';
 import {
   getStoredTableCode,
   setStoredTableCode,
@@ -42,6 +55,13 @@ const timeSlotKeyMap: Record<string, string> = {
   FULL_DAY: 'booking.fullDay',
 };
 
+/** datetime-local 的值（本地时间）→ ISO 字符串 */
+function localInputToIso(v: string): string | undefined {
+  if (!v) return undefined;
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
+}
+
 export default function CartPage() {
   const t = useTranslations();
   const locale = useLocale();
@@ -51,11 +71,13 @@ export default function CartPage() {
     bookingCart,
     setFoodQuantity,
     removeCartItem,
+    updateFoodLine,
     clearCart,
     user,
   } = useApp();
 
   const [note, setNote] = useState('');
+  const [noteChips, setNoteChips] = useState<string[]>([]);
   const [showPayment, setShowPayment] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -66,10 +88,18 @@ export default function CartPage() {
   const [showTableError, setShowTableError] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
 
+  // 外带取餐时间（仅外带）
+  const [pickupAt, setPickupAt] = useState('');
+
   // 结算方式：堂食默认最后结算；外带默认立即付款。顾客都能改。
   const [settlementMode, setSettlementMode] =
     useState<SettlementModeValue>('POSTPAID');
   const [modeTouched, setModeTouched] = useState(false);
+
+  // 行编辑（改规格 / 改特别需求）
+  const [editLineId, setEditLineId] = useState<string | null>(null);
+  const [editGroups, setEditGroups] = useState<OptionGroupPublic[]>([]);
+  const [editLoading, setEditLoading] = useState(false);
 
   useEffect(() => {
     setTableCode(getStoredTableCode());
@@ -108,15 +138,49 @@ export default function CartPage() {
   };
 
   const bookingTotal = bookingCart.reduce((s, i) => s + i.price, 0);
-  const foodSubtotal = foodCart.reduce((s, i) => s + i.price * i.quantity, 0);
+  const foodSubtotal = foodCart.reduce(
+    (s, i) => s + lineUnitPrice(i) * i.quantity,
+    0,
+  );
   const total = bookingTotal + foodSubtotal;
   const itemCount = foodCart.length + bookingCart.length;
 
-  const updateFoodQuantity = (id: string, delta: number) => {
-    const item = foodCart.find((i) => i.id === id);
-    if (!item) return;
-    setFoodQuantity(id, item.quantity + delta);
+  const editLine = foodCart.find((f) => f.lineId === editLineId) || null;
+  const editItem: OptionSheetItem | null = editLine
+    ? {
+        id: editLine.id,
+        name_zh: editLine.name_zh,
+        name_en: editLine.name_en,
+        name_th: editLine.name_th,
+        price: editLine.price,
+      }
+    : null;
+
+  /** 打开行编辑：选项组要回菜单接口取（购物车里只存了快照） */
+  const openLineEditor = async (lineId: string) => {
+    const line = foodCart.find((f) => f.lineId === lineId);
+    if (!line) return;
+    setEditLineId(lineId);
+    setEditLoading(true);
+    setEditGroups([]);
+    try {
+      const items = await fetchMenuItems();
+      const found = items.find((i) => i.id === line.id);
+      if (!found) {
+        setError(t('cart.itemGone'));
+        setEditLineId(null);
+        return;
+      }
+      setEditGroups(found.optionGroups ?? []);
+    } catch {
+      setError(t('cart.loadOptionsFailed'));
+      setEditLineId(null);
+    } finally {
+      setEditLoading(false);
+    }
   };
+
+  const orderNote = useMemo(() => composeNote(noteChips, note), [noteChips, note]);
 
   /**
    * 「确认下单」—— 生成订单（不付款），库存立即预占。
@@ -143,11 +207,15 @@ export default function CartPage() {
         items: foodCart.map((i) => ({
           menuItemId: i.id,
           quantity: i.quantity,
+          optionIds: i.options.map((o) => o.optionId),
+          note: i.note || undefined,
         })),
-        note: note || undefined,
+        note: orderNote || undefined,
         orderType,
         settlementMode,
         tableCode: orderType === 'DINE_IN' ? tableCode || undefined : undefined,
+        pickupAt:
+          orderType === 'TAKEAWAY' ? localInputToIso(pickupAt) : undefined,
       });
 
       // 立即付款 + PromptPay → 直接进支付页
@@ -263,41 +331,73 @@ export default function CartPage() {
                 {t('cart.foodItems')}
               </h3>
               <div className="space-y-2">
-                {foodCart.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex items-center gap-3 rounded-xl bg-white p-3 shadow-md"
-                  >
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-neutral-100 text-lg">
-                      🍽️
+                {foodCart.map((item) => {
+                  const optLines = formatLineOptions(item.options, locale);
+                  const unit = lineUnitPrice(item);
+                  return (
+                    <div key={item.lineId} className="rounded-xl bg-white p-3 shadow-md">
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-neutral-100 text-lg">
+                          🍽️
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <h4 className="text-sm font-semibold text-neutral-900">
+                            {getLocaleName(item)}
+                          </h4>
+                          {optLines.map((l, i) => (
+                            <p key={i} className="mt-0.5 text-[11px] text-neutral-500">
+                              {l}
+                            </p>
+                          ))}
+                          {item.note && (
+                            <p className="mt-0.5 text-[11px] text-accent-600">
+                              ※ {item.note}
+                            </p>
+                          )}
+                          <p className="mt-1 text-xs text-neutral-500">
+                            ฿{unit} × {item.quantity}
+                          </p>
+                          <div className="mt-1.5 flex items-center gap-3">
+                            <button
+                              onClick={() => openLineEditor(item.lineId)}
+                              className="text-[11px] font-medium text-primary-600 hover:text-primary-700"
+                            >
+                              {t('cart.editLine')}
+                            </button>
+                            <button
+                              onClick={() => removeCartItem(item.lineId)}
+                              className="text-[11px] font-medium text-error-500 hover:text-error-600"
+                            >
+                              {t('cart.remove')}
+                            </button>
+                          </div>
+                        </div>
+                        <div className="flex shrink-0 flex-col items-end gap-1.5">
+                          <span className="text-sm font-bold text-accent-600">
+                            ฿{Math.round(unit * item.quantity * 100) / 100}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => setFoodQuantity(item.lineId, item.quantity - 1)}
+                              className="flex h-7 w-7 items-center justify-center rounded-full bg-neutral-100 text-sm font-medium text-neutral-600 hover:bg-neutral-200"
+                            >
+                              −
+                            </button>
+                            <span className="w-5 text-center text-sm font-semibold">
+                              {item.quantity}
+                            </span>
+                            <button
+                              onClick={() => setFoodQuantity(item.lineId, item.quantity + 1)}
+                              className="flex h-7 w-7 items-center justify-center rounded-full bg-primary-50 text-sm font-medium text-primary-700 hover:bg-primary-100"
+                            >
+                              +
+                            </button>
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <h4 className="text-sm font-semibold text-neutral-900">
-                        {getLocaleName(item)}
-                      </h4>
-                      <p className="text-xs text-neutral-500">
-                        ฿{item.price} × {item.quantity}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => updateFoodQuantity(item.id, -1)}
-                        className="flex h-7 w-7 items-center justify-center rounded-full bg-neutral-100 text-sm font-medium text-neutral-600 hover:bg-neutral-200"
-                      >
-                        −
-                      </button>
-                      <span className="w-5 text-center text-sm font-semibold">
-                        {item.quantity}
-                      </span>
-                      <button
-                        onClick={() => updateFoodQuantity(item.id, 1)}
-                        className="flex h-7 w-7 items-center justify-center rounded-full bg-primary-50 text-sm font-medium text-primary-700 hover:bg-primary-100"
-                      >
-                        +
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -361,6 +461,24 @@ export default function CartPage() {
                 )}
               </>
             )}
+
+            {/* 外带：指定取餐时间 */}
+            {orderType === 'TAKEAWAY' && (
+              <div className="mt-3">
+                <label className="mb-1 block text-xs text-neutral-500">
+                  {t('cart.pickupTime')}
+                </label>
+                <input
+                  type="datetime-local"
+                  value={pickupAt}
+                  onChange={(e) => setPickupAt(e.target.value)}
+                  className="w-full rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2.5 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                />
+                <p className="mt-1 text-[10px] text-neutral-400">
+                  {t('cart.pickupTimeHint')}
+                </p>
+              </div>
+            )}
           </div>
 
           {/* 结算方式 */}
@@ -402,10 +520,38 @@ export default function CartPage() {
             </div>
           </div>
 
-          {/* Order Note */}
+          {/* Order Note（整单备注，带快捷标签） */}
           <div className="mb-4">
+            <p className="mb-1.5 text-xs font-semibold text-neutral-500">
+              {t('cart.orderNote')}
+            </p>
+            <div className="mb-2 flex flex-wrap gap-1.5">
+              {QUICK_NOTES.map((n) => {
+                const label = quickNoteLabel(n, locale);
+                const on = noteChips.includes(label);
+                return (
+                  <button
+                    key={n.zh}
+                    onClick={() =>
+                      setNoteChips((prev) =>
+                        prev.includes(label)
+                          ? prev.filter((c) => c !== label)
+                          : [...prev, label],
+                      )
+                    }
+                    className={`rounded-full border px-2.5 py-1 text-[11px] transition ${
+                      on
+                        ? 'border-accent-400 bg-accent-50 text-accent-700'
+                        : 'border-neutral-200 bg-white text-neutral-500 hover:border-neutral-300'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
             <textarea
-              placeholder={t('cart.orderNote')}
+              placeholder={t('cart.orderNotePlaceholder')}
               value={note}
               onChange={(e) => setNote(e.target.value)}
               className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
@@ -514,6 +660,27 @@ export default function CartPage() {
           </div>
         </div>
       )}
+
+      {/* 行编辑面板（改规格 / 改特别需求） */}
+      <OptionSheet
+        open={!!editLineId && !editLoading}
+        item={editItem}
+        groups={editGroups}
+        locale={locale}
+        initialOptionIds={editLine?.options.map((o) => o.optionId)}
+        initialNote={editLine?.note ?? null}
+        confirmLabel={t('common.save')}
+        onClose={() => setEditLineId(null)}
+        onConfirm={(res) => {
+          if (!editLineId) return;
+          updateFoodLine(editLineId, {
+            options: res.options,
+            optionsDelta: res.optionsDelta,
+            note: res.note,
+          });
+          setEditLineId(null);
+        }}
+      />
 
       {/* Table picker (dine-in) */}
       <TablePicker

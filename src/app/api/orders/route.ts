@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { runTx } from "@/lib/tx";
 import { bangkokDateString } from "@/lib/date-utils";
 import { isClosedDate } from "@/lib/closed-days";
 import { reserveStock, InsufficientStockError } from "@/lib/stock";
 import { generateOrderNumber } from "@/lib/orders";
+import { resolveOrderLines, OptionError } from "@/lib/menu-options-server";
 
 // Neon(us-east-2) ← 泰国：往返延迟较高，放宽函数执行上限
 export const maxDuration = 60;
@@ -72,41 +74,34 @@ export async function POST(request: NextRequest) {
       tableId = table.id;
     }
 
-    // Fetch menu items to calculate prices
-    const menuItemIds = items.map((i: any) => i.menuItemId);
-    const menuItems = await prisma.menuItem.findMany({
-      where: { id: { in: menuItemIds } },
-    });
-
-    const menuItemMap = new Map(menuItems.map((m) => [m.id, m]));
-
-    // Build order items and calculate subtotal
-    let subtotal = 0;
-    const orderItemsData = items.map((i: any) => {
-      const menuItem = menuItemMap.get(i.menuItemId);
-      if (!menuItem) {
-        throw new Error(`Menu item not found: ${i.menuItemId}`);
+    // ----- 外带取餐时间（仅外带；限「15 分钟前 ~ 7 天后」） -----
+    let pickupAt: Date | null = null;
+    if (orderType === "TAKEAWAY" && body.pickupAt) {
+      const d = new Date(body.pickupAt);
+      if (Number.isNaN(d.getTime())) {
+        return NextResponse.json({ error: "Invalid pickupAt" }, { status: 400 });
       }
-      const unitPrice = menuItem.price;
-      const totalPrice = unitPrice * i.quantity;
-      subtotal += totalPrice;
-      return {
-        menuItemId: i.menuItemId,
-        quantity: i.quantity,
-        unitPrice,
-        totalPrice,
-        note: i.note || null,
-      };
-    });
+      const now = Date.now();
+      if (d.getTime() < now - 15 * 60 * 1000 || d.getTime() > now + 7 * 24 * 3600 * 1000) {
+        return NextResponse.json(
+          { error: "pickupAt must be within the next 7 days" },
+          { status: 400 },
+        );
+      }
+      pickupAt = d;
+    }
 
     // Create order with items in a transaction; link booking if provided.
     // 订单号按当日流水生成，并发下可能撞号 —— 重试三次。
+    // 单价与选项一律由 resolveOrderLines 在服务端重算（不采信前端价格）。
     let order: { id: string } | null = null;
     let lastError: any = null;
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
         order = await runTx(async (tx) => {
           const orderNumber = await generateOrderNumber(tx, attempt);
+          const { lines, subtotal } = await resolveOrderLines(tx, items);
+
           const newOrder = await tx.order.create({
             data: {
               orderNumber,
@@ -119,9 +114,21 @@ export async function POST(request: NextRequest) {
               note: note || null,
               orderType,
               settlementMode,
+              pickupAt,
               status: "PENDING",
-              items: { create: orderItemsData },
+              items: {
+                create: lines.map((l) => ({
+                  menuItemId: l.menuItemId,
+                  quantity: l.quantity,
+                  unitPrice: l.unitPrice,
+                  totalPrice: l.totalPrice,
+                  optionKey: l.optionKey,
+                  note: l.note,
+                  ...(l.options ? { options: l.options as unknown as Prisma.InputJsonValue } : {}),
+                })),
+              },
             },
+            include: { items: true },
           });
 
           if (bookingId) {
@@ -132,10 +139,16 @@ export async function POST(request: NextRequest) {
           }
 
           // 下单即预占库存（不足时事务内抛 InsufficientStockError，整体回滚）
+          // 逐行带上 orderItemId，避免同菜多规格时预占写重
           await reserveStock(
             tx,
             newOrder.id,
-            orderItemsData.map((i) => ({ menuItemId: i.menuItemId, quantity: i.quantity })),
+            newOrder.items.map((it) => ({
+              menuItemId: it.menuItemId,
+              quantity: it.quantity,
+              optionKey: it.optionKey,
+              orderItemId: it.id,
+            })),
           );
 
           return newOrder;
@@ -162,6 +175,12 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(fullOrder || order, { status: 201 });
   } catch (error: any) {
+    if (error instanceof OptionError) {
+      return NextResponse.json(
+        { error: error.humanMessage, code: error.code },
+        { status: 400 },
+      );
+    }
     if (error instanceof InsufficientStockError) {
       return NextResponse.json(
         { error: `${error.itemName} 已售罄，请调整购物车` },

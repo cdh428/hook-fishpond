@@ -120,7 +120,22 @@
     "all": "全部",
     "searchPlaceholder": "搜索菜品...",
     "noResults": "没有找到相关菜品",
-    "tools": "工具"
+    "tools": "工具",
+    "hasOptions": "可选规格",
+    "soldOutAlternatives": "同类还有",
+    "searchResultCount": "找到 {n} 道",
+    "callService": "呼叫服务员",
+    "callSending": "呼叫中…",
+    "callSent": "已呼叫，稍等",
+    "bill": {
+      "title": "本桌账单",
+      "myTable": "本桌已点",
+      "summary": "共 {items} 件 · {amount}",
+      "view": "明细",
+      "nothingYet": "本桌还没有点单",
+      "payableHint": "当前已点金额（渔获另计）",
+      "settleAtCounter": "请用完餐后到收银台结账"
+    }
   },
   "cart": {
     "title": "购物车",
@@ -140,7 +155,13 @@
     "settleLaterHint": "用完/钓完后一次结清",
     "confirmOrder": "确认下单",
     "choosePayment": "选择支付方式",
-    "fishChargeNotice": "渔获前 1 公斤免费，超出部分按 60฿/公斤在结算时计入订单。"
+    "fishChargeNotice": "渔获前 1 公斤免费，超出部分按 60฿/公斤在结算时计入订单。",
+    "pickupTime": "取餐时间",
+    "pickupTimeHint": "外带可指定取餐时间，留空则尽快出餐",
+    "editLine": "改规格",
+    "itemGone": "有菜品已下架，请重新选择",
+    "loadOptionsFailed": "加载规格失败，请重试",
+    "orderNotePlaceholder": "整单备注，如：先上饮料、分开打包…"
   },
   "payment": {
     "title": "选择支付方式",
@@ -217,7 +238,9 @@
     "active": "进行中",
     "completed": "已完成",
     "served": "已送出",
-    "settled": "已结清"
+    "settled": "已结清",
+    "reorder": "再来一单",
+    "reordered": "已加入购物车"
   },
   "profile": {
     "title": "个人中心",
@@ -674,7 +697,10 @@
     "confirmPaidHint": "确认后订单结清，预占库存同时转为正式扣减。",
     "markPaidDirect": "不使用二维码，直接记为已收款",
     "settledToast": "已结清",
-    "settledAt": "结清时间"
+    "settledAt": "结清时间",
+    "newLine": "新增行（选好规格后加入）",
+    "addItem": "加菜",
+    "lineWillBeRemoved": "数量为 0，保存后将移除此行"
   },
   "printLabels": {
     "brandSub": "泰国 · 垂钓 · 美食",
@@ -685,7 +711,9 @@
     "time": "时间",
     "item": "品名",
     "qty": "数量",
-    "thanks": "谢谢光临，欢迎再来"
+    "thanks": "谢谢光临，欢迎再来",
+    "fishCharge": "渔获",
+    "discount": "折扣"
   },
   "printAgent": {
     "sentTo": "🖨️ 已发送到 {target}",
@@ -693,5 +721,58 @@
     "bridgeOffline": "未检测到本地打印服务，已改为弹出对话框打印",
     "noTarget": "未指定打印目标，已改为弹出对话框打印",
     "bridgeError": "打印服务出错（{error}），已改为弹出对话框打印"
+  },
+  "options": {
+    "subtitle": "选择规格与口味",
+    "required": "必选",
+    "optional": "可选",
+    "single": "单选",
+    "multi": "多选",
+    "maxSelect": "最多 {n} 项",
+    "specialRequest": "特别需求",
+    "specialPlaceholder": "如：不要香菜、少辣、面多一点…",
+    "needRequired": "请先选择「{name}」",
+    "total": "合计",
+    "addToCart": "加入购物车"
+  },
+  "adminOptions": {
+    "action": "选项",
+    "title": "规格与选项",
+    "subtitle": "配置份量、面型、加料等，顾客下单时可选",
+    "templateHint": "点模板快速添加，再按实际改价格",
+    "empty": "还没有选项组",
+    "emptyHint": "用上方模板，或点「添加选项组」从零配置",
+    "single": "单选",
+    "multi": "多选",
+    "required": "必选",
+    "optional": "可选",
+    "removeGroup": "删除选项组",
+    "maxSelect": "最多可选",
+    "unlimited": "不限",
+    "defaultOption": "设为默认",
+    "priceDelta": "加价",
+    "addOption": "添加选项",
+    "addGroup": "添加选项组",
+    "nameZhRequired": "选项组的中文名不能为空",
+    "optionNameZhRequired": "每个选项的中文名不能为空",
+    "needDefault": "必选组「{name}」需设一个默认项",
+    "applyTemplate": "套用模板",
+    "applyTitle": "批量套用选项模板",
+    "applyTo": "将套用到 {count} 个菜品",
+    "pickTemplates": "选择模板",
+    "mode": "套用方式",
+    "modeAdd": "追加（跳过同名）",
+    "modeReplace": "替换（清空后套用）",
+    "applySubmit": "开始套用",
+    "applyResult": "已处理 {items} 个菜品，新增 {created} 组，跳过 {skipped} 组"
+  },
+  "serviceCall": {
+    "assistance": "呼叫服务",
+    "water": "加水",
+    "tissue": "纸巾",
+    "bill": "买单",
+    "acknowledge": "已接收",
+    "acknowledged": "处理中",
+    "done": "完成"
   }
 }

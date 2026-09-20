@@ -7,7 +7,10 @@ import {
   applyOrderItemChange,
   releaseOrderStock,
   InsufficientStockError,
+  type TargetLine,
 } from "@/lib/stock";
+import { makeOptionKey, normalizeOptionKey } from "@/lib/menu-options";
+import { resolveOrderLines, OptionError } from "@/lib/menu-options-server";
 import {
   computeOrderTotals,
   checkStaffChange,
@@ -152,6 +155,12 @@ export async function PATCH(
     }
 
     // ---------- 3) 改单（增减菜品） ----------
+    //
+    // 行匹配按「菜品 + 选项」的 optionKey，不再按 menuItemId：
+    // 「加大蛋面」和「标准米粉」是同菜的两行，只按菜品匹配会互相吃掉。
+    //  - 已存在的行：沿用原单价与选项快照，只改数量（历史价不会被今天的价目洗掉）
+    //  - 新行：必须带 optionIds，由服务端按选项解析出单价
+    //  - quantity ≤ 0：删行（预占释放、已扣减部分回补库存）
     if (action === "items") {
       if (!isOrderEditable(order.status)) {
         return NextResponse.json(
@@ -159,23 +168,80 @@ export async function PATCH(
           { status: 400 },
         );
       }
-      const lines = Array.isArray(body.items) ? body.items : null;
-      if (!lines) {
+      const raw = Array.isArray(body.items) ? body.items : null;
+      if (!raw) {
         return NextResponse.json({ error: "items[] is required" }, { status: 400 });
       }
 
       let result;
       try {
         result = await runTx(async (tx) => {
-          const change = await applyOrderItemChange(
-            tx,
-            id,
-            lines.map((l: any) => ({
-              menuItemId: String(l.menuItemId),
-              quantity: Math.max(0, Math.floor(Number(l.quantity) || 0)),
-            })),
-            { adminName: admin.username },
+          const currentRows = await tx.orderItem.findMany({ where: { orderId: id } });
+          const existingByKey = new Map(
+            currentRows.map((r) => [normalizeOptionKey(r.optionKey, r.menuItemId), r]),
           );
+
+          const targets: TargetLine[] = [];
+          const needResolve: {
+            menuItemId: string;
+            quantity: number;
+            optionIds: string[];
+            note: string | null;
+          }[] = [];
+
+          for (const l of raw) {
+            const menuItemId = String(l?.menuItemId || "");
+            if (!menuItemId) continue;
+            const quantity = Math.max(0, Math.floor(Number(l?.quantity) || 0));
+            const optionIds = Array.isArray(l?.optionIds) ? l.optionIds.map(String) : [];
+            const key =
+              typeof l?.optionKey === "string" && l.optionKey.length > 0
+                ? l.optionKey
+                : makeOptionKey(menuItemId, optionIds);
+
+            if (quantity <= 0) {
+              // 删行：只需要行键，不必解析价格
+              targets.push({ menuItemId, quantity: 0, optionKey: key });
+              continue;
+            }
+
+            const ex = existingByKey.get(key);
+            if (ex) {
+              targets.push({
+                menuItemId,
+                quantity,
+                optionKey: key,
+                unitPrice: ex.unitPrice,
+                options: ex.options ?? null,
+                ...(l.note !== undefined ? { note: String(l.note ?? "").slice(0, 200) } : {}),
+              });
+            } else {
+              needResolve.push({
+                menuItemId,
+                quantity,
+                optionIds,
+                note: l.note != null ? String(l.note).slice(0, 200) : null,
+              });
+            }
+          }
+
+          if (needResolve.length > 0) {
+            const { lines } = await resolveOrderLines(tx, needResolve);
+            for (const rl of lines) {
+              targets.push({
+                menuItemId: rl.menuItemId,
+                quantity: rl.quantity,
+                optionKey: rl.optionKey,
+                unitPrice: rl.unitPrice,
+                options: rl.options,
+                note: rl.note,
+              });
+            }
+          }
+
+          const change = await applyOrderItemChange(tx, id, targets, {
+            adminName: admin.username,
+          });
 
           // 菜品行变了 → 重新计算小计 / 折扣 / 应付净额
           const totals = await recalcOrderTotals(tx, id);
@@ -189,6 +255,12 @@ export async function PATCH(
           return { change, totals };
         });
       } catch (e: any) {
+        if (e instanceof OptionError) {
+          return NextResponse.json(
+            { error: e.humanMessage, code: e.code },
+            { status: 400 },
+          );
+        }
         if (e instanceof InsufficientStockError) {
           return NextResponse.json(
             { error: `${e.itemName} 已售罄，无法增加数量` },

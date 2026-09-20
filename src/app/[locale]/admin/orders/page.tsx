@@ -4,6 +4,7 @@ import { useTranslations, useLocale } from 'next-intl';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   fetchAdminOrders,
+  fetchMenuItems,
   updateAdminOrderStatus,
   updateAdminOrderTable,
   updateAdminOrderItems,
@@ -12,8 +13,11 @@ import {
   addOrderWeighing,
   deleteOrderWeighing,
   settleAdminOrder,
+  fetchAdminServiceCalls,
+  updateServiceCall,
   type AdminOrderSummary,
   type DiscountTypeValue,
+  type ServiceCallRow,
 } from '@/lib/api-client';
 import {
   ORDER_STATUS_COLOR,
@@ -32,8 +36,10 @@ import {
   makeQrDataUrl,
   type PrintLabels,
 } from '@/lib/print-receipt';
+import { formatLineOptions, makeOptionKey } from '@/lib/menu-options';
 import { submitPrint, describeOutcome } from '@/lib/print-agent';
 import TablePicker from '@/components/TablePicker';
+import OptionSheet from '@/components/OptionSheet';
 
 type Tab = 'open' | 'awaiting' | 'settled' | 'cancelled';
 type Modal =
@@ -65,6 +71,9 @@ export default function AdminOrdersPage() {
   const [busy, setBusy] = useState(false);
   const [modal, setModal] = useState<Modal>(null);
   const [toast, setToast] = useState('');
+  // 呼叫服务看板：顾客按桌上的按钮 → 这里闪出来（15 秒轮询，失败静默）
+  const [calls, setCalls] = useState<ServiceCallRow[]>([]);
+  const [callBusy, setCallBusy] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -83,6 +92,33 @@ export default function AdminOrdersPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const loadCalls = useCallback(async () => {
+    try {
+      const res = await fetchAdminServiceCalls();
+      setCalls(res.pending);
+    } catch {
+      /* 静默：呼叫看板不该打断订单操作 */
+    }
+  }, []);
+
+  useEffect(() => {
+    loadCalls();
+    const id = window.setInterval(loadCalls, 15000);
+    return () => window.clearInterval(id);
+  }, [loadCalls]);
+
+  const handleCall = async (id: string, status: 'ACKNOWLEDGED' | 'DONE') => {
+    setCallBusy(id);
+    try {
+      await updateServiceCall(id, status);
+      await loadCalls();
+    } catch (e: any) {
+      setError(e?.message || t('common.error'));
+    } finally {
+      setCallBusy(null);
+    }
+  };
 
   const flash = (msg: string) => {
     setToast(msg);
@@ -132,6 +168,7 @@ export default function AdminOrdersPage() {
       postpaid: t('adminOrders.postpaid'),
       scanToPay: t('adminOrders.scanToPay'),
       paidAt: t('adminOrders.settledAt'),
+      pickupAt: t('cart.pickupTime'),
       thanks: t('printLabels.thanks'),
     }),
     [t],
@@ -219,6 +256,70 @@ export default function AdminOrdersPage() {
           </p>
         </div>
       </div>
+
+      {/* 呼叫服务看板（有未处理的呼叫才出现，处理完自动消失） */}
+      {calls.length > 0 && (
+        <div className="mb-4 space-y-2">
+          {calls.map((c) => {
+            const icon =
+              (
+                { ASSISTANCE: '🛎️', WATER: '💧', TISSUE: '🧻', BILL: '💰' } as Record<
+                  string,
+                  string
+                >
+              )[c.type] ?? '🛎️';
+            const pending = c.status === 'PENDING';
+            const label =
+              (
+                {
+                  ASSISTANCE: t('serviceCall.assistance'),
+                  WATER: t('serviceCall.water'),
+                  TISSUE: t('serviceCall.tissue'),
+                  BILL: t('serviceCall.bill'),
+                } as Record<string, string>
+              )[c.type] ?? t('serviceCall.assistance');
+            return (
+              <div
+                key={c.id}
+                className={`flex items-center gap-2.5 rounded-xl px-3 py-2.5 ${
+                  pending ? 'bg-error-50 ring-1 ring-error-200' : 'bg-warning-50'
+                }`}
+              >
+                <span className="text-lg">{icon}</span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-neutral-800">
+                    {c.tableCode} · {label}
+                  </p>
+                  <p className="text-[11px] text-neutral-500">
+                    {new Date(c.createdAt).toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                    {!pending && ` · ${t('serviceCall.acknowledged')}`}
+                  </p>
+                </div>
+                {pending ? (
+                  <button
+                    onClick={() => handleCall(c.id, 'ACKNOWLEDGED')}
+                    disabled={callBusy === c.id}
+                    className="shrink-0 rounded-lg bg-error-500 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                  >
+                    {t('serviceCall.acknowledge')}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleCall(c.id, 'DONE')}
+                    disabled={callBusy === c.id}
+                    className="shrink-0 rounded-lg bg-neutral-800 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                  >
+                    {t('serviceCall.done')}
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* 筛选 */}
       <div className="mb-3 flex items-center gap-2">
@@ -462,6 +563,15 @@ function OrderCard({
                 ? `🥡 ${t('orderType.takeaway')}`
                 : `🪑 ${order.table.code}`}
             </button>
+            {order.pickupAt && (
+              <span className="rounded bg-primary-50 px-1.5 py-0.5 font-medium text-primary-700">
+                ⏰ {t('cart.pickupTime')}{' '}
+                {new Date(order.pickupAt).toLocaleTimeString([], {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </span>
+            )}
             <span>·</span>
             <span>{time}</span>
             <span>·</span>
@@ -487,14 +597,27 @@ function OrderCard({
 
       {/* 菜品 */}
       <div className="space-y-0.5 rounded-lg bg-neutral-50 px-2.5 py-2">
-        {(order.items || []).map((it: any) => (
-          <div key={it.id} className="flex justify-between text-xs">
-            <span className="text-neutral-700">
-              {pickName(it.menuItem, locale)} × {it.quantity}
-            </span>
-            <span className="text-neutral-500">฿{it.totalPrice}</span>
-          </div>
-        ))}
+        {(order.items || []).map((it: any) => {
+          const optLines = formatLineOptions(it.options, locale);
+          return (
+            <div key={it.id}>
+              <div className="flex justify-between text-xs">
+                <span className="min-w-0 flex-1 text-neutral-700">
+                  {pickName(it.menuItem, locale)} × {it.quantity}
+                </span>
+                <span className="shrink-0 text-neutral-500">฿{it.totalPrice}</span>
+              </div>
+              {optLines.map((l, i) => (
+                <p key={i} className="pl-3 text-[11px] text-neutral-500">
+                  {l}
+                </p>
+              ))}
+              {it.note && (
+                <p className="pl-3 text-[11px] text-accent-600">※ {it.note}</p>
+              )}
+            </div>
+          );
+        })}
         {order.fishWeightKg > 0 && (
           <div className="flex justify-between text-xs text-primary-700">
             <span>
@@ -941,7 +1064,24 @@ function DiscountModal({
 
 /* =====================================================================
  * 改单（增减菜品）
+ *
+ * 行匹配按「菜品 + 规格」的 optionKey —— 过去只按 menuItemId，
+ * 一份订单里出现「加大蛋面」和「标准米粉」时会把两行搅在一起。
  * ===================================================================*/
+interface EditRow {
+  /** 行匹配键；新增行先占位，保存时由服务端按 optionIds 重算 */
+  key: string;
+  menuItemId: string;
+  name: string;
+  optionLines: string[];
+  optionIds: string[];
+  note: string | null;
+  quantity: number;
+  /** 仅供显示；服务端会按选项重算，不信这个值 */
+  unitPrice: number;
+  isNew: boolean;
+}
+
 function ItemsModal({
   order,
   locale,
@@ -956,27 +1096,97 @@ function ItemsModal({
   onError: (m: string) => void;
 }) {
   const t = useTranslations();
-  const [rows, setRows] = useState<{ menuItemId: string; name: string; quantity: number }[]>(
-    (order.items || []).map((it: any) => ({
-      menuItemId: it.menuItemId,
-      name: pickName(it.menuItem, locale),
-      quantity: it.quantity,
-    })),
+  const [rows, setRows] = useState<EditRow[]>(
+    (order.items || []).map((it: any) => {
+      const snapshot = Array.isArray(it.options) ? it.options : [];
+      const optionIds = snapshot.map((o: any) => o.optionId);
+      return {
+        key: it.optionKey || makeOptionKey(it.menuItemId, optionIds),
+        menuItemId: it.menuItemId,
+        name: pickName(it.menuItem, locale),
+        optionLines: formatLineOptions(snapshot, locale),
+        optionIds,
+        note: it.note ?? null,
+        quantity: it.quantity,
+        unitPrice: it.unitPrice,
+        isNew: false,
+      };
+    }),
   );
+
   const [busy, setBusy] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [menu, setMenu] = useState<any[] | null>(null);
+  const [menuBusy, setMenuBusy] = useState(false);
+  const [query, setQuery] = useState('');
+  const [sheetItem, setSheetItem] = useState<any | null>(null);
 
   const step = (idx: number, delta: number) =>
     setRows((list) =>
       list.map((r, i) => (i === idx ? { ...r, quantity: Math.max(0, r.quantity + delta) } : r)),
     );
 
+  const openAdd = async () => {
+    setAddOpen(true);
+    if (menu || menuBusy) return;
+    setMenuBusy(true);
+    try {
+      setMenu(await fetchMenuItems());
+    } catch (e: any) {
+      onError(e?.message || t('common.error'));
+      setAddOpen(false);
+    } finally {
+      setMenuBusy(false);
+    }
+  };
+
+  const appendRow = (item: any, res?: { optionIds: string[]; options: any[]; optionsDelta: number }) => {
+    const optionIds = res?.optionIds ?? [];
+    const key = makeOptionKey(item.id, optionIds);
+    setRows((list) => {
+      const idx = list.findIndex((r) => r.key === key);
+      if (idx >= 0) {
+        return list.map((r, i) => (i === idx ? { ...r, quantity: r.quantity + 1 } : r));
+      }
+      return [
+        ...list,
+        {
+          key,
+          menuItemId: item.id,
+          name: locale === 'en' ? item.name_en : locale === 'th' ? item.name_th : item.name_zh,
+          optionLines: formatLineOptions(res?.options ?? [], locale),
+          optionIds,
+          note: null,
+          quantity: 1,
+          unitPrice: Math.round((Number(item.price) + Number(res?.optionsDelta ?? 0)) * 100) / 100,
+          isNew: true,
+        },
+      ];
+    });
+  };
+
   const save = async () => {
     setBusy(true);
     try {
-      const res = await updateAdminOrderItems(
-        order.id,
-        rows.filter((r) => r.quantity > 0).map((r) => ({ menuItemId: r.menuItemId, quantity: r.quantity })),
-      );
+      const payload = rows
+        // 原有行数量归零 = 删行，必须发出去；新增行数量归零可直接丢掉
+        .filter((r) => r.quantity > 0 || !r.isNew)
+        .map((r) =>
+          r.isNew
+            ? {
+                menuItemId: r.menuItemId,
+                quantity: r.quantity,
+                optionIds: r.optionIds,
+                ...(r.note ? { note: r.note } : {}),
+              }
+            : {
+                menuItemId: r.menuItemId,
+                quantity: r.quantity,
+                optionKey: r.key,
+                optionIds: r.optionIds,
+              },
+        );
+      const res = await updateAdminOrderItems(order.id, payload as any);
       onSaved(res.order, res.restored ?? 0);
     } catch (e: any) {
       onError(e?.message || t('common.error'));
@@ -984,6 +1194,16 @@ function ItemsModal({
       setBusy(false);
     }
   };
+
+  const q = query.trim().toLowerCase();
+  const menuFiltered = (menu ?? []).filter((i) => {
+    if (!q) return true;
+    return [i.name_zh, i.name_en, i.name_th]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase()
+      .includes(q);
+  });
 
   return (
     <Sheet title={`✏️ ${t('adminOrders.editItems')} · ${order.orderNumber}`} onClose={onClose}>
@@ -993,29 +1213,106 @@ function ItemsModal({
 
       <div className="space-y-2">
         {rows.map((r, idx) => (
-          <div
-            key={r.menuItemId}
-            className="flex items-center justify-between rounded-xl bg-neutral-50 px-3 py-2"
-          >
-            <span className="min-w-0 flex-1 truncate text-sm text-neutral-800">{r.name}</span>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => step(idx, -1)}
-                className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-sm font-medium text-neutral-600 shadow-sm"
-              >
-                −
-              </button>
-              <span className="w-6 text-center text-sm font-semibold">{r.quantity}</span>
-              <button
-                onClick={() => step(idx, 1)}
-                className="flex h-7 w-7 items-center justify-center rounded-full bg-primary-50 text-sm font-medium text-primary-700"
-              >
-                +
-              </button>
+          <div key={r.key} className="rounded-xl bg-neutral-50 px-3 py-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="min-w-0 flex-1 truncate text-sm text-neutral-800">
+                {r.name}
+                {r.isNew && (
+                  <span className="ml-1.5 rounded bg-primary-100 px-1.5 py-0.5 text-[10px] font-medium text-primary-700">
+                    {t('adminOrders.newLine')}
+                  </span>
+                )}
+              </span>
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  onClick={() => step(idx, -1)}
+                  className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-sm font-medium text-neutral-600 shadow-sm"
+                >
+                  −
+                </button>
+                <span className="w-6 text-center text-sm font-semibold">{r.quantity}</span>
+                <button
+                  onClick={() => step(idx, 1)}
+                  className="flex h-7 w-7 items-center justify-center rounded-full bg-primary-50 text-sm font-medium text-primary-700"
+                >
+                  +
+                </button>
+              </div>
             </div>
+            {r.optionLines.length > 0 && (
+              <div className="mt-0.5">
+                {r.optionLines.map((l, i) => (
+                  <p key={i} className="text-[11px] text-neutral-500">
+                    {l}
+                  </p>
+                ))}
+              </div>
+            )}
+            {r.note && <p className="text-[11px] text-accent-600">※ {r.note}</p>}
+            {r.quantity === 0 && (
+              <p className="mt-0.5 text-[11px] text-error-500">
+                {t('adminOrders.lineWillBeRemoved')}
+              </p>
+            )}
           </div>
         ))}
       </div>
+
+      {/* 加菜 */}
+      {!addOpen ? (
+        <button
+          onClick={() => void openAdd()}
+          className="mt-3 w-full rounded-xl border border-dashed border-neutral-300 py-2.5 text-sm font-medium text-neutral-600 hover:border-primary-300 hover:text-primary-700"
+        >
+          ＋ {t('adminOrders.addItem')}
+        </button>
+      ) : (
+        <div className="mt-3 rounded-xl border border-neutral-200 p-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-neutral-600">
+              {t('adminOrders.addItem')}
+            </span>
+            <button
+              onClick={() => setAddOpen(false)}
+              className="text-xs text-neutral-400 hover:text-neutral-600"
+            >
+              {t('common.close')}
+            </button>
+          </div>
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={t('menu.searchPlaceholder')}
+            className="mt-2 w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none"
+          />
+          <div className="mt-2 max-h-52 overflow-y-auto">
+            {menuBusy ? (
+              <p className="py-3 text-center text-xs text-neutral-400">
+                {t('common.loading')}
+              </p>
+            ) : (
+              menuFiltered.slice(0, 60).map((i) => (
+                <button
+                  key={i.id}
+                  onClick={() => {
+                    if ((i.optionGroups ?? []).length > 0) {
+                      setSheetItem(i);
+                    } else {
+                      appendRow(i);
+                    }
+                  }}
+                  className="flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-neutral-50"
+                >
+                  <span className="min-w-0 truncate text-neutral-700">
+                    {locale === 'en' ? i.name_en : locale === 'th' ? i.name_th : i.name_zh}
+                  </span>
+                  <span className="shrink-0 text-xs text-neutral-400">฿{i.price}</span>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
 
       <button
         onClick={save}
@@ -1024,6 +1321,20 @@ function ItemsModal({
       >
         {busy ? t('common.saving') : t('adminOrders.saveChanges')}
       </button>
+
+      {/* 加菜时选规格（与顾客端同一个面板，口径一致） */}
+      <OptionSheet
+        open={!!sheetItem}
+        item={sheetItem}
+        groups={sheetItem?.optionGroups ?? []}
+        locale={locale}
+        onClose={() => setSheetItem(null)}
+        onConfirm={(res) => {
+          if (!sheetItem) return;
+          appendRow(sheetItem, res);
+          setSheetItem(null);
+        }}
+      />
     </Sheet>
   );
 }

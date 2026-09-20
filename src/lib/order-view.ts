@@ -1,4 +1,5 @@
 import type { ReceiptOrder, ReceiptItem } from '@/lib/print-receipt';
+import { formatLineOptions, type OrderLineOption } from '@/lib/menu-options';
 
 /**
  * 订单视图工具 —— 把 API 返回的原始订单转成界面/小票需要的形状。
@@ -71,6 +72,11 @@ export function toReceiptOrder(raw: any, locale: string): ReceiptOrder {
     unitPrice: it.unitPrice,
     totalPrice: it.totalPrice,
     note: it.note ?? null,
+    // 规格 / 面型 / 加料：后厨单必须逐行打出来，否则会做错
+    optionLines: formatLineOptions(
+      (Array.isArray(it.options) ? it.options : []) as OrderLineOption[],
+      locale,
+    ),
   }));
 
   const tableName = raw.table
@@ -93,6 +99,7 @@ export function toReceiptOrder(raw: any, locale: string): ReceiptOrder {
     discountNote: raw.discountNote ?? null,
     totalPrice: raw.totalPrice ?? 0,
     note: raw.note ?? null,
+    pickupAt: raw.pickupAt ?? null,
   };
 }
 

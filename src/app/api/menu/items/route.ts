@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
 import { buildStockViews, LOW_STOCK_DISPLAY_THRESHOLD } from "@/lib/stock";
+import { optionGroupsInclude, toPublicGroups } from "@/lib/menu-options-server";
 
 // MenuItem has no top-level type column — its menu type derives from its
 // category. Flatten it onto the item so API consumers get `type` directly.
@@ -16,6 +17,8 @@ async function withStockField(items: any[]) {
     const v = views.get(it.id)!;
     return {
       ...withMenuType(it),
+      // 选项组：顾客端据此弹规格面板；无选项的菜品为一空数组
+      optionGroups: toPublicGroups(it.optionGroups),
       stock: {
         soldOut: v.soldOut,
         remaining:
@@ -27,6 +30,11 @@ async function withStockField(items: any[]) {
     };
   });
 }
+
+const PUBLIC_INCLUDE = {
+  category: true,
+  optionGroups: optionGroupsInclude,
+};
 
 export async function GET(request: NextRequest) {
   try {
@@ -40,7 +48,7 @@ export async function GET(request: NextRequest) {
           isPopular: true,
           isActive: true,
         },
-        include: { category: true },
+        include: PUBLIC_INCLUDE,
         orderBy: { sortOrder: "asc" },
       });
 
@@ -52,7 +60,7 @@ export async function GET(request: NextRequest) {
         isActive: true,
         ...(categoryId ? { categoryId } : {}),
       },
-      include: { category: true },
+      include: PUBLIC_INCLUDE,
       orderBy: { sortOrder: "asc" },
     });
 

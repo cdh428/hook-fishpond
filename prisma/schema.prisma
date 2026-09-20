@@ -162,8 +162,54 @@ model MenuItem {
   soldOut        Boolean      @default(false)  // 手动强制售罄
   movements      StockMovement[]
   orderItems     OrderItem[]
+  optionGroups   MenuItemOptionGroup[]  // 规格 / 面型 / 加料 等可选项
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
+}
+
+// ===== 菜品选项（规格 / 面型 / 加料 …） =====
+// 一个菜品下挂若干个「选项组」，每个组里若干个「选项」。
+// 组可设为必选/单选（份量、面型）或多选（加料）；选项可带加价。
+// 选项加价只影响单价，不影响库存口径——扣库存仍按菜品自身数量。
+model MenuItemOptionGroup {
+  id            String              @id @default(cuid())
+  menuItemId    String
+  menuItem      MenuItem            @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  name_zh       String
+  name_en       String
+  name_th       String
+  selectionType OptionSelectionType @default(SINGLE)
+  isRequired    Boolean             @default(false)
+  maxSelect     Int?                // MULTI 的勾选上限（空=不限）
+  sortOrder     Int                 @default(0)
+  isActive      Boolean             @default(true)
+  options       MenuItemOption[]
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  @@index([menuItemId, sortOrder])
+}
+
+model MenuItemOption {
+  id         String              @id @default(cuid())
+  groupId    String
+  group      MenuItemOptionGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  name_zh    String
+  name_en    String
+  name_th    String
+  priceDelta Float               @default(0)  // 加价（可为 0 或负数）
+  isDefault  Boolean             @default(false)
+  sortOrder  Int                 @default(0)
+  isActive   Boolean             @default(true)
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+
+  @@index([groupId, sortOrder])
+}
+
+enum OptionSelectionType {
+  SINGLE  // 单选（份量、面型）
+  MULTI   // 多选（加料）
 }
 
 enum MenuType {
@@ -212,8 +258,38 @@ model DiningTable {
   area      TableArea               // 区域：茅草屋 / 咖啡厅
   isActive  Boolean  @default(true)
   orders    Order[]
+  serviceCalls ServiceCall[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ===== 呼叫服务（桌上按钮 → 后台提示） =====
+model ServiceCall {
+  id        String            @id @default(cuid())
+  tableId   String?
+  table     DiningTable?      @relation(fields: [tableId], references: [id])
+  tableCode String                          // 冗余存桌号，方便后台直接显示
+  type      ServiceCallType   @default(ASSISTANCE)
+  status    ServiceCallStatus @default(PENDING)
+  note      String?
+  handledBy String?
+  handledAt DateTime?
+  createdAt DateTime          @default(now())
+
+  @@index([status, createdAt])
+}
+
+enum ServiceCallType {
+  ASSISTANCE  // 需要服务员
+  WATER       // 加水
+  TISSUE      // 纸巾 / 餐具
+  BILL        // 请结账
+}
+
+enum ServiceCallStatus {
+  PENDING       // 待处理
+  ACKNOWLEDGED  // 已响应（人在路上）
+  DONE          // 已完成
 }
 
 enum TableArea {
@@ -252,6 +328,8 @@ model Order {
   totalPrice    Float         // 应付净额 = subtotal + fishCharge − discountAmount
   note          String?
   orderType     OrderType     @default(DINE_IN)
+  // 外带：顾客指定的取餐时间（堂食为空）。后厨据此排单，小票上也会打出来。
+  pickupAt      DateTime?
   status        OrderStatus   @default(PENDING)
   // ----- 结算方式：先付 / 后付（用完后统一结算） -----
   settlementMode SettlementMode @default(POSTPAID)
@@ -284,6 +362,12 @@ model OrderItem {
   totalPrice  Float
   // 下单即预占的数量（不改变 stockQty、不写流水）；结算时预占转正式扣减后归零
   reservedQty Int      @default(0)
+  // ----- 选项快照（规格 / 面型 / 加料）-----
+  // 存三语名称与加价快照：选项日后改名或删除，历史订单仍如实还原。
+  options     Json?
+  // 行匹配键 = menuItemId + '|' + 升序 optionId 列表。后台改单靠它区分
+  // 「同菜品不同规格」的独立行，不能再用 menuItemId 单独匹配。
+  optionKey   String?
   note        String?
   createdAt   DateTime @default(now())
 }

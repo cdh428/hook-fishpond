@@ -21,6 +21,7 @@ import {
   MENU_TYPE_EMOJI,
   type MenuTypeValue,
 } from '@/lib/menu-types';
+import { ItemOptionsEditor, ApplyTemplateModal } from '@/components/ItemOptionsEditor';
 
 type MenuType = MenuTypeValue;
 
@@ -319,6 +320,10 @@ export default function AdminMenuPage() {
   const [moveSaving, setMoveSaving] = useState(false);
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  // ---------- 规格选项（单个编辑 / 批量套用模板）----------
+  const [optionsItem, setOptionsItem] = useState<MenuItem | null>(null);
+  const [showTemplateApply, setShowTemplateApply] = useState(false);
 
   // 空大类不能是死胡同：以前「工具」大类下一个分类都没有，按钮又被写死 disabled，
   // 于是无论怎么点都到不了工具类。现在允许在移动面板里直接给该大类建一个分类。
@@ -638,6 +643,14 @@ export default function AdminMenuPage() {
                           ↗ {t('adminMove.action')}
                         </button>
                       )}
+                      {!selectMode && (
+                        <button
+                          onClick={() => setOptionsItem(item)}
+                          className="rounded px-2 py-1 text-xs text-accent-600 hover:bg-accent-50"
+                        >
+                          ⚙ {t('adminOptions.action')}
+                        </button>
+                      )}
                       <button
                         onClick={() => openItemForm(item)}
                         className="rounded px-2 py-1 text-xs text-primary-600 hover:bg-primary-50"
@@ -666,6 +679,13 @@ export default function AdminMenuPage() {
                 <span className="flex-1 px-2 text-xs font-medium text-white">
                   {t('adminMove.selected', { count: selectedIds.length })}
                 </span>
+                <button
+                  onClick={() => setShowTemplateApply(true)}
+                  disabled={selectedIds.length === 0}
+                  className="rounded-lg bg-white/15 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                >
+                  ⚙ {t('adminOptions.applyTemplate')}
+                </button>
                 <button
                   onClick={() => openMove(selectedIds)}
                   disabled={selectedIds.length === 0}
@@ -1211,6 +1231,22 @@ export default function AdminMenuPage() {
           </div>
         </div>
       )}
+      {/* 规格选项编辑器（单个菜品） */}
+      <ItemOptionsEditor
+        open={!!optionsItem}
+        itemId={optionsItem?.id ?? null}
+        itemName={optionsItem ? getLocaleName(optionsItem) : ''}
+        onClose={() => setOptionsItem(null)}
+        onSaved={() => loadData()}
+      />
+
+      {/* 批量套用选项模板 */}
+      <ApplyTemplateModal
+        open={showTemplateApply}
+        itemIds={selectedIds}
+        onClose={() => setShowTemplateApply(false)}
+        onDone={() => loadData()}
+      />
     </>
   );
 }

@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { runTx } from "@/lib/tx";
 import { bangkokDateString } from "@/lib/date-utils";
+import { normalizeOptionKey, round2 } from "@/lib/menu-options";
 
 /**
  * 库存核心库 —— 全站库存余量、预占、扣减、回补的唯一真相来源。
@@ -187,16 +188,58 @@ export async function buildStockViews(
   return map;
 }
 
-/** 合并订单行（同一菜品多行 → 累加），过滤掉非正数量 */
-function mergeLines(
-  lines: { menuItemId: string; quantity: number }[],
-): Map<string, number> {
-  const merged = new Map<string, number>();
+/**
+ * 库存行 —— 带选项的订单行。
+ *
+ * 关键：库存永远按 **菜品** 口径算（选项加价不改库存），
+ * 但「合并同一行」必须按 **选项** 区分——「加大蛋面」与「标准米粉」
+ * 是两行，合并了就分不清、改单也会错。
+ */
+export interface StockLine {
+  menuItemId: string;
+  quantity: number;
+  /** 行匹配键（含选项）；缺省视为「无选项」行 */
+  optionKey?: string | null;
+  /** 已知的订单行 id（新建后立刻预占时用，最可靠） */
+  orderItemId?: string;
+}
+
+/**
+ * 按「行匹配键」合并订单行（同菜同选项才累加），过滤掉非正数量。
+ * 返回 Map<lineKey, { menuItemId, quantity, orderItemId? }>。
+ */
+function mergeLines(lines: StockLine[]) {
+  const merged = new Map<
+    string,
+    { menuItemId: string; quantity: number; orderItemId?: string }
+  >();
   for (const l of lines) {
     if (!l.menuItemId || !(l.quantity > 0)) continue;
-    merged.set(l.menuItemId, (merged.get(l.menuItemId) ?? 0) + l.quantity);
+    const key = normalizeOptionKey(l.optionKey, l.menuItemId);
+    const prev = merged.get(key);
+    if (prev) {
+      prev.quantity += l.quantity;
+      if (!prev.orderItemId && l.orderItemId) prev.orderItemId = l.orderItemId;
+    } else {
+      merged.set(key, {
+        menuItemId: l.menuItemId,
+        quantity: l.quantity,
+        orderItemId: l.orderItemId,
+      });
+    }
   }
   return merged;
+}
+
+/** 按菜品汇总合并后的行数量（库存校验用 —— 库存是菜品口径，不分选项） */
+function sumByItem(
+  merged: Map<string, { menuItemId: string; quantity: number }>,
+): Map<string, number> {
+  const byItem = new Map<string, number>();
+  for (const v of merged.values()) {
+    byItem.set(v.menuItemId, (byItem.get(v.menuItemId) ?? 0) + v.quantity);
+  }
+  return byItem;
 }
 
 /** 对涉及的菜品行加 FOR UPDATE 行锁（并发下单/改单时串行化，避免超卖） */
@@ -259,30 +302,47 @@ export async function assertCanHold(
 /**
  * 预占库存（必须在订单事务内调用，且订单行已写入）。
  * 顾客「确认下单」后调用：校验可用量，不足直接拦下；只写 reservedQty，不动 stockQty。
+ *
+ * 注意：可用量按**菜品**合计校验（选项不分库存），但 reservedQty 必须
+ * **逐行**写入——同一菜品有「加大」「标准」两行时，写错会把预占翻倍。
  */
 export async function reserveStock(
   tx: Prisma.TransactionClient,
   orderId: string,
-  lines: { menuItemId: string; quantity: number }[],
+  lines: StockLine[],
 ): Promise<void> {
   const merged = mergeLines(lines);
   if (merged.size === 0) return;
-  const ids = [...merged.keys()];
+  const ids = [...new Set([...merged.values()].map((v) => v.menuItemId))];
   await lockItems(tx, ids);
 
+  const byItem = sumByItem(merged);
   const items = await tx.menuItem.findMany({ where: { id: { in: ids } } });
+
   for (const item of items) {
-    const qty = merged.get(item.id)!;
+    const qty = byItem.get(item.id) ?? 0;
+    if (qty <= 0) continue;
     const st = item.stockType as StockTypeValue;
     if (st === "NONE") continue; // 不管理库存，无需预占
 
     await assertCanHold(tx, { ...item, stockType: st }, qty, orderId);
 
     if (st === "PURCHASED") {
-      await tx.orderItem.updateMany({
-        where: { orderId, menuItemId: item.id },
-        data: { reservedQty: qty },
-      });
+      // 逐行写预占：能拿到行 id 就直接定位，否则按「菜品 + 选项键」匹配
+      for (const [key, v] of merged) {
+        if (v.menuItemId !== item.id) continue;
+        if (v.orderItemId) {
+          await tx.orderItem.update({
+            where: { id: v.orderItemId },
+            data: { reservedQty: v.quantity },
+          });
+        } else {
+          await tx.orderItem.updateMany({
+            where: { orderId, menuItemId: item.id, optionKey: key },
+            data: { reservedQty: v.quantity },
+          });
+        }
+      }
     }
     // MADE：无需写 reservedQty —— 未取消订单的数量本身就已计入当日占用
   }
@@ -421,25 +481,56 @@ export async function restoreStock(
 }
 
 /**
+ * 后台改单的目标行。
+ *
+ * `optionKey` 决定「改的是哪一行」——同菜品不同选项是不同行。
+ * 新增行必须带上 `unitPrice` / `options`（由路由用 resolveOrderLines 按选项解析），
+ * 否则会按菜品基础价落库，与顾客看到的价格不一致。
+ */
+export interface TargetLine {
+  menuItemId: string;
+  quantity: number;
+  optionKey?: string | null;
+  unitPrice?: number;
+  options?: unknown;
+  note?: string | null;
+}
+
+/**
  * 后台改单：把订单菜品调整为 targetLines（完整目标状态，非增量）。
  *  - 减量/删行 → 预占部分释放，已扣减部分回补库存（"后台改单减少要加回库存"）
  *  - 加量/加行 → 校验可用量后增加预占
  * 返回被回补（真实加回库存）的总件数。
+ *
+ * 匹配口径：按「菜品 + 选项」的行匹配键，不再按 menuItemId —
+ * 否则「加大蛋面」和「标准米粉」会被当成同一行，一改就把另一行吃掉。
  */
 export async function applyOrderItemChange(
   tx: Prisma.TransactionClient,
   orderId: string,
-  targetLines: { menuItemId: string; quantity: number }[],
+  targetLines: TargetLine[],
   opts: { adminName?: string } = {},
 ): Promise<{ restored: number }> {
   const merged = mergeLines(targetLines);
-  const current = await tx.orderItem.findMany({
+
+  // 目标行的完整信息（单价 / 选项快照 / 备注），按行键索引
+  const targetSource = new Map<string, TargetLine>();
+  for (const l of targetLines) {
+    if (!l.menuItemId || !(l.quantity > 0)) continue;
+    const key = normalizeOptionKey(l.optionKey, l.menuItemId);
+    if (!targetSource.has(key)) targetSource.set(key, l);
+  }
+
+  const incoming = await tx.orderItem.findMany({
     where: { orderId },
     include: { menuItem: true },
   });
 
   const ids = [
-    ...new Set([...current.map((o) => o.menuItemId), ...merged.keys()]),
+    ...new Set([
+      ...incoming.map((o) => o.menuItemId),
+      ...[...merged.values()].map((v) => v.menuItemId),
+    ]),
   ];
   await lockItems(tx, ids);
 
@@ -449,36 +540,54 @@ export async function applyOrderItemChange(
 
   let restored = 0;
 
+  /** 回补某一行的「已扣减部分」并写流水，返回回补件数 */
+  const revertRow = async (oi: (typeof incoming)[number]): Promise<number> => {
+    const st = ((fresh.get(oi.menuItemId) ?? oi.menuItem).stockType) as StockTypeValue;
+    const alreadyDeducted = Math.max(0, oi.quantity - oi.reservedQty);
+    if (alreadyDeducted <= 0 || st === "NONE") return 0;
+    if (st === "PURCHASED") {
+      await tx.$executeRaw`
+        UPDATE "MenuItem"
+        SET "stockQty" = COALESCE("stockQty", 0) + ${alreadyDeducted}
+        WHERE "id" = ${oi.menuItemId}
+      `;
+    }
+    await tx.stockMovement.create({
+      data: {
+        itemId: oi.menuItemId,
+        type: "CANCEL",
+        quantity: alreadyDeducted,
+        orderId,
+        adminName: opts.adminName ?? null,
+        note: "后台改单删除菜品回补",
+      },
+    });
+    return alreadyDeducted;
+  };
+
+  // 当前行按「行匹配键」归组（历史行 optionKey 为 NULL → 归入无选项键）
+  const currentByKey = new Map<string, typeof incoming>();
+  for (const oi of incoming) {
+    const key = normalizeOptionKey(oi.optionKey, oi.menuItemId);
+    currentByKey.set(key, [...(currentByKey.get(key) ?? []), oi]);
+  }
+
   // 1) 处理已有行：改量 或 删除
-  for (const oi of current) {
+  for (const [key, rows] of currentByKey) {
+    // 同一键多行（历史脏数据）→ 只保留第一行，其余按删行回补
+    for (let i = 1; i < rows.length; i++) {
+      restored += await revertRow(rows[i]);
+      await tx.orderItem.delete({ where: { id: rows[i].id } });
+    }
+
+    const oi = rows[0];
     const item = fresh.get(oi.menuItemId) ?? oi.menuItem;
     const st = item.stockType as StockTypeValue;
-    const targetQty = merged.get(oi.menuItemId) ?? 0;
-    merged.delete(oi.menuItemId);
+    const targetQty = merged.get(key)?.quantity ?? 0;
 
     if (targetQty <= 0) {
       // 删行：释放预占 + 回补已扣减部分
-      const alreadyDeducted = Math.max(0, oi.quantity - oi.reservedQty);
-      if (alreadyDeducted > 0 && st === "PURCHASED") {
-        await tx.$executeRaw`
-          UPDATE "MenuItem"
-          SET "stockQty" = COALESCE("stockQty", 0) + ${alreadyDeducted}
-          WHERE "id" = ${oi.menuItemId}
-        `;
-      }
-      if (alreadyDeducted > 0 && st !== "NONE") {
-        await tx.stockMovement.create({
-          data: {
-            itemId: oi.menuItemId,
-            type: "CANCEL",
-            quantity: alreadyDeducted,
-            orderId,
-            adminName: opts.adminName ?? null,
-            note: "后台改单删除菜品回补",
-          },
-        });
-        restored += alreadyDeducted;
-      }
+      restored += await revertRow(oi);
       await tx.orderItem.delete({ where: { id: oi.id } });
       continue;
     }
@@ -515,35 +624,52 @@ export async function applyOrderItemChange(
       }
     }
 
-    if (targetQty !== oi.quantity || newReserved !== oi.reservedQty) {
-      await tx.orderItem.update({
-        where: { id: oi.id },
-        data: {
-          quantity: targetQty,
-          totalPrice: targetQty * oi.unitPrice,
-          reservedQty: st === "NONE" ? 0 : newReserved,
-        },
-      });
-    }
+    const src = targetSource.get(key);
+    const unitPrice =
+      src?.unitPrice !== undefined ? round2(src.unitPrice) : oi.unitPrice;
+
+    await tx.orderItem.update({
+      where: { id: oi.id },
+      data: {
+        quantity: targetQty,
+        unitPrice,
+        totalPrice: round2(targetQty * unitPrice),
+        reservedQty: st === "NONE" ? 0 : newReserved,
+        // 只在显式传了选项/备注时覆盖快照，避免把原有规格洗掉
+        ...(src?.options !== undefined
+          ? { options: (src.options ?? null) as Prisma.InputJsonValue }
+          : {}),
+        ...(src?.note !== undefined ? { note: src.note } : {}),
+      },
+    });
   }
 
   // 2) 剩下的就是新增行
-  for (const [menuItemId, qty] of merged) {
-    const item = fresh.get(menuItemId);
+  for (const [key, v] of merged) {
+    if (currentByKey.has(key)) continue;
+    const item = fresh.get(v.menuItemId);
     if (!item) continue;
     const st = item.stockType as StockTypeValue;
     if (st !== "NONE") {
-      await assertCanHold(tx, { ...item, stockType: st }, qty, orderId);
+      await assertCanHold(tx, { ...item, stockType: st }, v.quantity, orderId);
     }
+
+    const src = targetSource.get(key);
+    const unitPrice = src?.unitPrice !== undefined ? round2(src.unitPrice) : item.price;
+    const options = src?.options ?? null;
+
     await tx.orderItem.create({
       data: {
         orderId,
-        menuItemId,
-        quantity: qty,
-        unitPrice: item.price,
-        totalPrice: item.price * qty,
+        menuItemId: v.menuItemId,
+        quantity: v.quantity,
+        unitPrice,
+        totalPrice: round2(unitPrice * v.quantity),
+        optionKey: key,
+        note: src?.note ?? null,
+        ...(options ? { options: options as Prisma.InputJsonValue } : {}),
         // 新增行同样立即预占（外购库存）；MADE 靠当日数量天然占位
-        reservedQty: st === "PURCHASED" ? qty : 0,
+        reservedQty: st === "PURCHASED" ? v.quantity : 0,
       },
     });
   }

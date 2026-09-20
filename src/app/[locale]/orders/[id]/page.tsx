@@ -17,6 +17,7 @@ import {
   type PrintLabels,
 } from '@/lib/print-receipt';
 import { submitPrint, describeOutcome } from '@/lib/print-agent';
+import { formatLineOptions } from '@/lib/menu-options';
 
 /**
  * 顾客订单详情 —— 下单成功后落地页，也是「我的订单」点进来的详情页。
@@ -65,6 +66,7 @@ export default function OrderDetailPage() {
       postpaid: t('adminOrders.postpaid'),
       scanToPay: t('adminOrders.scanToPay'),
       paidAt: t('adminOrders.settledAt'),
+      pickupAt: t('cart.pickupTime'),
       thanks: t('printLabels.thanks'),
     }),
     [t],
@@ -195,6 +197,14 @@ export default function OrderDetailPage() {
               {mode === 'PREPAID' ? t('adminOrders.prepaid') : t('adminOrders.postpaid')}
             </span>
           </div>
+          {order.pickupAt && (
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-neutral-500">{t('cart.pickupTime')}</span>
+              <span className="font-medium text-accent-700">
+                {new Date(order.pickupAt).toLocaleString()}
+              </span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -204,20 +214,28 @@ export default function OrderDetailPage() {
           {t('orders.details')}
         </h3>
         <div className="space-y-2">
-          {(order.items || []).map((it: any) => (
-            <div key={it.id} className="flex items-start justify-between gap-2 text-sm">
-              <span className="min-w-0 flex-1 text-neutral-800">
-                {pickName(it.menuItem, locale)}
-                <span className="ml-1 text-xs text-neutral-400">× {it.quantity}</span>
-                {it.note && (
-                  <span className="mt-0.5 block text-[11px] text-warning-600">
-                    ※ {it.note}
-                  </span>
-                )}
-              </span>
-              <span className="shrink-0 text-neutral-500">฿{it.totalPrice}</span>
-            </div>
-          ))}
+          {(order.items || []).map((it: any) => {
+            const optLines = formatLineOptions(it.options, locale);
+            return (
+              <div key={it.id} className="flex items-start justify-between gap-2 text-sm">
+                <span className="min-w-0 flex-1 text-neutral-800">
+                  {pickName(it.menuItem, locale)}
+                  <span className="ml-1 text-xs text-neutral-400">× {it.quantity}</span>
+                  {optLines.map((l, i) => (
+                    <span key={i} className="mt-0.5 block text-[11px] text-neutral-500">
+                      {l}
+                    </span>
+                  ))}
+                  {it.note && (
+                    <span className="mt-0.5 block text-[11px] text-warning-600">
+                      ※ {it.note}
+                    </span>
+                  )}
+                </span>
+                <span className="shrink-0 text-neutral-500">฿{it.totalPrice}</span>
+              </div>
+            );
+          })}
         </div>
 
         <div className="mt-3 space-y-1 border-t border-neutral-100 pt-3 text-sm">

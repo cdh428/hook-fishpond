@@ -42,6 +42,8 @@ export interface PrintLabels {
   postpaid: string;
   scanToPay: string;
   paidAt: string;
+  /** 外带取餐时间行的标签 */
+  pickupAt?: string;
   thanks: string;
   poweredBy?: string;
 }
@@ -52,6 +54,8 @@ export interface ReceiptItem {
   unitPrice: number;
   totalPrice: number;
   note?: string | null;
+  /** 该行的规格 / 面型 / 加料（已本地化，如「份量: 加大 (+฿10)」） */
+  optionLines?: string[];
 }
 
 export interface ReceiptOrder {
@@ -70,6 +74,8 @@ export interface ReceiptOrder {
   discountNote?: string | null;
   totalPrice: number;
   note?: string | null;
+  /** 外带取餐时间（后端厨据此排单） */
+  pickupAt?: string | Date | null;
 }
 
 /** HTML 转义，避免菜名里的 < > & 破坏小票结构 */
@@ -164,6 +170,11 @@ function orderMeta(order: ReceiptOrder, labels: PrintLabels): string {
       <div class="row"><span class="k">${esc(labels.table)}</span><span class="v">${esc(seat)}</span></div>
       <div class="row"><span class="k">${esc(labels.time)}</span><span class="v">${esc(fmtTime(order.createdAt))}</span></div>
       ${
+        order.pickupAt
+          ? `<div class="row"><span class="k">${esc(labels.pickupAt || labels.time)}</span><span class="v">${esc(fmtTime(order.pickupAt))}</span></div>`
+          : ''
+      }
+      ${
         order.customerName
           ? `<div class="row"><span class="k">${esc(labels.customer)}</span><span class="v">${esc(order.customerName)}</span></div>`
           : ''
@@ -174,20 +185,27 @@ function orderMeta(order: ReceiptOrder, labels: PrintLabels): string {
     </div>`;
 }
 
+/**
+ * 菜品行。规格 / 面型 / 加料紧跟菜名下方逐行打出 ——
+ * 后厨单尤其重要：不打出「加大／蛋面／加煎蛋」就等于没下单。
+ * 用 .item-note 的样式（10px，左缩进），后厨单走 .big 放大也不会抢主行。
+ */
 function itemsBlock(order: ReceiptOrder, labels: PrintLabels, withPrices: boolean): string {
   return `
     <div class="dashed"></div>
     <div class="items">
       ${order.items
-        .map(
-          (it) => `
+        .map((it) => {
+          const opts = Array.isArray(it.optionLines) ? it.optionLines : [];
+          return `
         <div class="item">
           <span class="n">${esc(it.name)}</span>
           <span class="q">× ${esc(it.quantity)}</span>
           ${withPrices ? `<span class="q" style="min-width:16mm;text-align:right">${esc(money(it.totalPrice))}</span>` : ''}
         </div>
-        ${it.note ? `<div class="item-note">※ ${esc(it.note)}</div>` : ''}`,
-        )
+        ${opts.map((o) => `<div class="item-note">› ${esc(o)}</div>`).join('')}
+        ${it.note ? `<div class="item-note">※ ${esc(it.note)}</div>` : ''}`;
+        })
         .join('')}
     </div>`;
 }

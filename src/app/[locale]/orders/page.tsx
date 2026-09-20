@@ -2,9 +2,10 @@
 
 import { useTranslations, useLocale } from 'next-intl';
 import { useEffect, useState } from 'react';
-import { Link } from '@/i18n/routing';
+import { Link, useRouter } from '@/i18n/routing';
 import { useApp } from '@/contexts/AppContext';
 import { fetchOrders } from '@/lib/api-client';
+import { formatLineOptions, type OrderLineOption } from '@/lib/menu-options';
 
 const statusColors: Record<string, string> = {
   PENDING: 'bg-warning-100 text-warning-600',
@@ -35,6 +36,20 @@ const timeSlotKeyMap: Record<string, string> = {
 
 type FilterTab = 'all' | 'active' | 'completed';
 
+/** 「再来一单」要用的原始行信息（菜品 id + 选项 id + 备注） */
+interface ReorderLine {
+  menuItemId: string;
+  name_zh: string;
+  name_en: string;
+  name_th: string;
+  quantity: number;
+  optionIds: string[];
+  optionSnapshot: OrderLineOption[];
+  note: string | null;
+  price: number;
+  optionsDelta: number;
+}
+
 interface OrderView {
   id: string;
   orderNumber: string;
@@ -44,7 +59,10 @@ interface OrderView {
     name_th: string;
     qty: number;
     price: number;
+    options: OrderLineOption[];
+    note: string | null;
   }[];
+  reorder: ReorderLine[];
   total: number;
   status: string;
   orderType: 'DINE_IN' | 'TAKEAWAY';
@@ -68,6 +86,27 @@ interface OrderView {
 function mapOrder(raw: any): OrderView {
   const booking =
     raw.bookings && raw.bookings.length > 0 ? raw.bookings[0] : null;
+
+  const reorder: ReorderLine[] = [];
+  for (const it of raw.items || []) {
+    if (!it.menuItemId || !it.menuItem) continue; // 菜品已下架 → 跳过，不能复购
+    const snapshot: OrderLineOption[] = Array.isArray(it.options) ? it.options : [];
+    const optionsDelta = snapshot.reduce((s, o) => s + (Number(o.priceDelta) || 0), 0);
+    reorder.push({
+      menuItemId: it.menuItemId,
+      name_zh: it.menuItem.name_zh ?? '',
+      name_en: it.menuItem.name_en ?? '',
+      name_th: it.menuItem.name_th ?? '',
+      quantity: it.quantity,
+      optionIds: snapshot.map((o) => o.optionId),
+      optionSnapshot: snapshot,
+      note: it.note ?? null,
+      // 基础价 = 单价 − 选项加价（「再来一单」要按当前菜价重算，不用历史价）
+      price: Math.round(((Number(it.unitPrice) || 0) - optionsDelta) * 100) / 100,
+      optionsDelta,
+    });
+  }
+
   return {
     id: raw.id,
     orderNumber: raw.orderNumber,
@@ -77,7 +116,10 @@ function mapOrder(raw: any): OrderView {
       name_th: it.menuItem?.name_th ?? '',
       qty: it.quantity,
       price: it.unitPrice,
+      options: Array.isArray(it.options) ? it.options : [],
+      note: it.note ?? null,
     })),
+    reorder,
     total: raw.totalPrice,
     status: raw.status,
     orderType: raw.orderType ?? 'DINE_IN',
@@ -106,11 +148,13 @@ function mapOrder(raw: any): OrderView {
 export default function OrdersPage() {
   const t = useTranslations();
   const locale = useLocale();
-  const { user } = useApp();
+  const router = useRouter();
+  const { user, addFoodBatch } = useApp();
   const [filter, setFilter] = useState<FilterTab>('all');
   const [orders, setOrders] = useState<OrderView[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reorderedFrom, setReorderedFrom] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -167,6 +211,30 @@ export default function OrdersPage() {
       : locale === 'th'
         ? b.pondName_th
         : b.pondName_zh;
+  };
+
+  /**
+   * 「再来一单」——把历史订单的菜品（连同规格与备注）整单加回购物车。
+   *
+   * 按**当前**菜价与选项加价重算，不沿用历史价；购物车按「菜品 + 选项 + 备注」
+   * 判重，所以重复点同一单只会把数量加上去，不会出现两行一模一样的。
+   */
+  const handleReorder = (order: OrderView) => {
+    if (order.reorder.length === 0) return;
+    addFoodBatch(
+      order.reorder.map((l) => ({
+        id: l.menuItemId,
+        name_zh: l.name_zh,
+        name_en: l.name_en,
+        name_th: l.name_th,
+        price: l.price,
+        options: l.optionSnapshot,
+        optionsDelta: l.optionsDelta,
+        note: l.note,
+      })),
+    );
+    setReorderedFrom(order.id);
+    router.push('/cart');
   };
 
   return (
@@ -330,29 +398,54 @@ export default function OrdersPage() {
               )}
 
               {/* Items */}
-              <div className="space-y-1">
-                {order.items.map((item, idx) => (
-                  <div key={idx} className="flex justify-between text-sm">
-                    <span className="text-neutral-700">
-                      {getLocaleName(item)} × {item.qty}
-                    </span>
-                    <span className="text-neutral-500">
-                      ฿{item.price * item.qty}
-                    </span>
-                  </div>
-                ))}
+              <div className="space-y-1.5">
+                {order.items.map((item, idx) => {
+                  const optLines = formatLineOptions(item.options, locale);
+                  return (
+                    <div key={idx}>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-neutral-700">
+                          {getLocaleName(item)} × {item.qty}
+                        </span>
+                        <span className="shrink-0 text-neutral-500">
+                          ฿{Math.round(item.price * item.qty * 100) / 100}
+                        </span>
+                      </div>
+                      {optLines.map((l, i) => (
+                        <p key={i} className="text-[11px] text-neutral-500">
+                          {l}
+                        </p>
+                      ))}
+                      {item.note && (
+                        <p className="text-[11px] text-accent-600">※ {item.note}</p>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
 
               {/* Footer */}
-              <div className="mt-3 flex items-center justify-between border-t border-neutral-100 pt-3">
-                <span className="text-xs text-neutral-400">{order.date}</span>
-                <div className="flex items-center gap-3">
+              <div className="mt-3 border-t border-neutral-100 pt-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-neutral-400">{order.date}</span>
                   <span className="font-bold text-accent-600">
                     ฿{order.total}
                   </span>
+                </div>
+                <div className="mt-2.5 flex items-center gap-2">
+                  {order.reorder.length > 0 && (
+                    <button
+                      onClick={() => handleReorder(order)}
+                      className="flex-1 rounded-lg bg-accent-500 py-2 text-xs font-semibold text-white transition hover:bg-accent-600"
+                    >
+                      {reorderedFrom === order.id
+                        ? t('orders.reordered')
+                        : t('orders.reorder')}
+                    </button>
+                  )}
                   <Link
                     href={`/orders/${order.id}`}
-                    className="rounded-lg bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-700 hover:bg-primary-100"
+                    className="flex-1 rounded-lg bg-primary-50 py-2 text-center text-xs font-medium text-primary-700 hover:bg-primary-100"
                   >
                     {t('orders.details')}
                   </Link>

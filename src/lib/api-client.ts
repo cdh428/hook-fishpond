@@ -1,3 +1,9 @@
+import type {
+  OptionGroupPublic,
+  OptionGroupInput,
+  OrderLineOption,
+} from './menu-options';
+
 /**
  * Shared frontend API client.
  * Wraps fetch(), injects the `x-user-id` header (from localStorage) for
@@ -37,6 +43,14 @@ export interface ApiMenuItem {
   type: MenuType;
   imageUrl?: string;
   imageThumbUrl?: string;
+  /** 规格 / 面型 / 加料 等选项组；无选项的菜品为空数组 */
+  optionGroups?: OptionGroupPublic[];
+  /** 库存视图（公开菜单接口附带） */
+  stock?: {
+    soldOut: boolean;
+    remaining: number | null;
+    stockType: 'NONE' | 'MADE' | 'PURCHASED';
+  };
 }
 
 export interface ApiPond {
@@ -162,6 +176,8 @@ function normalizeMenuItem(raw: any): ApiMenuItem {
     type: raw.category?.type ?? raw.type,
     imageUrl: raw.imageUrl ?? undefined,
     imageThumbUrl: raw.imageThumbUrl ?? undefined,
+    optionGroups: Array.isArray(raw.optionGroups) ? raw.optionGroups : [],
+    stock: raw.stock ?? undefined,
   };
 }
 
@@ -268,13 +284,22 @@ export interface CreateOrderInput {
   userId?: string;
   customerName: string;
   customerPhone: string;
-  items: { menuItemId: string; quantity: number; note?: string }[];
+  items: {
+    menuItemId: string;
+    quantity: number;
+    /** 勾选的选项 id（份量 / 面型 / 加料…）；服务端据此重算单价 */
+    optionIds?: string[];
+    /** 该行的特别需求（少葱、面硬一点…） */
+    note?: string;
+  }[];
   bookingId?: string;
   note?: string;
   orderType?: OrderTypeValue;
   tableCode?: string;
   /** 结算方式：立即付款 / 最后结算 */
   settlementMode?: SettlementModeValue;
+  /** 外带指定的取餐时间（ISO 字符串） */
+  pickupAt?: string;
 }
 
 export async function createOrder(input: CreateOrderInput): Promise<any> {
@@ -499,10 +524,23 @@ export async function updateAdminOrderStatus(
   });
 }
 
-/** Admin — 改单：传入改后的完整菜品行；减量会自动把库存加回去 */
+/**
+ * Admin — 改单：传入改后的完整菜品行；减量会自动把库存加回去。
+ *
+ * 每一行必须能唯一定位到「菜品 + 规格」：
+ *  - 已有行：带 `optionKey`（从订单行原样回传），只改数量时服务端沿用原单价
+ *  - 新增行：不带 `optionKey`，但必须带 `optionIds`，由服务端按选项解析单价
+ *  - `quantity: 0` 表示删行（预占释放、已扣减部分回补库存）
+ */
 export async function updateAdminOrderItems(
   orderId: string,
-  items: { menuItemId: string; quantity: number }[],
+  items: {
+    menuItemId: string;
+    quantity: number;
+    optionKey?: string;
+    optionIds?: string[];
+    note?: string;
+  }[],
 ): Promise<{ order: any; restored: number }> {
   return request<any>(`/api/admin/orders/${orderId}`, {
     method: 'PATCH',
@@ -1305,5 +1343,163 @@ export async function sendLineReport(opts: {
 export async function unbindLineTarget(id: string): Promise<{ ok: boolean }> {
   return request<{ ok: boolean }>(`/api/admin/line?id=${encodeURIComponent(id)}`, {
     method: 'DELETE',
+  });
+}
+
+// ---------- 菜品选项（规格 / 面型 / 加料） ----------
+
+export interface ItemOptionsResponse {
+  item: {
+    id: string;
+    name_zh: string;
+    name_en: string;
+    name_th: string;
+    price: number;
+  };
+  groups: OptionGroupPublic[];
+}
+
+/** 后台 — 读取某菜品的选项组 */
+export async function fetchItemOptions(itemId: string): Promise<ItemOptionsResponse> {
+  return request<ItemOptionsResponse>(`/api/admin/menu/items/${itemId}/options`);
+}
+
+/** 后台 — 整体替换某菜品的选项组（未提交的组会被删除） */
+export async function saveItemOptions(
+  itemId: string,
+  groups: OptionGroupInput[],
+): Promise<{ ok: boolean; groups: OptionGroupPublic[] }> {
+  return request<{ ok: boolean; groups: OptionGroupPublic[] }>(
+    `/api/admin/menu/items/${itemId}/options`,
+    { method: 'PUT', body: JSON.stringify({ groups }) },
+  );
+}
+
+/** 后台 — 批量套用选项模板 */
+export async function applyOptionTemplate(input: {
+  itemIds: string[];
+  templateKeys: string[];
+  mode?: 'add' | 'replace';
+}): Promise<{ ok: boolean; mode: string; items: number; created: number; skipped: number }> {
+  return request<{ ok: boolean; mode: string; items: number; created: number; skipped: number }>(
+    '/api/admin/menu/options/template',
+    { method: 'POST', body: JSON.stringify(input) },
+  );
+}
+
+// ---------- 本桌账单（堂食后付：顾客看自己这桌点了多少） ----------
+
+export interface TableBillItem {
+  id: string;
+  menuItemId: string;
+  name_zh: string;
+  name_en: string;
+  name_th: string;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+  options: OrderLineOption[] | null;
+  note: string | null;
+}
+
+export interface TableBillOrder {
+  id: string;
+  orderNumber: string;
+  status: string;
+  settlementMode: SettlementModeValue;
+  createdAt: string;
+  pickupAt: string | null;
+  subtotal: number;
+  fishWeightKg: number;
+  fishCharge: number;
+  discountAmount: number;
+  totalPrice: number;
+  note: string | null;
+  items: TableBillItem[];
+}
+
+export interface TableBill {
+  table: {
+    id: string;
+    code: string;
+    name_zh: string;
+    name_en: string;
+    name_th: string;
+    area: string;
+  };
+  summary: {
+    orderCount: number;
+    itemCount: number;
+    itemSubtotal: number;
+    payable: number;
+    unsettled: boolean;
+  };
+  orders: TableBillOrder[];
+}
+
+/** 本桌账单；桌号无效或网络异常时返回 null（不打断点餐） */
+export async function fetchTableBill(code: string): Promise<TableBill | null> {
+  try {
+    return await request<TableBill>(`/api/orders/table/${encodeURIComponent(code)}`);
+  } catch {
+    return null;
+  }
+}
+
+// ---------- 呼叫服务员 ----------
+
+export type ServiceCallTypeValue = 'ASSISTANCE' | 'WATER' | 'TISSUE' | 'BILL';
+export type ServiceCallStatusValue = 'PENDING' | 'ACKNOWLEDGED' | 'DONE';
+
+export interface ServiceCallRow {
+  id: string;
+  tableId: string | null;
+  tableCode: string;
+  type: ServiceCallTypeValue;
+  status: ServiceCallStatusValue;
+  note: string | null;
+  handledBy: string | null;
+  handledAt: string | null;
+  createdAt: string;
+}
+
+export async function createServiceCall(input: {
+  tableCode: string;
+  type?: ServiceCallTypeValue;
+  note?: string;
+}): Promise<{ call: ServiceCallRow; deduped: boolean }> {
+  return request<{ call: ServiceCallRow; deduped: boolean }>('/api/service-calls', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export async function fetchTableServiceCalls(
+  tableCode: string,
+): Promise<{ calls: ServiceCallRow[] }> {
+  return request<{ calls: ServiceCallRow[] }>(
+    `/api/service-calls?tableCode=${encodeURIComponent(tableCode)}`,
+  );
+}
+
+export async function fetchAdminServiceCalls(): Promise<{
+  pending: ServiceCallRow[];
+  recent: ServiceCallRow[];
+  pendingCount: number;
+}> {
+  return request<{
+    pending: ServiceCallRow[];
+    recent: ServiceCallRow[];
+    pendingCount: number;
+  }>('/api/admin/service-calls');
+}
+
+export async function updateServiceCall(
+  id: string,
+  status: ServiceCallStatusValue,
+): Promise<{ ok: boolean; call: ServiceCallRow }> {
+  return request<{ ok: boolean; call: ServiceCallRow }>('/api/admin/service-calls', {
+    method: 'PATCH',
+    body: JSON.stringify({ id, status }),
   });
 }
