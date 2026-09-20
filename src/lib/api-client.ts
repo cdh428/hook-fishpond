@@ -594,9 +594,22 @@ export async function deleteOrderWeighing(
   );
 }
 
+/** 订单结算时的库存过账结果 */
+export interface StockPostResult {
+  /** 本次转正出库的总件数（含补记） */
+  consumed: number;
+  /** 其中属于「漏扣补记」的件数；> 0 说明这单以前扣不到库存 */
+  healed: number;
+}
+
 export interface SettleResult {
   order: any;
   status?: string;
+  /**
+   * 结算时的库存过账结果。
+   *  `healed > 0` = 这单有「下单时没预占到」的菜品，本次结算已在台账上补记出库。
+   */
+  stock?: StockPostResult;
   totals?: {
     subtotal: number;
     fishWeightKg: number;
@@ -1265,10 +1278,63 @@ export interface ReconcileResult {
     bookValue: number;
     ledgerValue: number;
   };
+  /** 订单 ↔ 库存 挂钩体检（有没有「卖了没扣」的单） */
+  orderLink?: OrderLinkAudit;
+}
+
+// ---------- 订单 ↔ 库存 挂钩体检 ----------
+
+export type OrderLinkKind =
+  | 'SETTLED_UNPOSTED'
+  | 'OPEN_UNRESERVED'
+  | 'STALE_RESERVATION'
+  | 'RESIDUAL_RESERVATION';
+
+export interface OrderLinkLine {
+  orderItemId: string;
+  name: string;
+  quantity: number;
+  reservedQty: number;
+  posted: number;
+}
+
+export interface OrderLinkIssue {
+  kind: OrderLinkKind;
+  orderId: string;
+  orderNumber: string;
+  status: string;
+  settlementMode: string;
+  createdAt: string;
+  closedAt: string | null;
+  ageHours: number;
+  lines: OrderLinkLine[];
+  gap: number;
+}
+
+export interface OrderLinkAudit {
+  issues: OrderLinkIssue[];
+  counts: Record<OrderLinkKind, number>;
 }
 
 export async function fetchStockReconcile(): Promise<ReconcileResult> {
   return request<ReconcileResult>(`/api/admin/stock/reconcile`);
+}
+
+/** 补记一张「卖了没扣」的订单（幂等） */
+export async function repairOrderStock(orderId: string): Promise<{
+  ok: boolean;
+  orderId: string;
+  consumed: number;
+  healed: number;
+  message: string;
+}> {
+  return request<{
+    ok: boolean;
+    orderId: string;
+    consumed: number;
+    healed: number;
+    message: string;
+  }>(`/api/admin/orders/${orderId}/stock-repair`, { method: 'POST' });
 }
 
 export async function recalcStock(itemIds?: string[]): Promise<{

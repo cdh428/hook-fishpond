@@ -68,7 +68,7 @@ export async function POST(
 
     // ---------- 结清 ----------
     if (action === "confirm" || action === "mark-paid") {
-      await runTx(async (tx) => {
+      const stock = await runTx(async (tx) => {
         const totals = await recalcOrderTotals(tx, id);
 
         await tx.payment.upsert({
@@ -90,7 +90,7 @@ export async function POST(
           },
         });
 
-        await settleOrder(tx, id, { adminName: admin.username });
+        return settleOrder(tx, id, { adminName: admin.username });
       });
 
       const settled = await prisma.order.findUnique({
@@ -102,6 +102,8 @@ export async function POST(
         order: settled,
         status: "SUCCESSFUL",
         mask: maskPromptPayId(promptPayId),
+        // healed > 0 → 这单有下单时没预占到的菜品，本次结算已补记出库
+        stock,
       });
     }
 

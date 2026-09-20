@@ -135,7 +135,7 @@ export async function PUT(
       if (!admin) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
-      const updated = await runTx(async (tx) => {
+      const result = await runTx(async (tx) => {
         const p = await tx.payment.update({
           where: { id },
           data: {
@@ -149,17 +149,22 @@ export async function PUT(
           select: { settlementMode: true },
         });
 
+        let stock = { consumed: 0, healed: 0 };
         if (order?.settlementMode === "PREPAID") {
           // 先付订单：付款到账即把「预占」转为正式库存扣减，后厨流程照常继续
-          await consumeReservation(tx, payment.orderId, { adminName: admin.username });
+          stock = await consumeReservation(tx, payment.orderId, {
+            adminName: admin.username,
+          });
         } else {
           // 后付订单：这一步就是结清
-          await settleOrder(tx, payment.orderId, { adminName: admin.username });
+          stock = await settleOrder(tx, payment.orderId, {
+            adminName: admin.username,
+          });
         }
 
-        return p;
+        return { payment: p, stock };
       });
-      return NextResponse.json({ status: updated.status });
+      return NextResponse.json({ status: result.payment.status, stock: result.stock });
     }
 
     if (action === "admin_reject") {

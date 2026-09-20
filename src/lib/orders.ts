@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { bangkokDateString } from "@/lib/date-utils";
-import { bangkokDayRange, consumeReservation } from "@/lib/stock";
+import { bangkokDayRange, consumeReservation, type ConsumeResult } from "@/lib/stock";
 
 /**
  * 订单计费核心库 —— 渔获、折扣、金额口径的唯一计算来源。
@@ -138,18 +138,23 @@ export async function recalcOrderTotals(tx: Tx, orderId: string): Promise<OrderT
 
 /**
  * 结清订单：预占转正式扣减 + 状态置为 SETTLED。
- * 幂等（consumeReservation 内部有 stockConsumedAt 守卫）。
+ *
+ * 返回出库结果：`healed > 0` 表示这单有「下单时未预占到」的菜品，
+ * 本次结算在台账上补记了出库（否则就会变成「卖了没扣」）。
+ *
+ * 幂等（consumeReservation 内部有 stockConsumedAt 守卫 + 台账幂等键）。
  */
 export async function settleOrder(
   tx: Tx,
   orderId: string,
   opts: { adminName?: string } = {},
-): Promise<void> {
-  await consumeReservation(tx, orderId, opts);
+): Promise<ConsumeResult> {
+  const result = await consumeReservation(tx, orderId, opts);
   await tx.order.update({
     where: { id: orderId },
     data: { status: "SETTLED", settledAt: new Date() },
   });
+  return result;
 }
 
 export interface StaffChangeCheck {

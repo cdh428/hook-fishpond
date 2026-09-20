@@ -357,23 +357,51 @@ export async function reserveStock(
   }
 }
 
+export interface ConsumeResult {
+  /** 本次转正出库的总件数（含补记） */
+  consumed: number;
+  /**
+   * 其中属于「结算补记」的件数 —— 即下单时**没有预占到**、
+   * 若只信 reservedQty 就会漏扣的部分。
+   * 结算接口应把它回显给收银员：> 0 说明这单以前是漏扣的。
+   */
+  healed: number;
+}
+
 /**
  * 预占转正式扣减（结算时点：后付=结清，先付=付款到账）。
- *  - PURCHASED：stockQty −= reservedQty，写 SALE 流水，reservedQty 归零。
- *  - MADE：数量已在当日占用里，仅写 SALE 流水备查。
- * 幂等：reservedQty 已为 0 时不会重复扣减。
+ *
+ * ## 铁律：以台账为准，不是「信 reservedQty」
+ *
+ * 只按 `reservedQty` 扣减曾造成真实的「卖了没扣」——典型场景：
+ * 下单时该菜品还是「不管理库存（NONE）」，后来被改成「外购」，
+ * 于是下单没预占、结算时 `reservedQty = 0`，扣减被**静默跳过**。
+ *
+ * 现在改为：对每条外购行，先查台账上这个订单行**已经出库了多少**
+ * （幂等键 `sale:{订单行 id}` / `cancel:{订单行 id}`），
+ * 与「应出库 = 订单数量」比差额，差额补一条出库分录。
+ * 于是「有销售必有出库」成为台账上的硬约束，与下单时库存类型无关。
+ *
+ * - PURCHASED：按上述差额过账，`reservedQty` 归零。
+ * - MADE：数量已在当日占用里，仅写 SALE 流水备查。
+ * - NONE：不管理，不入账。
+ *
+ * 幂等：正常路径由 `stockConsumedAt` 守卫；`force` 用于「历史漏扣补记」，
+ * 此时靠台账差额判断，重复执行不会重复扣减。
  */
 export async function consumeReservation(
   tx: Prisma.TransactionClient,
   orderId: string,
-  opts: { adminName?: string } = {},
-): Promise<number> {
-  // 幂等：已经转正过就不再处理
-  const current = await tx.order.findUnique({
-    where: { id: orderId },
-    select: { stockConsumedAt: true },
-  });
-  if (!current || current.stockConsumedAt) return 0;
+  opts: { adminName?: string; force?: boolean } = {},
+): Promise<ConsumeResult> {
+  // 幂等：已经转正过就不再处理（force 用于对历史漏扣订单做补记）
+  if (!opts.force) {
+    const current = await tx.order.findUnique({
+      where: { id: orderId },
+      select: { stockConsumedAt: true },
+    });
+    if (!current || current.stockConsumedAt) return { consumed: 0, healed: 0 };
+  }
 
   const orderItems = await tx.orderItem.findMany({
     where: { orderId },
@@ -381,32 +409,16 @@ export async function consumeReservation(
   });
 
   let consumed = 0;
+  let healed = 0;
+
   for (const oi of orderItems) {
     const st = oi.menuItem.stockType as StockTypeValue;
     if (st === "NONE") continue;
 
     // 幂等键 `sale:{订单行 id}`：同一订单行只出库一次，重复结算不会扣两次
-    const idempotencyKey = `sale:${oi.id}`;
+    const saleKey = `sale:${oi.id}`;
 
-    if (st === "PURCHASED") {
-      // 只出库「预占」部分：历史订单（旧流程下单即出库）reservedQty 为 0，不重复出库
-      if (oi.reservedQty > 0) {
-        await postMovement(tx, {
-          itemId: oi.menuItemId,
-          type: "SALE",
-          quantity: -oi.reservedQty,
-          docType: "ORDER",
-          docId: orderId,
-          orderId,
-          adminName: opts.adminName ?? null,
-          note: "订单结算出库",
-          // 菜已上桌，不因账面异常卡住结算（超卖在预占阶段就已拦下）
-          allowNegative: true,
-          idempotencyKey,
-        });
-        consumed += oi.reservedQty;
-      }
-    } else {
+    if (st !== "PURCHASED") {
       // MADE：数量本就在当日占用里，转正时补记一条备查分录（不动持久余额）
       await postMovement(tx, {
         itemId: oi.menuItemId,
@@ -418,9 +430,60 @@ export async function consumeReservation(
         adminName: opts.adminName ?? null,
         note: "预占转正式出库",
         ledgerOnly: true,
-        idempotencyKey,
+        idempotencyKey: saleKey,
       });
       consumed += oi.quantity;
+      continue;
+    }
+
+    // ---- PURCHASED：以台账差额决定还要出库多少 ----
+    // 只认「真正动过数量账」的分录（balanceAfter 非空）——
+    // 自制菜品的备查分录（ledgerOnly）不算已出库，否则菜品类型改成外购后会漏扣。
+    // 用前缀匹配以覆盖补记键 `sale:<id>#fix…`，避免重复执行时算漏。
+    const posted = await tx.stockMovement.findMany({
+      where: {
+        orderId,
+        itemId: oi.menuItemId,
+        balanceAfter: { not: null },
+        OR: [
+          { idempotencyKey: { startsWith: `sale:${oi.id}` } },
+          { idempotencyKey: { equals: `cancel:${oi.id}` } },
+        ],
+      },
+      select: { quantity: true, idempotencyKey: true },
+    });
+    // 已出库净量（正数 = 台账上已经出去多少）
+    const alreadyOut = -posted.reduce((s, m) => s + m.quantity, 0);
+    const missing = oi.quantity - alreadyOut;
+
+    if (missing === 0) continue;
+
+    // 已用过 sale 键还要再补 → 用一个「确定性」的补记键，重复执行仍幂等
+    const key = posted.some((p) => p.idempotencyKey === saleKey)
+      ? `${saleKey}#fix${alreadyOut}-${oi.quantity}`
+      : saleKey;
+
+    await postMovement(tx, {
+      itemId: oi.menuItemId,
+      type: "SALE",
+      quantity: -missing, // missing > 0 出库；< 0 说明台账多扣了，反向补回
+      docType: "ORDER",
+      docId: orderId,
+      orderId,
+      adminName: opts.adminName ?? null,
+      note:
+        posted.length === 0
+          ? "订单结算出库（补记：下单时未预占）"
+          : "订单结算出库（补记台账差额）",
+      // 菜已上桌，不因账面异常卡住结算（超卖在预占阶段就已拦下）
+      allowNegative: true,
+      idempotencyKey: key,
+    });
+
+    if (missing > 0) {
+      consumed += missing;
+      // 超出「预占量」的部分才是真正的漏扣
+      healed += Math.max(0, missing - oi.reservedQty);
     }
   }
 
@@ -430,7 +493,7 @@ export async function consumeReservation(
     data: { stockConsumedAt: new Date() },
   });
 
-  return consumed;
+  return { consumed, healed };
 }
 
 /**

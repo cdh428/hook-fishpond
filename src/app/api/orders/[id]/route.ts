@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { runTx } from "@/lib/tx";
+import { requireAdmin } from "@/lib/auth";
 import { reserveStock, releaseOrderStock, InsufficientStockError } from "@/lib/stock";
 import { settleOrder } from "@/lib/orders";
 
@@ -39,9 +40,18 @@ export async function GET(
   }
 }
 
+/**
+ * 订单状态流转。
+ *
+ * ⚠️ **仅限管理员**（2026-09-20 起）：这个接口能直接把订单推到 SETTLED（扣库）
+ * 或 CANCELLED（回补库存），是库存台账的写入口，绝不能让顾客端匿名调用 ——
+ * 否则任何人拿到订单 id 就能改库存。顾客端没有任何地方调用它。
+ *
+ * 真正面向收银的结清走 `/api/admin/orders/[id]/settle`（会记支付单），
+ * 这里的 SETTLED 只作为后台/内部调用入口保留。
+ */
 const VALID_STATUSES = [
   "PENDING",
-  "PAID",
   "PREPARING",
   "READY",
   "SERVED",
@@ -54,6 +64,11 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const admin = await requireAdmin(request);
+    if (!admin) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { id } = await params;
     const { status } = await request.json();
 
@@ -79,7 +94,7 @@ export async function PUT(
       order = await runTx(async (tx) => {
         if (movingIntoSettled) {
           // 结清：预占转正式扣减 + 状态置 SETTLED
-          await settleOrder(tx, id);
+          await settleOrder(tx, id, { adminName: admin.username });
           return tx.order.findUnique({
             where: { id },
             include: { items: { include: { menuItem: true } }, payment: true },
@@ -102,12 +117,20 @@ export async function PUT(
           // 取消：释放预占，已扣减部分回补
           await releaseOrderStock(tx, id);
         } else if (movingOutOfCancelled) {
-          // 从取消恢复：重新预占
+          // 从取消恢复：重新预占。
+          // 必须逐行带上 orderItemId / optionKey —— 只给 menuItemId 时
+          // reserveStock 的兜底匹配（按 optionKey）会匹配不到任何行，
+          // 预占写不进去，之后结算就会「无事可做」地跳过扣减。
           const ois = await tx.orderItem.findMany({ where: { orderId: id } });
           await reserveStock(
             tx,
             id,
-            ois.map((oi) => ({ menuItemId: oi.menuItemId, quantity: oi.quantity })),
+            ois.map((oi) => ({
+              menuItemId: oi.menuItemId,
+              quantity: oi.quantity,
+              optionKey: oi.optionKey,
+              orderItemId: oi.id,
+            })),
           );
         }
 

@@ -18,6 +18,7 @@ import {
   type AdminOrderSummary,
   type DiscountTypeValue,
   type ServiceCallRow,
+  type StockPostResult,
 } from '@/lib/api-client';
 import {
   ORDER_STATUS_COLOR,
@@ -487,11 +488,16 @@ export default function AdminOrdersPage() {
           locale={locale}
           printLabels={printLabels}
           onClose={() => setModal(null)}
-          onSettled={(updated) => {
+          onSettled={(updated, stock) => {
             patchOrder(updated);
             setModal(null);
             load();
-            flash(t('adminOrders.settledToast'));
+            // 结算时补记了漏扣 → 明确提示，不静默改库存
+            if (stock && stock.healed > 0) {
+              flash(t('adminOrders.stockHealed', { n: stock.healed }));
+            } else {
+              flash(t('adminOrders.settledToast'));
+            }
           }}
           onError={(m) => setError(m)}
         />
@@ -1354,7 +1360,7 @@ function SettleModal({
   locale: string;
   printLabels: PrintLabels;
   onClose: () => void;
-  onSettled: (updated: any) => void;
+  onSettled: (updated: any, stock?: StockPostResult) => void;
   onError: (m: string) => void;
 }) {
   const t = useTranslations();
@@ -1391,7 +1397,7 @@ function SettleModal({
           buildReceiptHtml(toReceiptOrder(res.order, locale), { labels: printLabels }),
           'receipt',
         );
-        onSettled(res.order);
+        onSettled(res.order, res.stock);
       }
     } catch (e: any) {
       onError(e?.message || t('common.error'));
@@ -1410,7 +1416,7 @@ function SettleModal({
           buildReceiptHtml(toReceiptOrder(res.order, locale), { labels: printLabels }),
           'receipt',
         );
-        onSettled(res.order);
+        onSettled(res.order, res.stock);
       }
     } catch (e: any) {
       onError(e?.message || t('common.error'));

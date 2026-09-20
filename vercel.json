@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/daily-report",
       "schedule": "0 14 * * *"
+    },
+    {
+      "path": "/api/cron/stock-sweep?apply=1",
+      "schedule": "0 17 * * *"
     }
   ]
 }

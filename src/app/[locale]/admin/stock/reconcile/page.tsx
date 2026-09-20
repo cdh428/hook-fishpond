@@ -6,8 +6,12 @@ import { Link } from '@/i18n/routing';
 import {
   fetchStockReconcile,
   recalcStock,
+  repairOrderStock,
   type ReconcileResult,
   type ReconcileRow,
+  type OrderLinkAudit,
+  type OrderLinkIssue,
+  type OrderLinkKind,
 } from '@/lib/api-client';
 
 function localeName(
@@ -200,6 +204,15 @@ export default function StockReconcilePage() {
             </button>
           </div>
 
+          {/* ===== 订单 ↔ 库存 挂钩体检 ===== */}
+          <OrderLinkSection
+            audit={data.orderLink}
+            locale={locale}
+            t={t}
+            onRepaired={load}
+            showToast={showToast}
+          />
+
           {/* 明细 */}
           <div className="mb-2 flex items-center justify-between">
             <h4 className="font-semibold text-neutral-900">
@@ -297,6 +310,164 @@ function ReconcileCard({
         {t('adminStock.entryCount', { n: row.entryCount })} ·{' '}
         {t('adminStock.avgCost')} {money(row.avgCost)}
       </div>
+    </div>
+  );
+}
+
+/** 订单 ↔ 库存 挂钩体检（「卖了没扣」专项） */
+function OrderLinkSection({
+  audit,
+  locale,
+  t,
+  onRepaired,
+  showToast,
+}: {
+  audit?: OrderLinkAudit;
+  locale: string;
+  t: ReturnType<typeof useTranslations>;
+  onRepaired: () => Promise<void> | void;
+  showToast: (ok: boolean, msg: string) => void;
+}) {
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  if (!audit) return null;
+
+  const total = Object.values(audit.counts).reduce((s, n) => s + n, 0);
+  const kinds: OrderLinkKind[] = [
+    'SETTLED_UNPOSTED',
+    'OPEN_UNRESERVED',
+    'STALE_RESERVATION',
+    'RESIDUAL_RESERVATION',
+  ];
+
+  const kindTitle: Record<OrderLinkKind, string> = {
+    SETTLED_UNPOSTED: t('adminStock.kindSettledUnposted'),
+    OPEN_UNRESERVED: t('adminStock.kindOpenUnreserved'),
+    STALE_RESERVATION: t('adminStock.kindStaleReservation'),
+    RESIDUAL_RESERVATION: t('adminStock.kindResidualReservation'),
+  };
+  const kindHint: Record<OrderLinkKind, string> = {
+    SETTLED_UNPOSTED: t('adminStock.kindSettledUnpostedHint'),
+    OPEN_UNRESERVED: t('adminStock.kindOpenUnreservedHint'),
+    STALE_RESERVATION: t('adminStock.kindStaleReservationHint'),
+    RESIDUAL_RESERVATION: t('adminStock.kindResidualReservationHint'),
+  };
+
+  const handleRepair = async (issue: OrderLinkIssue) => {
+    if (!window.confirm(`${t('adminStock.repairStock')} · ${issue.orderNumber}?`)) return;
+    setBusyId(issue.orderId);
+    try {
+      const res = await repairOrderStock(issue.orderId);
+      showToast(
+        true,
+        res.healed > 0
+          ? t('adminStock.repairDone', { n: res.healed })
+          : t('adminStock.repairNothing'),
+      );
+      await onRepaired();
+    } catch (err: any) {
+      showToast(false, err?.message || t('adminStock.saveFailed'));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  return (
+    <div className="mb-4">
+      <h4 className="mb-1.5 font-semibold text-neutral-900">
+        {t('adminStock.orderLinkTitle')}
+      </h4>
+      <p className="mb-2 text-[11px] leading-relaxed text-neutral-400">
+        {t('adminStock.orderLinkHint')}
+      </p>
+
+      {/* 计数 */}
+      <div className="mb-3 grid grid-cols-2 gap-2">
+        {kinds.map((k) => (
+          <div
+            key={k}
+            className={`rounded-xl p-2.5 shadow-sm ${
+              audit.counts[k] > 0 ? 'bg-amber-50' : 'bg-white'
+            }`}
+          >
+            <div
+              className={`text-lg font-bold ${
+                audit.counts[k] > 0 ? 'text-error-600' : 'text-neutral-900'
+              }`}
+            >
+              {audit.counts[k]}
+            </div>
+            <div className="mt-0.5 text-[11px] leading-tight text-neutral-500">
+              {kindTitle[k]}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {total === 0 ? (
+        <div className="rounded-xl bg-success-50 px-4 py-6 text-center text-sm text-success-700">
+          ✓ {t('adminStock.orderLinkOk')}
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {audit.issues.map((issue) => (
+            <div
+              key={`${issue.kind}:${issue.orderId}`}
+              className={`rounded-xl p-3 shadow-sm ${
+                issue.kind === 'SETTLED_UNPOSTED' ? 'bg-error-50' : 'bg-white'
+              }`}
+            >
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <span className="min-w-0 truncate text-sm font-semibold text-neutral-900">
+                  {issue.orderNumber}
+                </span>
+                <span
+                  className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                    issue.kind === 'SETTLED_UNPOSTED'
+                      ? 'bg-error-100 text-error-700'
+                      : 'bg-amber-100 text-accent-700'
+                  }`}
+                >
+                  {kindTitle[issue.kind]}
+                </span>
+              </div>
+
+              <div className="mb-1.5 text-[11px] leading-relaxed text-neutral-500">
+                {kindHint[issue.kind]} · {issue.status} · {issue.settlementMode} ·{' '}
+                {t('adminStock.ageHours', { n: issue.ageHours })}
+              </div>
+
+              <div className="space-y-0.5">
+                {issue.lines.map((ln) => (
+                  <div
+                    key={ln.orderItemId}
+                    className="flex items-center justify-between text-[11px]"
+                  >
+                    <span className="min-w-0 truncate text-neutral-700">
+                      {ln.name} × {ln.quantity}
+                    </span>
+                    <span className="shrink-0 text-neutral-400">
+                      {t('adminStock.linePosted', { posted: ln.posted })}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {issue.kind === 'SETTLED_UNPOSTED' && (
+                <button
+                  onClick={() => handleRepair(issue)}
+                  disabled={busyId === issue.orderId}
+                  className="mt-2 w-full rounded-lg bg-primary-700 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                >
+                  {busyId === issue.orderId
+                    ? t('adminStock.repairing')
+                    : t('adminStock.repairStock')}
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
