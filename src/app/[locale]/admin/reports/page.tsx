@@ -4,15 +4,28 @@ import { useTranslations, useLocale } from 'next-intl';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   fetchAdminReport,
+  fetchLineTargets,
   reportExportUrl,
+  sendLineReport,
+  unbindLineTarget,
   updateMenuItem,
+  type LineConfigStatus,
+  type LineSendOutcome,
+  type LineTargetRow,
   type ReportItemStat,
   type ReportPayload,
   type ReportRange,
   type TrendGrain,
 } from '@/lib/api-client';
 
-type Segment = 'overview' | 'trend' | 'top' | 'structure' | 'margin' | 'export';
+type Segment =
+  | 'overview'
+  | 'trend'
+  | 'top'
+  | 'structure'
+  | 'margin'
+  | 'export'
+  | 'line';
 type TopSort = 'qty' | 'revenue' | 'profit';
 type MarginFilter = 'all' | 'below' | 'noCost' | 'top';
 
@@ -75,6 +88,26 @@ export default function AdminReportsPage() {
     'items',
   ]);
   const [exportFormat, setExportFormat] = useState<'xlsx' | 'csv'>('xlsx');
+
+  // LINE 日报
+  const [lineTargets, setLineTargets] = useState<LineTargetRow[]>([]);
+  const [lineConfig, setLineConfig] = useState<LineConfigStatus | null>(null);
+  const [lineBusy, setLineBusy] = useState(false);
+  const [lineResult, setLineResult] = useState<LineSendOutcome | null>(null);
+
+  const loadLine = useCallback(async () => {
+    try {
+      const res = await fetchLineTargets();
+      setLineTargets(res.targets ?? []);
+      setLineConfig(res.configured);
+    } catch {
+      // 未配置时接口也可能直接失败，静默处理
+    }
+  }, []);
+
+  useEffect(() => {
+    loadLine();
+  }, [loadLine]);
 
   const load = useCallback(async () => {
     if (range === 'custom' && (!customFrom || !customTo)) {
@@ -163,6 +196,45 @@ export default function AdminReportsPage() {
     }
   };
 
+  // ---------- LINE 日报 ----------
+  const sendLine = async (mode: 'demo' | 'real') => {
+    setLineBusy(true);
+    setLineResult(null);
+    try {
+      const res = await sendLineReport({ mode });
+      setLineResult(res);
+      await loadLine();
+    } catch (err: any) {
+      setLineResult({
+        ok: false,
+        reason: 'no_token',
+        message: err?.message || t('common.error'),
+        demo: mode === 'demo',
+        locale: locale,
+        date: '',
+        total: 0,
+        sent: 0,
+        failed: 0,
+        results: [],
+        preview: '',
+      });
+    } finally {
+      setLineBusy(false);
+    }
+  };
+
+  const removeLineTarget = async (id: string) => {
+    setLineBusy(true);
+    try {
+      await unbindLineTarget(id);
+      await loadLine();
+    } catch (err: any) {
+      setError(err?.message || t('common.error'));
+    } finally {
+      setLineBusy(false);
+    }
+  };
+
   // ---------- derived ----------
   const o = data?.overview;
   const trend = data?.trend ?? [];
@@ -196,6 +268,7 @@ export default function AdminReportsPage() {
             ['structure', 'adminReports.segStructure'],
             ['margin', 'adminReports.segMargin'],
             ['export', 'adminReports.segExport'],
+            ['line', 'adminReports.segLine'],
           ] as [Segment, string][]
         ).map(([key, labelKey]) => (
           <button
@@ -995,8 +1068,181 @@ export default function AdminReportsPage() {
                 <b className="text-neutral-600">
                   {t('adminReports.comingSoon')}
                 </b>
-                <br />☐ {t('adminReports.autoDaily')}
+                <br />☑ {t('adminReports.autoDaily')}
                 <br />☐ {t('adminReports.autoMonthly')}
+              </div>
+            </>
+          )}
+
+          {/* ============ LINE 日报 ============ */}
+          {segment === 'line' && (
+            <>
+              <div className="mb-4 rounded-xl bg-primary-50 px-4 py-3 text-xs leading-relaxed text-primary-700">
+                {t('adminReports.lineIntro')}
+              </div>
+
+              {/* 配置状态 */}
+              <div className="mb-4 space-y-2">
+                {(
+                  [
+                    ['hasToken', 'adminReports.lineToken'],
+                    ['hasSecret', 'adminReports.lineSecret'],
+                    ['cronSecret', 'adminReports.lineCronSecret'],
+                  ] as [keyof LineConfigStatus, string][]
+                ).map(([key, labelKey]) => {
+                  const on = Boolean(lineConfig?.[key]);
+                  return (
+                    <div
+                      key={key}
+                      className="flex items-center gap-3 rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm"
+                    >
+                      <span
+                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
+                          on
+                            ? 'bg-success-50 text-success-600'
+                            : 'bg-neutral-100 text-neutral-400'
+                        }`}
+                      >
+                        {on ? '✓' : '!'}
+                      </span>
+                      <span className="flex-1 text-neutral-700">
+                        {t(labelKey)}
+                      </span>
+                      <span
+                        className={`text-xs font-semibold ${
+                          on ? 'text-success-600' : 'text-error-600'
+                        }`}
+                      >
+                        {on
+                          ? t('adminReports.lineReady')
+                          : t('adminReports.lineMissing')}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* 接收人 */}
+              <div className="mb-2 flex items-center justify-between">
+                <div className="text-sm font-bold text-neutral-700">
+                  {t('adminReports.lineTargets')}
+                </div>
+                <button
+                  onClick={loadLine}
+                  className="text-xs font-medium text-primary-700"
+                >
+                  ⟳ {t('common.refresh')}
+                </button>
+              </div>
+
+              {lineTargets.length === 0 ? (
+                <div className="mb-4 rounded-xl border border-dashed border-neutral-300 px-4 py-3 text-xs leading-relaxed text-neutral-500">
+                  {t('adminReports.lineNoTarget')}
+                </div>
+              ) : (
+                <div className="mb-4 space-y-2">
+                  {lineTargets.map((tg) => (
+                    <div
+                      key={tg.id}
+                      className="flex items-center gap-3 rounded-xl border border-neutral-200 bg-white px-3 py-2.5"
+                    >
+                      <span className="text-lg">
+                        {tg.targetType === 'USER' ? '👤' : '👥'}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-medium text-neutral-800">
+                          {tg.displayName || tg.targetId.slice(0, 12)}
+                        </div>
+                        <div className="truncate text-[11px] text-neutral-400">
+                          {tg.targetId}
+                          {tg.lastSentAt
+                            ? ` · ${t('adminReports.lineLastSent')} ${new Date(
+                                tg.lastSentAt,
+                              ).toLocaleString()}` 
+                            : ''}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => removeLineTarget(tg.id)}
+                        disabled={lineBusy}
+                        className="shrink-0 rounded-lg px-2 py-1 text-xs text-error-600 disabled:opacity-40"
+                      >
+                        {t('adminReports.lineUnbind')}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* 发送 */}
+              <div className="mb-3 grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => sendLine('real')}
+                  disabled={lineBusy || !lineTargets.length}
+                  className="rounded-xl bg-primary-700 py-3 text-sm font-semibold text-white disabled:opacity-40"
+                >
+                  {lineBusy ? t('common.saving') : t('adminReports.lineSendReal')}
+                </button>
+                <button
+                  onClick={() => sendLine('demo')}
+                  disabled={lineBusy || !lineTargets.length}
+                  className="rounded-xl border border-primary-200 bg-white py-3 text-sm font-semibold text-primary-700 disabled:opacity-40"
+                >
+                  {t('adminReports.lineSendDemo')}
+                </button>
+              </div>
+
+              {lineTargets.length === 0 && (
+                <div className="mb-3 text-xs text-neutral-500">
+                  {t('adminReports.lineBindHint')}
+                </div>
+              )}
+
+              {/* 结果 */}
+              {lineResult && (
+                <div className="mb-4 space-y-3">
+                  <div
+                    className={`rounded-xl px-4 py-3 text-xs ${
+                      lineResult.ok
+                        ? 'bg-success-50 text-success-700'
+                        : 'bg-error-50 text-error-700'
+                    }`}
+                  >
+                    {lineResult.ok
+                      ? `${t('adminReports.lineSentOk')} ${lineResult.sent}/${lineResult.total}`
+                      : lineResult.message ||
+                        t('adminReports.lineSendFailed')}
+                  </div>
+                  {lineResult.results.length > 0 && (
+                    <div className="space-y-1">
+                      {lineResult.results.map((r) => (
+                        <div
+                          key={r.targetId}
+                          className="rounded-lg bg-neutral-100 px-3 py-2 text-[11px] text-neutral-600"
+                        >
+                          {r.ok ? '✓' : `✗ ${r.status}`}{' '}
+                          {r.displayName || r.targetId.slice(0, 12)}
+                          {!r.ok && ` — ${r.detail}`}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {lineResult.preview && (
+                    <>
+                      <div className="text-xs font-bold text-neutral-700">
+                        {t('adminReports.linePreview')}
+                      </div>
+                      <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-xl bg-neutral-900 px-4 py-3 text-[11px] leading-relaxed text-neutral-100">
+                        {lineResult.preview}
+                      </pre>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* 排程说明 */}
+              <div className="rounded-xl border border-dashed border-neutral-300 px-4 py-3 text-xs leading-relaxed text-neutral-500">
+                {t('adminReports.lineScheduleNote')}
               </div>
             </>
           )}

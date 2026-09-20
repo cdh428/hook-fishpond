@@ -38,7 +38,8 @@
     "seeAll": "See all",
     "close": "Close",
     "retry": "Retry",
-    "saving": "Saving…"
+    "saving": "Saving…",
+    "refresh": "Refresh"
   },
   "home": {
     "welcome": "Welcome to Happy Fishing Pond",
@@ -426,6 +427,7 @@
     "segStructure": "Traffic mix",
     "segMargin": "Cost & margin",
     "segExport": "Export",
+    "segLine": "LINE report",
     "rangeToday": "Today",
     "rangeWeek": "This week",
     "rangeMonth": "This month",
@@ -487,8 +489,25 @@
     "pickContent": "Tick at least one thing to export",
     "generateDownload": "Generate & download",
     "comingSoon": "Planned for a later release",
-    "autoDaily": "Auto-generate a daily report at 22:00 and push it to WeCom",
+    "autoDaily": "Auto daily report at 21:00 pushed to LINE (live)",
     "autoMonthly": "Auto-generate last month's report on the 1st",
-    "pickCustomRange": "Pick a start and end date"
+    "pickCustomRange": "Pick a start and end date",
+    "lineIntro": "After closing, the daily report is pushed to LINE automatically. Recipients are captured for you — send any message to the official account (@300bsham) from your personal LINE to bind it; groups work too.",
+    "lineToken": "LINE_CHANNEL_ACCESS_TOKEN (push credential)",
+    "lineSecret": "LINE_CHANNEL_SECRET (webhook signature check, required)",
+    "lineCronSecret": "CRON_SECRET (scheduled job auth)",
+    "lineReady": "Configured",
+    "lineMissing": "Missing",
+    "lineTargets": "Recipients",
+    "lineNoTarget": "No recipients yet. Add the official account as a friend and send it any message from your personal LINE — it will appear here.",
+    "lineUnbind": "Unbind",
+    "lineLastSent": "Last sent",
+    "lineSendReal": "Send today's report",
+    "lineSendDemo": "Send sample report",
+    "lineBindHint": "Bind a recipient first: send any message to the official account from your personal LINE.",
+    "lineSentOk": "Sent",
+    "lineSendFailed": "Send failed",
+    "linePreview": "Message preview",
+    "lineScheduleNote": "Schedule: every day 21:00 (Bangkok). Vercel's free plan fires within ±59 minutes, so arrival may be 21:00–21:59."
   }
 }

@@ -1085,3 +1085,67 @@ export function reportExportUrl(params: {
   if (params.sheet) qs.set('sheet', params.sheet);
   return `/api/admin/reports/export?${qs.toString()}`;
 }
+
+// ---------- LINE 日报 ----------
+
+export interface LineTargetRow {
+  id: string;
+  targetId: string;
+  targetType: 'USER' | 'GROUP' | 'ROOM';
+  displayName: string | null;
+  note: string | null;
+  isActive: boolean;
+  boundAt: string;
+  lastSentAt: string | null;
+}
+
+export interface LineConfigStatus {
+  hasToken: boolean;
+  hasSecret: boolean;
+  cronSecret: boolean;
+}
+
+export interface LineSendOutcome {
+  ok: boolean;
+  reason?: 'no_token' | 'no_targets';
+  message?: string;
+  demo: boolean;
+  locale: string;
+  date: string;
+  total: number;
+  sent: number;
+  failed: number;
+  results: {
+    targetId: string;
+    displayName: string | null;
+    ok: boolean;
+    status: number;
+    detail: string;
+  }[];
+  preview: string;
+}
+
+export async function fetchLineTargets(): Promise<{
+  configured: LineConfigStatus;
+  targets: LineTargetRow[];
+}> {
+  return request<{ configured: LineConfigStatus; targets: LineTargetRow[] }>(
+    '/api/admin/line',
+  );
+}
+
+export async function sendLineReport(opts: {
+  mode: 'demo' | 'real';
+  locale?: 'zh' | 'th' | 'en';
+}): Promise<LineSendOutcome> {
+  return request<LineSendOutcome>('/api/admin/line', {
+    method: 'POST',
+    body: JSON.stringify(opts),
+  });
+}
+
+export async function unbindLineTarget(id: string): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>(`/api/admin/line?id=${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+}

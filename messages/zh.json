@@ -38,7 +38,8 @@
     "seeAll": "查看全部",
     "close": "关闭",
     "retry": "重试",
-    "saving": "保存中…"
+    "saving": "保存中…",
+    "refresh": "刷新"
   },
   "home": {
     "welcome": "欢迎来到乐钓鱼塘",
@@ -426,6 +427,7 @@
     "segStructure": "客流结构",
     "segMargin": "成本毛利",
     "segExport": "导出",
+    "segLine": "日报推送",
     "rangeToday": "今日",
     "rangeWeek": "本周",
     "rangeMonth": "本月",
@@ -487,8 +489,25 @@
     "pickContent": "请至少勾选一项导出内容",
     "generateDownload": "生成并下载",
     "comingSoon": "后续版本（本次未做）",
-    "autoDaily": "每天 22:00 自动生成日报并推送企业微信",
+    "autoDaily": "每天 21:00 自动生成日报并推送到 LINE（已上线）",
     "autoMonthly": "每月 1 号自动生成上月月报",
-    "pickCustomRange": "请选择开始与结束日期"
+    "pickCustomRange": "请选择开始与结束日期",
+    "lineIntro": "每天营业结束后，系统会把当天经营日报自动推送到 LINE。接收人无需手抄 ID——用个人 LINE 给官方账号（@300bsham）发任意一句话即自动绑定，群里也能绑。",
+    "lineToken": "LINE_CHANNEL_ACCESS_TOKEN（推送凭据）",
+    "lineSecret": "LINE_CHANNEL_SECRET（webhook 验签，必填）",
+    "lineCronSecret": "CRON_SECRET（定时任务鉴权）",
+    "lineReady": "已配置",
+    "lineMissing": "未配置",
+    "lineTargets": "接收人",
+    "lineNoTarget": "还没有接收人。用个人 LINE 加官方账号为好友，并给它发任意一句话，这里就会出现。",
+    "lineUnbind": "解绑",
+    "lineLastSent": "最近发送",
+    "lineSendReal": "发送今日日报",
+    "lineSendDemo": "发送示例日报",
+    "lineBindHint": "先完成绑定才能发送：用个人 LINE 给官方账号发一句话即可。",
+    "lineSentOk": "发送成功",
+    "lineSendFailed": "发送失败",
+    "linePreview": "消息内容预览",
+    "lineScheduleNote": "自动排程：每天 21:00（曼谷时间）推送。Vercel 免费版定时精度为 ±59 分钟，实际到达时间可能在 21:00–21:59 之间。"
   }
 }

@@ -235,3 +235,59 @@ git push
 3. **手机 OTP 验证** — 用户注册时发送短信验证码
 4. **响应式优化** — 确保 PC / 安卓 / iOS 都有良好体验
 5. **性能优化** — 图片懒加载、API 缓存、并发处理
+
+---
+
+## 附录：LINE 每日日报（Messaging API）
+
+> ⚠️ LINE Notify 已于 **2025-03-31 停止服务**（官方公告），唯一替代是
+> 「LINE 官方账号 + Messaging API」。本项目按此实现。
+
+### 一次性配置（约 5 分钟，需要账号所有者本人操作）
+
+1. **确认官方账号**：LINE Official Account Manager（manager.line.biz）里已有账号，ID 形如 `@300bsham`
+2. **建 Messaging API Channel**：LINE Developers Console（developers.line.biz）→ 选/建 Provider →
+   在该官方账号下创建（或进入已有的）「Messaging API」Channel
+3. **取两个凭据**（Channel 的 Messaging API 页签）：
+   - 生成 **Channel access token (long-lived)** → 复制
+   - 记下 **Channel secret**
+   - 顺手关闭「Auto-reply messages」「Greeting messages」，否则会跟日报抢答
+4. **配 Webhook**（同页签）：
+   - Webhook URL：`https://hook-fishpond-xi15.vercel.app/api/webhooks/line`
+   - 打开「Use webhook」，点 **Verify**（应返回成功）
+5. **加环境变量**：Vercel → 项目 `hook-fishpond-xi15` → Settings → Environment Variables
+   （Environment 选 Production）
+
+   | 变量 | 值 |
+   |---|---|
+   | `LINE_CHANNEL_ACCESS_TOKEN` | 第 3 步的长效 token |
+   | `LINE_CHANNEL_SECRET` | 第 3 步的 channel secret |
+   | `CRON_SECRET` | 自定一串 ≥16 位随机字符（Vercel 定时任务会自动带上它） |
+   | `LINE_REPORT_LOCALE`（可选） | `zh` / `th` / `en`，默认 `zh` |
+
+6. **重新部署一次**：环境变量改动需要触发新部署才生效（改完可空提交一次）
+
+### 绑定接收人（不用手抄 userId）
+
+1. 用**个人 LINE** 加官方账号为好友（已是好友则跳过）
+2. 给它发任意一句话，例如「绑定」
+3. 收到「✅ 绑定成功」即完成 —— 后台「报表 → 日报推送」会出现这个接收人
+
+**推到群**：把官方账号拉进群，在群里发一句话即绑定该群（日报会发到群里）。
+
+### 排程
+
+- Vercel 免费版定时任务：每天 **21:00 曼谷时间**（= UTC 14:00），精度 ±59 分钟
+- 改时间：编辑 `vercel.json` 的 `crons[0].schedule`（UTC；泰国无夏令时，= 曼谷时间 − 7 小时）
+- 想要更准时：可改用 GitHub Actions `schedule` 调用 `/api/cron/daily-report` 并带
+  `Authorization: Bearer $CRON_SECRET`，同时移除 `vercel.json` 里的条目，避免一天发两条
+
+### 排错
+
+| 现象 | 原因 |
+|---|---|
+| 后台显示「未配置」 | Vercel 环境变量没加，或加完没重新部署 |
+| Verify 失败 | `LINE_CHANNEL_SECRET` 不对，或 URL 少了 `/api/webhooks/line` |
+| 推送返回 403 | 该用户没加官方账号为好友，或 userId 属于别的 Channel |
+| 推送返回 429 | 超出每月免费额度（免费版 200 条/月） |
+| 定时消息没到 | Hobby 只能每天一次；检查 `CRON_SECRET` 是否夹带空格/换行 |

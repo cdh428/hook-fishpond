@@ -316,3 +316,27 @@ enum PaymentStatus {
   FAILED
   REFUNDED
 }
+
+// ===== LINE 日报接收人 =====
+// 由 /api/webhooks/line 自动捕获：谁给官方账号发消息，就把谁记下来，
+// 之后日报推给他。targetId 是 LINE 的 userId / groupId / roomId，
+// 不是官方账号自己的 @ID。
+model LineTarget {
+  id          String         @id @default(cuid())
+  targetId    String         @unique
+  targetType  LineTargetType @default(USER)
+  displayName String?        // 从 LINE 拉到的昵称 / 群名
+  note        String?        // 管理员备注
+  isActive    Boolean        @default(true)
+  boundAt     DateTime       @default(now())
+  lastSentAt  DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+}
+
+enum LineTargetType {
+  USER
+  GROUP
+  ROOM
+}
+
