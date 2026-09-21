@@ -212,6 +212,36 @@ export default function MenuPage() {
 
   const popularItemsForTab = allItems.filter((i) => i.popular);
 
+  /**
+   * 进入某个大类时应默认落在哪个小类上：
+   * 有热门推荐 → 「热门」，没有热门（如钓具目前没有标热门）→ 第一项小类。
+   * 不这么做的话会停在一个内容为空的小类上，整页看起来「什么都没有」。
+   */
+  const defaultCatForTab = (type: TabType) =>
+    menuItems.some((i) => i.type === type && i.popular)
+      ? 'popular'
+      : (categories.find((c) => c.type === type)?.id ?? 'popular');
+
+  const selectTab = (type: TabType) => {
+    setActiveTab(type);
+    setActiveCat(defaultCatForTab(type));
+  };
+
+  // 兜底校正：数据到达后（或小类被删/热门被取消后），选中的小类必须在本大类里真实存在
+  useEffect(() => {
+    if (searching) return;
+    const tabItems = menuItems.filter((i) => i.type === activeTab);
+    const tabCats = categories.filter((c) => c.type === activeTab);
+    const stillValid =
+      activeCat === 'popular'
+        ? tabItems.some((i) => i.popular)
+        : tabCats.some((c) => c.id === activeCat);
+    if (stillValid) return;
+    const next = defaultCatForTab(activeTab);
+    if (next !== activeCat) setActiveCat(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, activeCat, searching, menuItems, categories]);
+
   const hasOptions = (item: MenuItemWithStock) =>
     Array.isArray(item.optionGroups) && item.optionGroups.length > 0;
 
@@ -450,10 +480,7 @@ export default function MenuPage() {
             {MENU_TYPES.map((type) => (
               <button
                 key={type}
-                onClick={() => {
-                  setActiveTab(type);
-                  setActiveCat('popular');
-                }}
+                onClick={() => selectTab(type)}
                 className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition ${
                   activeTab === type
                     ? 'bg-white text-primary-700 shadow-sm'
@@ -548,7 +575,9 @@ export default function MenuPage() {
                 d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
               />
             </svg>
-            <p className="text-sm">{t('menu.noResults')}</p>
+            <p className="text-sm">
+              {searching ? t('menu.noResults') : t('menu.emptyCategory')}
+            </p>
           </div>
         ) : (
           <div className="space-y-3">
