@@ -12,6 +12,9 @@ import {
   postStockWaste,
   postStockSoldOut,
   reverseStockMovement,
+  voidStockMovement,
+  unvoidStockMovement,
+  fetchAdminMe,
   type AdminStockItem,
   type StockMovement,
   type StockLedgerInfo,
@@ -90,7 +93,25 @@ export default function AdminStockItemPage() {
 
   const [busy, setBusy] = useState(false);
   const [reversingId, setReversingId] = useState<string | null>(null);
+  const [voidingId, setVoidingId] = useState<string | null>(null);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [toast, setToast] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  // 只有超级管理员能看到「作废 / 恢复」入口（后端同样强校验）
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const me = await fetchAdminMe();
+        if (!cancelled) setIsSuperAdmin(me.role === 'SUPER_ADMIN');
+      } catch {
+        /* 未登录时由 admin layout 兜底 */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const showToast = (ok: boolean, msg: string) => {
     setToast({ ok, msg });
@@ -261,6 +282,40 @@ export default function AdminStockItemPage() {
       showToast(false, err?.message || t('adminStock.saveFailed'));
     } finally {
       setReversingId(null);
+    }
+  };
+
+  /** 作废（超管的「删除」）：必须填原因，作废后立即重算余额 */
+  const handleVoid = async (movementId: string) => {
+    const reason = window.prompt(t('adminStock.voidReasonPrompt'));
+    if (reason === null) return;
+    if (!reason.trim()) {
+      showToast(false, t('adminStock.voidReasonRequired'));
+      return;
+    }
+    setVoidingId(movementId);
+    try {
+      const res = await voidStockMovement(itemId, movementId, reason.trim());
+      showToast(true, t('adminStock.voidedOk', { qty: res.stockQty }));
+      await load();
+    } catch (err: any) {
+      showToast(false, err?.message || t('adminStock.saveFailed'));
+    } finally {
+      setVoidingId(null);
+    }
+  };
+
+  const handleUnvoid = async (movementId: string) => {
+    if (!window.confirm(t('adminStock.unvoidConfirm'))) return;
+    setVoidingId(movementId);
+    try {
+      const res = await unvoidStockMovement(itemId, movementId);
+      showToast(true, t('adminStock.unvoidedOk', { qty: res.stockQty }));
+      await load();
+    } catch (err: any) {
+      showToast(false, err?.message || t('adminStock.saveFailed'));
+    } finally {
+      setVoidingId(null);
     }
   };
 
@@ -703,6 +758,9 @@ export default function AdminStockItemPage() {
         {ledger && (
           <span className="text-xs text-neutral-400">
             {t('adminStock.entryCount', { n: ledger.entryCount })}
+            {ledger.voidedCount
+              ? ` · ${t('adminStock.voidedCount', { n: ledger.voidedCount })}`
+              : ''}
           </span>
         )}
       </div>
@@ -718,21 +776,31 @@ export default function AdminStockItemPage() {
           {movements.map((m) => {
             const meta = MOVE_META[m.type];
             const positive = m.quantity > 0;
+            const isVoided = !!m.voidedAt;
             const canReverse =
+              !isVoided &&
               !m.reversed &&
               !m.reversalOf &&
               REVERSIBLE_TYPES.includes(m.type);
             return (
               <div
                 key={m.id}
-                className={`flex items-center gap-3 rounded-lg bg-white p-3 shadow-sm ${
-                  m.reversed || m.reversalOf ? 'opacity-60' : ''
-                }`}
+                className={`flex items-center gap-3 rounded-lg p-3 shadow-sm ${
+                  isVoided
+                    ? 'bg-neutral-50'
+                    : 'bg-white'
+                } ${m.reversed || m.reversalOf || isVoided ? 'opacity-60' : ''}`}
               >
                 <span className="text-lg">{meta.icon}</span>
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium text-neutral-900">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p
+                      className={`text-sm font-medium ${
+                        isVoided
+                          ? 'text-neutral-400 line-through'
+                          : 'text-neutral-900'
+                      }`}
+                    >
                       {t(meta.labelKey)}
                     </p>
                     {m.reversalOf && (
@@ -745,6 +813,11 @@ export default function AdminStockItemPage() {
                         {t('adminStock.tagReversed')}
                       </span>
                     )}
+                    {isVoided && (
+                      <span className="rounded bg-neutral-200 px-1.5 py-0.5 text-[10px] text-neutral-600">
+                        {t('adminStock.tagVoided')}
+                      </span>
+                    )}
                   </div>
                   <p className="truncate text-xs text-neutral-400">
                     {m.adminName ? `${m.adminName} · ` : ''}
@@ -753,6 +826,13 @@ export default function AdminStockItemPage() {
                   </p>
                   {m.note && (
                     <p className="truncate text-xs text-neutral-500">{m.note}</p>
+                  )}
+                  {isVoided && (
+                    <p className="truncate text-[11px] text-neutral-500">
+                      {t('adminStock.voidReasonLabel')}
+                      {m.voidReason || '—'}
+                      {m.voidedBy ? ` · ${m.voidedBy}` : ''}
+                    </p>
                   )}
                   <p className="truncate text-[11px] text-neutral-400">
                     {m.unitCost != null && `@${money(m.unitCost)}`}
@@ -763,7 +843,11 @@ export default function AdminStockItemPage() {
                 <div className="flex shrink-0 flex-col items-end gap-1">
                   <span
                     className={`text-sm font-semibold ${
-                      positive ? 'text-success-600' : 'text-error-600'
+                      isVoided
+                        ? 'text-neutral-400 line-through'
+                        : positive
+                          ? 'text-success-600'
+                          : 'text-error-600'
                     }`}
                   >
                     {positive ? '+' : ''}
@@ -778,6 +862,25 @@ export default function AdminStockItemPage() {
                       {reversingId === m.id
                         ? '…'
                         : `↩ ${t('adminStock.reverse')}`}
+                    </button>
+                  )}
+                  {/* 作废 / 恢复：仅超级管理员 */}
+                  {isSuperAdmin && !isVoided && (
+                    <button
+                      onClick={() => handleVoid(m.id)}
+                      disabled={voidingId === m.id}
+                      className="rounded px-1.5 py-0.5 text-[10px] font-medium text-neutral-600 hover:bg-neutral-100 disabled:opacity-50"
+                    >
+                      {voidingId === m.id ? '…' : `🗑 ${t('adminStock.void')}`}
+                    </button>
+                  )}
+                  {isSuperAdmin && isVoided && (
+                    <button
+                      onClick={() => handleUnvoid(m.id)}
+                      disabled={voidingId === m.id}
+                      className="rounded px-1.5 py-0.5 text-[10px] font-medium text-primary-700 hover:bg-primary-50 disabled:opacity-50"
+                    >
+                      {voidingId === m.id ? '…' : `↺ ${t('adminStock.unvoid')}`}
                     </button>
                   )}
                 </div>

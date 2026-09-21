@@ -97,6 +97,7 @@ export async function auditOrderStockLink(
                select sum(sm.quantity) from "StockMovement" sm
                where sm."orderId" = oi."orderId"
                  and sm."itemId"  = oi."menuItemId"
+                 and sm."voidedAt" is null
                  and sm."balanceAfter" is not null
                  and (sm."idempotencyKey" = 'sale:'  || oi.id
                    or sm."idempotencyKey" = 'cancel:' || oi.id

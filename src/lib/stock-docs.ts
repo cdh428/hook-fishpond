@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { runTx } from "@/lib/tx";
 import { bangkokDateString } from "@/lib/date-utils";
 import { round2 } from "@/lib/menu-options";
-import { postMovement, StockLedgerError } from "@/lib/stock-ledger";
+import { postMovement, StockLedgerError, LIVE_MOVEMENT, recomputeItemBalance, auditMaintenance } from "@/lib/stock-ledger";
 
 /**
  * 库存单据层 —— 借鉴会计软件的「凭证」概念。
@@ -205,6 +205,7 @@ export async function reversePurchaseReceipt(
           docId: receipt.id,
           itemId: line.menuItemId,
           quantity: line.qty,
+          voidedAt: null,
         },
         orderBy: { createdAt: "asc" },
         select: { id: true },
@@ -383,7 +384,7 @@ export async function reconcileStock(): Promise<{
 
   const agg = await prisma.stockMovement.groupBy({
     by: ["itemId"],
-    where: { itemId: { in: items.map((i) => i.id) } },
+    where: { itemId: { in: items.map((i) => i.id) }, ...LIVE_MOVEMENT },
     _sum: { quantity: true, amount: true },
     _count: { _all: true },
   });
@@ -437,6 +438,10 @@ export async function reconcileStock(): Promise<{
  *  - 台账**有**分录：账面以台账为准 → 直接重算余额（不新增分录，因为分录本来就是对的）
  *  - 台账**无**分录而账面不为 0：说明是手工建的期初 → 补一条 `OPENING` 期初分录，
  *    让分录追上账面（这样两边都成立）
+ *
+ * 另外**必须能修 NULL**：`stockQty` / `stockValue` 为 NULL 是迁移期遗留，
+ * 前台会把它当成 0 可用量 → 菜品被判「售罄」、顾客下不了单。
+ * 所以 NULL 一律走「归位」（有台账按台账，无台账归 0），不能被当成 0 跳过。
  */
 export async function recalcStock(opts: {
   itemIds?: string[];
@@ -467,20 +472,44 @@ export async function recalcStock(opts: {
 
     for (const item of items) {
       const agg = await tx.stockMovement.aggregate({
-        where: { itemId: item.id },
+        where: { itemId: item.id, ...LIVE_MOVEMENT },
         _sum: { quantity: true, amount: true },
         _count: { _all: true },
       });
       const entryCount = agg._count._all ?? 0;
       const ledgerQty = agg._sum.quantity ?? 0;
       const ledgerValue = round2(agg._sum.amount ?? 0);
+      // ⚠️ 必须区分「账面为 0」与「账面为 NULL」。
+      //    NULL 是迁移期的历史遗留值：前台按 `stockQty ?? 0` 算可用量，
+      //    于是这些菜品会被判成「售罄」、顾客下不了单（矿泉水曾因此下不了单）。
+      //    所以 NULL 一律属于「需要归位」，不能当成 0 跳过。
+      const bookIsNull = item.stockQty === null || item.stockValue === null;
       const bookQty = item.stockQty ?? 0;
 
       if (entryCount === 0) {
-        if (bookQty === 0) continue;
+        if (bookQty === 0) {
+          if (!bookIsNull) continue;
+          // 台账本来就空，只是把 NULL 归一为 0 —— 不建期初分录
+          // （数量为 0 的分录会被过账引擎拒绝，也没有业务含义）
+          const avgCost0 = round2(item.avgCost ?? item.costPrice ?? 0);
+          await tx.$executeRaw`
+            UPDATE "MenuItem"
+            SET "stockQty"   = 0,
+                "stockValue" = 0,
+                "avgCost"    = ${avgCost0}
+            WHERE "id" = ${item.id}
+          `;
+          redone.push({
+            itemId: item.id,
+            name_zh: item.name_zh,
+            fromQty: 0,
+            toQty: 0,
+          });
+          continue;
+        }
         // 期初建账：账面有货但台账空 → 补一条期初分录
         const unitCost = round2(item.avgCost ?? item.costPrice ?? 0);
-        await postMovement(tx, {
+        const res = await postMovement(tx, {
           itemId: item.id,
           type: "MANUAL",
           quantity: bookQty,
@@ -489,31 +518,43 @@ export async function recalcStock(opts: {
           note: "期初建账（按账面补录）",
           adminName: opts.adminName ?? null,
         });
+        await auditMaintenance(tx, {
+          action: "OPENING_REISSUE",
+          itemId: item.id,
+          movementId: res.movementId,
+          adminName: opts.adminName ?? null,
+          reason: "期初建账（按账面补录）",
+          before: { bookQty, avgCost: unitCost },
+          after: { qty: bookQty },
+        });
         opened.push({ itemId: item.id, name_zh: item.name_zh, qty: bookQty, avgCost: unitCost });
         continue;
       }
 
-      if (bookQty === ledgerQty && Math.abs(round2((item.stockValue ?? 0) - ledgerValue)) < 0.01) {
+      if (
+        !bookIsNull &&
+        bookQty === ledgerQty &&
+        Math.abs(round2((item.stockValue ?? 0) - ledgerValue)) < 0.01
+      ) {
         continue;
       }
 
-      const avgCost =
-        ledgerQty > 0
-          ? round2(ledgerValue / ledgerQty)
-          : round2(item.avgCost ?? item.costPrice ?? 0);
-
-      await tx.$executeRaw`
-        UPDATE "MenuItem"
-        SET "stockQty"   = ${ledgerQty},
-            "stockValue" = ${ledgerValue},
-            "avgCost"    = ${avgCost}
-        WHERE "id" = ${item.id}
-      `;
+      // 用统一的重算函数（口径 = Σ 未作废分录），避免这里再抄一遍公式
+      await recomputeItemBalance(tx, item.id);
       redone.push({
         itemId: item.id,
         name_zh: item.name_zh,
         fromQty: bookQty,
         toQty: ledgerQty,
+      });
+    }
+
+    if (redone.length > 0 || opened.length > 0) {
+      await auditMaintenance(tx, {
+        action: "RECALC",
+        adminName: opts.adminName ?? null,
+        reason: `按台账重算：调整 ${redone.length} 项，期初建账 ${opened.length} 项`,
+        after: { redone, opened },
       });
     }
 

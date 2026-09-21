@@ -208,7 +208,8 @@ export async function GET(request: NextRequest) {
         SELECT sm."createdAt", mi."name_zh", sm."type", sm."quantity", sm."note", sm."adminName"
         FROM "StockMovement" sm
         JOIN "MenuItem" mi ON mi."id" = sm."itemId"
-        WHERE sm."createdAt" >= ${rangeStart}
+        WHERE sm."voidedAt" IS NULL
+          AND sm."createdAt" >= ${rangeStart}
           AND sm."createdAt" < ${rangeEnd}
         ORDER BY sm."createdAt" DESC
       `;

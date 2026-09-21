@@ -118,9 +118,9 @@ export async function postMovement(
   if (input.idempotencyKey) {
     const existed = await tx.stockMovement.findUnique({
       where: { idempotencyKey: input.idempotencyKey },
-      select: { id: true, amount: true, balanceAfter: true },
+      select: { id: true, amount: true, balanceAfter: true, voidedAt: true },
     });
-    if (existed) {
+    if (existed && !existed.voidedAt) {
       const item = await tx.menuItem.findUnique({
         where: { id: input.itemId },
         select: { stockQty: true, stockValue: true, avgCost: true },
@@ -135,6 +135,12 @@ export async function postMovement(
       };
     }
   }
+
+  // 幂等键让路：基础键被「已作废」的分录占用时，换一个确定性的备用键，
+  // 既不撞唯一索引，也不至于把该记的账默默吞掉。
+  const effKey = input.idempotencyKey
+    ? await freeIdempotencyKey(tx, input.idempotencyKey)
+    : null;
 
   await lockItem(tx, input.itemId);
   const item = await tx.menuItem.findUnique({ where: { id: input.itemId } });
@@ -202,7 +208,7 @@ export async function postMovement(
       docType: (input.docType ?? null) as any,
       docId: input.docId ?? null,
       reversalOf: input.reversalOf ?? null,
-      idempotencyKey: input.idempotencyKey ?? null,
+      idempotencyKey: effKey,
       note: input.note ?? null,
       orderId: input.orderId ?? null,
       adminName: input.adminName ?? null,
@@ -231,18 +237,21 @@ export async function reverseMovement(
 ): Promise<PostMovementResult> {
   const origin = await tx.stockMovement.findUnique({ where: { id: movementId } });
   if (!origin) throw new StockLedgerError("NOT_FOUND", "Movement not found", 404);
+  if (origin.voidedAt) {
+    throw new StockLedgerError("VOIDED", "该分录已作废，无需冲销（如需恢复请用「恢复」）", 409);
+  }
   if (origin.reversalOf) {
     throw new StockLedgerError("ALREADY_REVERSED", "This entry is itself a reversal");
   }
   const existing = await tx.stockMovement.findFirst({
-    where: { reversalOf: movementId },
+    where: { reversalOf: movementId, ...LIVE_MOVEMENT },
     select: { id: true },
   });
   if (existing) {
     throw new StockLedgerError("ALREADY_REVERSED", "This entry has already been reversed", 409);
   }
 
-  return postMovement(tx, {
+  const result = await postMovement(tx, {
     itemId: origin.itemId,
     type: origin.type,
     quantity: -origin.quantity,
@@ -255,6 +264,20 @@ export async function reverseMovement(
     adminName: opts.adminName ?? origin.adminName,
     allowNegative: true,
   });
+
+  await writeAudit(tx, {
+    action: "REVERSE",
+    itemId: origin.itemId,
+    movementId: origin.id,
+    docType: origin.docType,
+    docId: origin.docId,
+    adminName: opts.adminName ?? null,
+    reason: opts.note ?? "红字冲销",
+    before: { quantity: origin.quantity, amount: origin.amount },
+    after: { reversalMovementId: result.movementId, amount: result.amount },
+  });
+
+  return result;
 }
 
 /**
@@ -286,4 +309,197 @@ export function ledgerErrorResponse(error: unknown, label = "Stock error") {
     { error: (error as any)?.message || label },
     { status: 500 },
   );
+}
+
+// ============================================================================
+// 作废（soft-void）—— 超管的「删除」
+// ============================================================================
+
+/**
+ * **余额口径的唯一真相**：参与余额核算的分录 = 未作废的分录。
+ *
+ * ⚠️ 任何聚合（账实核对、逐品明细、挂钩体检、成本取数）都必须带上它，
+ * 漏一处就会出现「作废了但还占着数量」的账漂。改口径只改这里。
+ */
+export const LIVE_MOVEMENT = { voidedAt: null } as const;
+
+/** 原生 SQL 里判断「未作废」的片段（别名必须是 m） */
+export const LIVE_MOVEMENT_SQL = `m."voidedAt" is null`;
+
+/** 写一条账套审计。失败不阻断主流程，但会打日志。 */
+async function writeAudit(
+  tx: Tx,
+  entry: {
+    action: "VOID" | "UNVOID" | "RECALC" | "REVERSE" | "OPENING_REISSUE";
+    itemId?: string | null;
+    movementId?: string | null;
+    docType?: string | null;
+    docId?: string | null;
+    adminName?: string | null;
+    reason?: string | null;
+    before?: unknown;
+    after?: unknown;
+  },
+): Promise<void> {
+  try {
+    await tx.stockLedgerAudit.create({
+      data: {
+        action: entry.action,
+        itemId: entry.itemId ?? null,
+        movementId: entry.movementId ?? null,
+        docType: entry.docType ?? null,
+        docId: entry.docId ?? null,
+        adminName: entry.adminName ?? null,
+        reason: entry.reason ?? null,
+        before: (entry.before ?? undefined) as any,
+        after: (entry.after ?? undefined) as any,
+      },
+    });
+  } catch (e) {
+    console.error("writeAudit failed:", e);
+  }
+}
+
+/**
+ * 以台账重算某菜品的两本账 —— **唯一**允许直接写 `stockQty/stockValue/avgCost` 的地方。
+ *
+ * 口径：`stockQty = Σ quantity`、`stockValue = Σ amount`，范围都是**未作废**的分录。
+ * 因此「作废一条分录 → 立即重算」必然让账面重新等于台账，天然账平。
+ */
+export async function recomputeItemBalance(
+  tx: Tx,
+  itemId: string,
+): Promise<{ stockQty: number; stockValue: number; avgCost: number }> {
+  await lockItem(tx, itemId);
+  const agg = await tx.stockMovement.aggregate({
+    where: { itemId, ...LIVE_MOVEMENT },
+    _sum: { quantity: true, amount: true },
+  });
+  const qty = agg._sum.quantity ?? 0;
+  const value = round2(agg._sum.amount ?? 0);
+  const item = await tx.menuItem.findUnique({
+    where: { id: itemId },
+    select: { avgCost: true, costPrice: true },
+  });
+  const avgCost = qty > 0 ? round2(value / qty) : round2(item?.avgCost ?? item?.costPrice ?? 0);
+
+  await tx.$executeRaw`
+    UPDATE "MenuItem"
+    SET "stockQty"   = ${qty},
+        "stockValue" = ${value},
+        "avgCost"    = ${avgCost}
+    WHERE "id" = ${itemId}
+  `;
+  return { stockQty: qty, stockValue: value, avgCost };
+}
+
+/**
+ * 幂等键「让路」：若基础键已被占用（例如那条分录被作废后再补记），
+ * 依次尝试 `base#v2`、`base#v3`… 保证既能补记、又不会因唯一索引炸掉。
+ * 结果是确定的：给定当前库状态，重复调用得到同一个键。
+ */
+export async function freeIdempotencyKey(tx: Tx, base: string): Promise<string> {
+  const rows = await tx.stockMovement.findMany({
+    where: { idempotencyKey: { startsWith: base } },
+    select: { idempotencyKey: true },
+  });
+  const used = new Set(rows.map((r) => r.idempotencyKey));
+  if (!used.has(base)) return base;
+  let n = 2;
+  while (used.has(`${base}#v${n}`)) n++;
+  return `${base}#v${n}`;
+}
+
+/**
+ * 作废一条分录（超管的「删除」语义）。
+ *
+ * - 原始分录**不物理删除**（触发器禁止，且审计需要），只打 `voidedAt` 标记；
+ * - 金额与数量从此**不再计入余额**；
+ * - 立刻按剩余分录重算该菜品两本账 → 账实必然一致；
+ * - 全程写 `StockLedgerAudit`（谁 / 何时 / 哪条 / 为什么）。
+ *
+ * 与「红字冲销 reverseMovement」的分工：
+ *  - 红冲用于**业务上确实发生过的反向操作**（退货、取消），留一对完整分录；
+ *  - 作废用于**录入错误**（把错数直接从账上摘掉），干净且可恢复。
+ */
+export async function voidMovement(
+  tx: Tx,
+  movementId: string,
+  opts: { reason: string; adminName?: string | null },
+): Promise<{ itemId: string; stockQty: number; stockValue: number; avgCost: number }> {
+  const m = await tx.stockMovement.findUnique({ where: { id: movementId } });
+  if (!m) throw new StockLedgerError("NOT_FOUND", "Movement not found", 404);
+  if (m.voidedAt) throw new StockLedgerError("ALREADY_VOIDED", "该分录已作废", 409);
+  if (!opts.reason || !opts.reason.trim()) {
+    throw new StockLedgerError("REASON_REQUIRED", "作废必须填写原因");
+  }
+
+  await tx.stockMovement.update({
+    where: { id: movementId },
+    data: { voidedAt: new Date(), voidedBy: opts.adminName ?? null, voidReason: opts.reason.trim() },
+  });
+
+  const balance = await recomputeItemBalance(tx, m.itemId);
+
+  await writeAudit(tx, {
+    action: "VOID",
+    itemId: m.itemId,
+    movementId,
+    docType: m.docType,
+    docId: m.docId,
+    adminName: opts.adminName,
+    reason: opts.reason.trim(),
+    before: {
+      type: m.type,
+      quantity: m.quantity,
+      unitCost: m.unitCost,
+      amount: m.amount,
+      balanceAfter: m.balanceAfter,
+      note: m.note,
+      createdAt: m.createdAt,
+    },
+    after: balance,
+  });
+
+  return { itemId: m.itemId, ...balance };
+}
+
+/** 恢复一条被作废的分录（撤销误作废）。恢复后重算余额。 */
+export async function unvoidMovement(
+  tx: Tx,
+  movementId: string,
+  opts: { adminName?: string | null; reason?: string | null } = {},
+): Promise<{ itemId: string; stockQty: number; stockValue: number; avgCost: number }> {
+  const m = await tx.stockMovement.findUnique({ where: { id: movementId } });
+  if (!m) throw new StockLedgerError("NOT_FOUND", "Movement not found", 404);
+  if (!m.voidedAt) throw new StockLedgerError("NOT_VOIDED", "该分录未被作废", 409);
+
+  await tx.stockMovement.update({
+    where: { id: movementId },
+    data: { voidedAt: null, voidedBy: null, voidReason: null },
+  });
+
+  const balance = await recomputeItemBalance(tx, m.itemId);
+
+  await writeAudit(tx, {
+    action: "UNVOID",
+    itemId: m.itemId,
+    movementId,
+    docType: m.docType,
+    docId: m.docId,
+    adminName: opts.adminName,
+    reason: opts.reason ?? "恢复已作废分录",
+    before: { wasVoidedAt: m.voidedAt, wasVoidReason: m.voidReason },
+    after: balance,
+  });
+
+  return { itemId: m.itemId, ...balance };
+}
+
+/** 记录一次账套维护操作（重算等），供路由调用 */
+export async function auditMaintenance(
+  tx: Tx,
+  entry: Parameters<typeof writeAudit>[1],
+): Promise<void> {
+  return writeAudit(tx, entry);
 }

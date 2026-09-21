@@ -1080,6 +1080,10 @@ export interface StockMovement {
   reversalOf: string | null;
   /** 该分录是否已被红字冲销 */
   reversed: boolean;
+  /** 作废（超管的「删除」）：非空表示已从账上摘除，可恢复 */
+  voidedAt?: string | null;
+  voidedBy?: string | null;
+  voidReason?: string | null;
   note: string | null;
   orderId: string | null;
   adminName: string | null;
@@ -1089,6 +1093,8 @@ export interface StockMovement {
 /** 账实核对（余额 ≡ 分录汇总） */
 export interface StockLedgerInfo {
   entryCount: number;
+  /** 已作废的分录条数（不计入余额） */
+  voidedCount?: number;
   /** 分录汇总数量 */
   qty: number;
   /** 分录汇总金额 */
@@ -1132,7 +1138,7 @@ export async function fetchStockItem(itemId: string): Promise<{
   }>(`/api/admin/stock/${itemId}`);
 }
 
-/** 红字冲销某条手工分录（调整 / 损耗 / 期初） */
+/** 红字冲销某条手工分录（调整 / 损耗 / 期初）—— 仅超级管理员 */
 export async function reverseStockMovement(
   itemId: string,
   movementId: string,
@@ -1141,6 +1147,33 @@ export async function reverseStockMovement(
   return request<{ ok: boolean }>(`/api/admin/stock/${itemId}`, {
     method: 'POST',
     body: JSON.stringify({ action: 'reverse', movementId, note }),
+  });
+}
+
+/**
+ * 作废一条分录（超管的「删除」）—— 从账上摘除、可恢复、留审计。
+ * 仅超级管理员；必须给原因。
+ */
+export async function voidStockMovement(
+  itemId: string,
+  movementId: string,
+  reason: string,
+): Promise<{ ok: boolean; stockQty: number; stockValue: number; avgCost: number }> {
+  return request(`/api/admin/stock/${itemId}`, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'void', movementId, reason }),
+  });
+}
+
+/** 恢复一条被作废的分录 —— 仅超级管理员 */
+export async function unvoidStockMovement(
+  itemId: string,
+  movementId: string,
+  reason?: string,
+): Promise<{ ok: boolean; stockQty: number; stockValue: number; avgCost: number }> {
+  return request(`/api/admin/stock/${itemId}`, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'unvoid', movementId, reason }),
   });
 }
 

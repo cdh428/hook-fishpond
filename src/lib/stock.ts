@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { runTx } from "@/lib/tx";
 import { bangkokDateString } from "@/lib/date-utils";
 import { normalizeOptionKey, round2 } from "@/lib/menu-options";
-import { postMovement, StockLedgerError } from "@/lib/stock-ledger";
+import { postMovement, StockLedgerError, freeIdempotencyKey } from "@/lib/stock-ledger";
 
 /**
  * 库存核心库 —— 全站库存**余量、预占、校验**的唯一真相来源。
@@ -444,6 +444,7 @@ export async function consumeReservation(
       where: {
         orderId,
         itemId: oi.menuItemId,
+        voidedAt: null,
         balanceAfter: { not: null },
         OR: [
           { idempotencyKey: { startsWith: `sale:${oi.id}` } },
@@ -458,10 +459,8 @@ export async function consumeReservation(
 
     if (missing === 0) continue;
 
-    // 已用过 sale 键还要再补 → 用一个「确定性」的补记键，重复执行仍幂等
-    const key = posted.some((p) => p.idempotencyKey === saleKey)
-      ? `${saleKey}#fix${alreadyOut}-${oi.quantity}`
-      : saleKey;
+    // 键可能已被占用（原出库分录被作废后又需补记）→ 让路到确定性备用键
+    const key = await freeIdempotencyKey(tx, saleKey);
 
     await postMovement(tx, {
       itemId: oi.menuItemId,
@@ -527,7 +526,7 @@ export async function releaseOrderStock(
       let originId: string | null = null;
       if (st === "PURCHASED") {
         const originSale = await tx.stockMovement.findFirst({
-          where: { orderId, itemId: oi.menuItemId, type: "SALE" },
+          where: { orderId, itemId: oi.menuItemId, type: "SALE", voidedAt: null },
           orderBy: { createdAt: "desc" },
           select: { id: true, unitCost: true },
         });
@@ -630,7 +629,7 @@ export async function applyOrderItemChange(
   /** 该行最近一次出库分录的成本快照 —— 回补必须按「原成本」入账，金额账才不会漂 */
   const originSaleOf = (itemId: string) =>
     tx.stockMovement.findFirst({
-      where: { itemId, type: "SALE", orderId },
+      where: { itemId, type: "SALE", orderId, voidedAt: null },
       orderBy: { createdAt: "desc" },
       select: { id: true, unitCost: true },
     });

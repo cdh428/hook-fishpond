@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin, requireSuperAdmin } from "@/lib/auth";
 import { reconcileStock, recalcStock } from "@/lib/stock-docs";
 import { auditOrderStockLink } from "@/lib/stock-watch";
 import { ledgerErrorResponse } from "@/lib/stock-ledger";
@@ -27,14 +27,23 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * 按台账重算余额。
+ * 按台账重算余额（**账套维护操作，仅超级管理员**）。
  * 传 itemIds 只重算指定菜品；不传则全量扫描（只改真正不符的）。
  */
 export async function POST(request: NextRequest) {
   try {
-    const admin = await requireAdmin(request);
+    const { admin, reason } = await requireSuperAdmin(request);
     if (!admin) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(
+        {
+          error:
+            reason === "FORBIDDEN"
+              ? "Super admin required for book recalculation"
+              : "Unauthorized",
+          code: reason,
+        },
+        { status: reason === "FORBIDDEN" ? 403 : 401 },
+      );
     }
     const body = await request.json().catch(() => ({}));
     const result = await recalcStock({

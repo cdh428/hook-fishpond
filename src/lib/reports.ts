@@ -300,6 +300,7 @@ async function fetchPeriodRevenue(
     FROM "StockMovement" sm
     JOIN "MenuItem" mi ON mi."id" = sm."itemId"
     WHERE sm."type" = 'WASTE'
+      AND sm."voidedAt" IS NULL
       AND sm."createdAt" >= ${from} AND sm."createdAt" < ${to}
   `);
 

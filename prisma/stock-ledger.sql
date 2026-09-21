@@ -12,12 +12,18 @@
 DROP TRIGGER IF EXISTS trg_stock_movement_append_only ON "StockMovement";
 
 -- ---------------------------------------------------------------------------
--- 1) 回填：外购菜品的 stockQty 由 NULL 归一为 0（NULL 与 0 业务上等价，
---    但 NULL 会让展示层出现「—」与「0 件」两种写法）
+-- 1) 回填：外购菜品的 stockQty 由 NULL 归位
+-- ⚠️ **不能一律置 0**：这些菜品可能已经有台账分录（只是账面字段是 NULL），
+--    置 0 会把真实库存抹掉（曾把「矿泉水」从 77 抹成 0，前台立刻变「售罄」、
+--    顾客下不了单 —— 因为前台按 `stockQty ?? 0` 算可用量）。
+--    正确做法：按台账汇总归位；台账为空才是 0。
 -- ---------------------------------------------------------------------------
-UPDATE "MenuItem"
-   SET "stockQty" = 0
- WHERE "stockType" = 'PURCHASED' AND "stockQty" IS NULL;
+UPDATE "MenuItem" i
+   SET "stockQty" = COALESCE(
+         (SELECT SUM(m."quantity") FROM "StockMovement" m WHERE m."itemId" = i."id"),
+         0
+       )
+ WHERE i."stockType" = 'PURCHASED' AND i."stockQty" IS NULL;
 
 -- ---------------------------------------------------------------------------
 -- 2) 回填历史分录的单价与金额（用菜品参考成本价 costPrice；历史无价者记 0）
@@ -52,19 +58,43 @@ UPDATE "MenuItem"
  WHERE "stockType" = 'PURCHASED' AND "stockValue" IS NULL;
 
 -- ---------------------------------------------------------------------------
--- 5) 装回不可变台账触发器
---    UPDATE 一律拒绝（改错必须走「红字冲销」：新增反向分录 + reversalOf 指针）
---    DELETE 仅在父级 MenuItem 已不存在时放行 —— 这样：
---      · 菜单里正常删菜品（级联删分录）仍然可用
---      · 直接删分录会被拦下
+-- 5) 装回台账保护触发器
+--
+-- 两条规则：
+--   · **UPDATE**：默认拒绝；**唯一例外**是「作废 / 恢复」——即只改
+--     voidedAt / voidedBy / voidReason 三个字段，其余业务字段必须原样不变。
+--     这样超管的「删除」= 作废（可追溯、可恢复），而金额/数量/方向永远改不了。
+--   · **DELETE**：仅在父级 MenuItem 已不存在时放行 —— 这样：
+--       · 菜单里正常删菜品（级联删分录）仍然可用
+--       · 直接删分录会被拦下（账套必须靠作废而不是抹掉证据）
 -- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION stock_movement_append_only() RETURNS trigger AS $$
 BEGIN
   IF TG_OP = 'UPDATE' THEN
-    RAISE EXCEPTION 'StockMovement is an append-only ledger: UPDATE is forbidden (post a reversing entry instead)';
+    -- 只允许「作废/恢复」这一种 UPDATE
+    IF (NEW."voidedAt" IS DISTINCT FROM OLD."voidedAt"
+        OR NEW."voidedBy" IS DISTINCT FROM OLD."voidedBy"
+        OR NEW."voidReason" IS DISTINCT FROM OLD."voidReason")
+       -- 且除作废字段外，其余字段一律不许变
+       AND NEW."itemId"         IS NOT DISTINCT FROM OLD."itemId"
+       AND NEW."type"           IS NOT DISTINCT FROM OLD."type"
+       AND NEW."quantity"       IS NOT DISTINCT FROM OLD."quantity"
+       AND NEW."unitCost"       IS NOT DISTINCT FROM OLD."unitCost"
+       AND NEW."amount"         IS NOT DISTINCT FROM OLD."amount"
+       AND NEW."balanceAfter"   IS NOT DISTINCT FROM OLD."balanceAfter"
+       AND NEW."docType"        IS NOT DISTINCT FROM OLD."docType"
+       AND NEW."docId"          IS NOT DISTINCT FROM OLD."docId"
+       AND NEW."reversalOf"     IS NOT DISTINCT FROM OLD."reversalOf"
+       AND NEW."idempotencyKey" IS NOT DISTINCT FROM OLD."idempotencyKey"
+       AND NEW."orderId"        IS NOT DISTINCT FROM OLD."orderId"
+       AND NEW."createdAt"      IS NOT DISTINCT FROM OLD."createdAt"
+    THEN
+      RETURN NEW;
+    END IF;
+    RAISE EXCEPTION 'StockMovement is an append-only ledger: only the void fields (voidedAt/voidedBy/voidReason) may be updated';
   ELSIF TG_OP = 'DELETE' THEN
     IF EXISTS (SELECT 1 FROM "MenuItem" WHERE "id" = OLD."itemId") THEN
-      RAISE EXCEPTION 'StockMovement is an append-only ledger: DELETE is forbidden while the item exists';
+      RAISE EXCEPTION 'StockMovement is an append-only ledger: DELETE is forbidden while the item exists (void it instead)';
     END IF;
     RETURN OLD;
   END IF;

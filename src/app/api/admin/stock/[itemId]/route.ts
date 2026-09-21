@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin, requireSuperAdmin } from "@/lib/auth";
 import { runTx } from "@/lib/tx";
 import { buildStockViews } from "@/lib/stock";
-import { reverseMovement, ledgerErrorResponse } from "@/lib/stock-ledger";
+import { reverseMovement, ledgerErrorResponse, voidMovement, unvoidMovement, StockLedgerError } from "@/lib/stock-ledger";
 
 const VALID_STOCK_TYPES = ["NONE", "MADE", "PURCHASED"];
 
@@ -54,14 +54,14 @@ export async function GET(
     const movementRows = await prisma.stockMovement.findMany({
       where: { itemId },
       orderBy: { createdAt: "desc" },
-      take: 80,
+      take: 120,
     });
 
-    // 已冲销的分录 id（用于在列表上打「已冲销」标记）
+    // 已冲销的分录 id（用于在列表上打「已冲销」标记）；已作废的冲销不算数
     const reversedIds = new Set(
       (
         await prisma.stockMovement.findMany({
-          where: { itemId, reversalOf: { not: null } },
+          where: { itemId, reversalOf: { not: null }, voidedAt: null },
           select: { reversalOf: true },
         })
       ).map((m) => m.reversalOf as string),
@@ -78,17 +78,23 @@ export async function GET(
       docId: m.docId,
       reversalOf: m.reversalOf,
       reversed: reversedIds.has(m.id),
+      voidedAt: m.voidedAt,
+      voidedBy: m.voidedBy,
+      voidReason: m.voidReason,
       note: m.note,
       orderId: m.orderId,
       adminName: m.adminName,
       createdAt: m.createdAt,
     }));
 
-    // 数量账 / 金额账 / 分录汇总（对账口径）
+    // 数量账 / 金额账 / 分录汇总（对账口径：只算未作废的分录）
     const agg = await prisma.stockMovement.aggregate({
-      where: { itemId },
+      where: { itemId, voidedAt: null },
       _sum: { quantity: true, amount: true },
       _count: { _all: true },
+    });
+    const voidedCount = await prisma.stockMovement.count({
+      where: { itemId, voidedAt: { not: null } },
     });
     const ledgerQty = agg._sum.quantity ?? 0;
     const ledgerValue = Math.round((agg._sum.amount ?? 0) * 100) / 100;
@@ -100,6 +106,7 @@ export async function GET(
       movements,
       ledger: {
         entryCount: agg._count._all ?? 0,
+        voidedCount,
         qty: ledgerQty,
         value: ledgerValue,
         bookQty,
@@ -185,15 +192,25 @@ export async function PATCH(
     }
 
     // ⚠️ 这里**不接受** stockQty / stockValue —— 库存余额只能由过账引擎维护。
-    // 首次切换为外购时把两本账初始化为 0（NULL 会让展示与扣减口径不一致）。
-    if (updateData.stockType === "PURCHASED") {
-      const cur = await prisma.menuItem.findUnique({
-        where: { id: itemId },
-        select: { stockQty: true, stockValue: true, avgCost: true, costPrice: true },
-      });
-      if (!cur) {
-        return NextResponse.json({ error: "Menu item not found" }, { status: 404 });
-      }
+    // 首次切换为外购时把两本账初始化为 0（NULL 会让展示与扣减口径不一致）；
+    // **即使请求里没带 stockType**，只要「当前已是外购且账面为 NULL」也要顺手归位 ——
+    // 否则这类迁移期遗留的 NULL 永远修不好，菜品会被前台判成售罄、下不了单。
+    const cur = await prisma.menuItem.findUnique({
+      where: { id: itemId },
+      select: {
+        stockType: true,
+        stockQty: true,
+        stockValue: true,
+        avgCost: true,
+        costPrice: true,
+      },
+    });
+    if (!cur) {
+      return NextResponse.json({ error: "Menu item not found" }, { status: 404 });
+    }
+
+    const effectiveStockType = updateData.stockType ?? cur.stockType;
+    if (effectiveStockType === "PURCHASED") {
       if (cur.stockQty === null) updateData.stockQty = 0;
       if (cur.stockValue === null) updateData.stockValue = 0;
       if (cur.avgCost === null) updateData.avgCost = cur.costPrice ?? 0;
@@ -220,19 +237,60 @@ export async function PATCH(
 /**
  * 红字冲销某条手工分录（调整 / 损耗 / 期初）。
  * 历史分录永不修改，只追加一条反向分录。
+ *
+ * **仅超级管理员**：冲销会改变账面余额，属于账套维护操作。
  */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ itemId: string }> },
 ) {
   try {
-    const admin = await requireAdmin(request);
+    const { admin, reason } = await requireSuperAdmin(request);
     if (!admin) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(
+        {
+          error:
+            reason === "FORBIDDEN"
+              ? "Super admin required to reverse a ledger entry"
+              : "Unauthorized",
+          code: reason,
+        },
+        { status: reason === "FORBIDDEN" ? 403 : 401 },
+      );
     }
 
     const { itemId } = await params;
     const body = await request.json().catch(() => ({}));
+
+    // 作废（超管的「删除」）/ 恢复
+    if (body?.action === "void" || body?.action === "unvoid") {
+      if (!body?.movementId) {
+        return NextResponse.json({ error: "movementId is required" }, { status: 400 });
+      }
+      const result = await runTx(async (tx) => {
+        const origin = await tx.stockMovement.findUnique({
+          where: { id: String(body.movementId) },
+          select: { itemId: true },
+        });
+        if (!origin || origin.itemId !== itemId) throw new Error("NOT_FOUND");
+
+        if (body.action === "void") {
+          if (!body?.reason || !String(body.reason).trim()) {
+            throw new StockLedgerError("REASON_REQUIRED", "作废必须填写原因");
+          }
+          return voidMovement(tx, String(body.movementId), {
+            reason: String(body.reason).trim(),
+            adminName: admin.username,
+          });
+        }
+        return unvoidMovement(tx, String(body.movementId), {
+          adminName: admin.username,
+          reason: body.reason ? String(body.reason) : null,
+        });
+      });
+      return NextResponse.json({ ok: true, ...result });
+    }
+
     if (body?.action !== "reverse" || !body?.movementId) {
       return NextResponse.json({ error: "Unsupported action" }, { status: 400 });
     }

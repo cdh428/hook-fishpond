@@ -269,12 +269,42 @@ model StockMovement {
   note           String?
   orderId        String?
   adminName      String?
+  // ----- 作废（soft-void）-----
+  // 超管「删除」某条分录 = 作废：原始分录永不物理删除，只标记不再计入余额。
+  // 余额口径收敛为：Σ{voidedAt IS NULL AND balanceAfter IS NOT NULL}。
+  // 触发器只放行「改这三个字段」这一种 UPDATE。
+  voidedAt       DateTime?
+  voidedBy       String?
+  voidReason     String?
   createdAt      DateTime          @default(now())
 
   @@index([itemId, createdAt])
   @@index([createdAt])
   @@index([docType, docId])
   @@index([reversalOf])
+  @@index([voidedAt])
+}
+
+// ===== 账套审计日志 =====
+// 所有破坏性/账务维护操作（作废、恢复、重算、单据冲销）的 who/when/why 留痕。
+// 借鉴 InvenTree StockItemTracking / LedgerSMB 审计表：纠错必须说得清「谁在什么时候为什么动过账」。
+model StockLedgerAudit {
+  id         String   @id @default(cuid())
+  action     String   // VOID | UNVOID | RECALC | REVERSE | OPENING_REISSUE
+  itemId     String?
+  movementId String?
+  docType    String?
+  docId      String?
+  adminName  String?
+  reason     String?
+  before     Json?    // 操作前快照
+  after      Json?    // 操作后快照
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([movementId])
+  @@index([itemId, createdAt])
+  @@index([action, createdAt])
 }
 
 // ===== 进货单（凭证头 + 明细）=====

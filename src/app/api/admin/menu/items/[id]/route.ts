@@ -93,10 +93,14 @@ export async function PUT(
       if (!cur) {
         return NextResponse.json({ error: "Menu item not found" }, { status: 404 });
       }
-      if (cur.stockType !== "PURCHASED") {
-        updateData.stockQty = 0;
-        updateData.stockValue = 0;
-        updateData.avgCost = updateData.costPrice ?? cur.costPrice ?? 0;
+      // 首次切到「外购」，**或**虽是外购但账面仍是 NULL，都要归位。
+      // 只判断「类型是否变化」的后果：已然是外购、但 stockQty 是迁移期遗留的 NULL 时，
+      // 无论保存多少次都修不好 → 前台按 (stockQty ?? 0) 判成 0 可用量 → 永远显示售罄。
+      if (cur.stockType !== "PURCHASED" || cur.stockQty === null) {
+        updateData.stockQty = cur.stockQty ?? 0;
+        updateData.stockValue = cur.stockValue ?? 0;
+        updateData.avgCost =
+          updateData.costPrice ?? cur.avgCost ?? cur.costPrice ?? 0;
       }
     }
 
