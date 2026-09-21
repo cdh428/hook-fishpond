@@ -38,7 +38,7 @@ export interface MenuImportRow {
   rowNumber: number; // 1-based spreadsheet row (header = 1)
   action: ImportAction;
   category: string; // category name_zh as given in the sheet
-  /** 大类：美食/饮品/工具。新建分类时用它决定归到哪个页签；留空默认美食 */
+  /** 大类：美食/饮品/钓具。新建分类时用它决定归到哪个页签；留空默认美食 */
   menuType?: MenuTypeValue;
   categoryId?: string; // resolved when the category exists
   itemId?: string; // matched MenuItem id (UPDATE/DELETE)
@@ -95,7 +95,7 @@ function zhStockType(v: string | null | undefined): string {
 /** 导出时的「大类」单元格：写中文标签，方便直接改 */
 function zhMenuType(v: string | null | undefined): string {
   if (v === "DRINK") return "饮品";
-  if (v === "TOOL") return "工具";
+  if (v === "TOOL") return "钓具";
   return "美食";
 }
 
@@ -103,8 +103,12 @@ function fmtPrice(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(2);
 }
 
-function parseBool(v: string): boolean | undefined {
-  const s = v.trim().toLowerCase();
+// ⚠️ 参数必须容忍 undefined：上传的表里若少了一整列（如删掉「招牌」「素食」
+// 「在售」），raw[key] 就是 undefined —— 以前这里直接 v.trim()，会抛
+// "Cannot read properties of undefined (reading 'trim')"，
+// 让「删掉一列再导入」变成看不懂的内部错误。
+function parseBool(v: string | null | undefined): boolean | undefined {
+  const s = (v ?? "").trim().toLowerCase();
   if (s === "") return undefined;
   if (["是", "true", "1", "y", "yes"].includes(s)) return true;
   if (["否", "false", "0", "n", "no"].includes(s)) return false;
@@ -394,8 +398,9 @@ export async function buildPreview(
       if (["美食", "食品", "food", "อาหาร"].includes(norm)) menuType = "FOOD";
       else if (["饮品", "饮料", "drink", "drinks", "เครื่องดื่ม"].includes(norm))
         menuType = "DRINK";
-      else if (["工具", "用具", "tool", "tools", "อุปกรณ์"].includes(norm)) menuType = "TOOL";
-      else errorList.push(`大类无法识别（${MENU_TYPES.join("/")}，或 美食/饮品/工具）`);
+      else if (["钓具", "工具", "用具", "tackle", "tool", "tools", "อุปกรณ์ตกปลา", "อุปกรณ์"].includes(norm))
+        menuType = "TOOL";
+      else errorList.push(`大类无法识别（${MENU_TYPES.join("/")}，或 美食/饮品/钓具）`);
     }
 
     // --- stock columns ---

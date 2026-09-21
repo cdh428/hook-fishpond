@@ -120,7 +120,7 @@
     "cutoffError": "ปิดรับจองสำหรับวันนี้แล้ว — กรุณาเลือกวันถัดไป"
   },
   "menu": {
-    "title": "เมนูอาหาร",
+    "title": "อาหาร เครื่องดื่ม & อุปกรณ์ตกปลา",
     "categories": "หมวดหมู่",
     "addToCart": "เพิ่มลงตะกร้า",
     "popular": "ยอดนิยม",
@@ -131,7 +131,7 @@
     "all": "ทั้งหมด",
     "searchPlaceholder": "ค้นหาเมนู...",
     "noResults": "ไม่พบรายการ",
-    "tools": "อุปกรณ์",
+    "tools": "อุปกรณ์ตกปลา",
     "hasOptions": "มีตัวเลือก",
     "soldOutAlternatives": "ลองเมนูใกล้เคียง",
     "searchResultCount": "พบ {n} รายการ",
@@ -366,7 +366,7 @@
     "restDayReason": "หมายเหตุ (ไม่บังคับ)",
     "noRestDays": "ยังไม่มีวันหยุดเพิ่มเติม",
     "yearLabel": "ปี",
-    "toolType": "อุปกรณ์",
+    "toolType": "อุปกรณ์ตกปลา",
     "tableQrPrintTitle": "บ่อตกปลาแฮปปี้ — คิวอาร์โค้ดโต๊ะ",
     "tableQrPrintHint": "พิมพ์แล้วตัดออก นำไปติดที่โต๊ะที่ตรงกัน",
     "collectFromOrder": "ออเดอร์รอชำระ",

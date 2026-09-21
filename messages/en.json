@@ -120,7 +120,7 @@
     "cutoffError": "Same-day booking is closed — please pick tomorrow or later"
   },
   "menu": {
-    "title": "Menu",
+    "title": "Food, Drinks & Tackle",
     "categories": "Categories",
     "addToCart": "Add to Cart",
     "popular": "Popular",
@@ -131,7 +131,7 @@
     "all": "All",
     "searchPlaceholder": "Search menu...",
     "noResults": "No items found",
-    "tools": "Tools",
+    "tools": "Tackle",
     "hasOptions": "Options",
     "soldOutAlternatives": "Try instead",
     "searchResultCount": "{n} found",
@@ -366,7 +366,7 @@
     "restDayReason": "Note (optional)",
     "noRestDays": "No extra rest days",
     "yearLabel": "Year",
-    "toolType": "Tools",
+    "toolType": "Tackle",
     "tableQrPrintTitle": "Happy Fishing Pond — Table QR Codes",
     "tableQrPrintHint": "Print, cut out and stick on the matching table.",
     "collectFromOrder": "Orders to collect",

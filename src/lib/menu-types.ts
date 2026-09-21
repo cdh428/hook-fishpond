@@ -13,10 +13,11 @@ export type MenuTypeValue = (typeof MENU_TYPES)[number];
 export const MENU_TYPE_EMOJI: Record<MenuTypeValue, string> = {
   FOOD: '🍽️',
   DRINK: '🥤',
-  TOOL: '🧰',
+  TOOL: '🎣',
 };
 
-/** 翻译键后缀：menu.food / menu.drinks / menu.tools，admin.foodType / admin.drinkType / admin.toolType */
+/** 翻译键后缀：menu.food / menu.drinks / menu.tools，admin.foodType / admin.drinkType / admin.toolType
+ *  注意：键名保留 tools/toolType 不变，只有显示文案是「钓具」——改键名会波及全站引用。 */
 export const MENU_TYPE_LABEL_KEY: Record<MenuTypeValue, string> = {
   FOOD: 'menu.food',
   DRINK: 'menu.drinks',
