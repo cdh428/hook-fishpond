@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>首页改版提案 · Hook Happyness 乐钓鱼塘</title>
+<style>
+  :root{
+    --p-50:#ECFBFC; --p-100:#CFF5F7; --p-200:#9EEBEE; --p-400:#2BBFC6;
+    --p-500:#1FA6A8; --p-600:#178A8C; --p-700:#155E75; --p-800:#0F4A5C; --p-900:#0A3747;
+    --a-100:#FEF3C7; --a-400:#FBBF24; --a-500:#F59E0B; --a-600:#D97706;
+    --n-50:#F8FAFC; --n-100:#F1F5F9; --n-200:#E2E8F0; --n-300:#CBD5E1;
+    --n-400:#94A3B8; --n-500:#64748B; --n-600:#475569; --n-700:#334155; --n-900:#0F172A;
+    --bg:#EAF6F5; --line:#06C755;
+    --shadow-brand:0 4px 14px 0 rgba(21,94,117,.25);
+    --shadow-cta:0 4px 14px 0 rgba(245,158,11,.35);
+    --shadow-card:0 1px 3px rgba(15,23,42,.06),0 8px 24px rgba(15,23,42,.06);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:"Inter","Noto Sans SC",system-ui,-apple-system,sans-serif;
+    background:linear-gradient(180deg,#F4FBFB 0%,#EAF6F5 240px,#EAF6F5 100%);
+    color:var(--n-900);-webkit-font-smoothing:antialiased;line-height:1.6;
+  }
+  .wrap{max-width:1180px;margin:0 auto;padding:0 24px 96px}
+
+  /* ---------- 提案页头 ---------- */
+  .head{padding:64px 0 8px}
+  .eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:600;letter-spacing:.08em;
+    text-transform:uppercase;color:var(--p-600);background:#fff;border:1px solid var(--p-100);
+    padding:6px 12px;border-radius:999px}
+  .head h1{font-size:40px;line-height:1.2;letter-spacing:-.02em;margin:20px 0 12px;font-weight:800}
+  .head h1 em{font-style:normal;color:var(--p-700)}
+  .lede{font-size:16px;color:var(--n-600);max-width:720px}
+  .meta{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px}
+  .meta span{font-size:12.5px;color:var(--n-600);background:#fff;border:1px solid var(--n-200);
+    padding:6px 12px;border-radius:999px}
+
+  /* ---------- 通用区块 ---------- */
+  section.block{margin-top:64px}
+  .block-title{display:flex;align-items:baseline;gap:12px;margin-bottom:6px}
+  .block-title .no{font-size:12px;font-weight:700;color:#fff;background:var(--p-700);
+    width:22px;height:22px;border-radius:7px;display:grid;place-items:center;flex:0 0 auto}
+  .block-title h2{font-size:22px;letter-spacing:-.01em;font-weight:700}
+  .block-sub{color:var(--n-500);font-size:14px;margin:0 0 22px 34px}
+
+  /* ---------- 研究结论卡 ---------- */
+  .findings{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  .fcard{background:#fff;border:1px solid var(--n-200);border-radius:16px;padding:20px}
+  .fcard h3{font-size:14px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+  .fcard .dot{width:8px;height:8px;border-radius:50%}
+  .fcard p{font-size:13.5px;color:var(--n-600)}
+  .fcard ul{margin:8px 0 0 2px;list-style:none;display:flex;flex-direction:column;gap:6px}
+  .fcard li{font-size:13px;color:var(--n-600);padding-left:16px;position:relative}
+  .fcard li::before{content:"";position:absolute;left:0;top:8px;width:6px;height:6px;border-radius:2px;
+    background:var(--p-200)}
+
+  /* ---------- 设计稿区 ---------- */
+  .stage{display:grid;grid-template-columns:390px 1fr;gap:40px;align-items:start;margin-top:8px}
+  .notes{display:flex;flex-direction:column;gap:12px}
+  .note{background:#fff;border:1px solid var(--n-200);border-radius:14px;padding:14px 16px;display:flex;gap:12px}
+  .note b{flex:0 0 auto;width:22px;height:22px;border-radius:50%;background:var(--a-500);color:#fff;
+    font-size:11.5px;display:grid;place-items:center;font-weight:700;margin-top:2px}
+  .note h4{font-size:13.5px;font-weight:700;margin-bottom:3px}
+  .note p{font-size:12.5px;color:var(--n-500)}
+
+  /* ---------- 手机稿 ---------- */
+  .phone{width:390px;background:var(--bg);border-radius:34px;overflow:hidden;
+    box-shadow:0 0 0 10px #0F172A,0 0 0 12px #1E293B,0 40px 80px -20px rgba(15,23,42,.45);
+    position:relative}
+  .notch{position:absolute;top:0;left:50%;transform:translateX(-50%);width:120px;height:24px;
+    background:#0F172A;border-radius:0 0 14px 14px;z-index:60}
+  .screen{position:relative;overflow:hidden}
+
+  /* 顶部栏 */
+  .topbar{position:relative;z-index:50;background:rgba(10,55,71,.55);backdrop-filter:blur(14px);
+    color:#fff;padding:26px 16px 12px;display:flex;align-items:center;justify-content:space-between}
+  .brandline{display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px;letter-spacing:-.01em}
+  .brandline svg{width:20px;height:20px;color:var(--a-400)}
+  .topbar-actions{display:flex;align-items:center;gap:8px}
+  .icobtn{width:32px;height:32px;border-radius:10px;background:rgba(255,255,255,.14);display:grid;
+    place-items:center;color:#fff}
+  .icobtn svg{width:16px;height:16px}
+  .langbtn{font-size:12px;font-weight:600;background:rgba(255,255,255,.14);border-radius:10px;padding:6px 10px}
+
+  /* Hero */
+  .hero{position:relative;margin-top:-68px;padding:98px 18px 26px;color:#fff;overflow:hidden;
+    background:
+      radial-gradient(120% 90% at 80% 10%,rgba(245,158,11,.34),transparent 55%),
+      radial-gradient(90% 70% at 10% 100%,rgba(31,166,168,.5),transparent 60%),
+      linear-gradient(160deg,#0A3747 0%,#155E75 55%,#0F4A5C 100%);
+  }
+  .hero .ph{position:absolute;inset:0;opacity:.5;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cg fill='none' stroke='%23ffffff' stroke-opacity='.18' stroke-width='1.2'%3E%3Cpath d='M10 30c10-8 20-8 30 0-10 8-20 8-30 0z'/%3E%3Ccircle cx='14' cy='30' r='1.4'/%3E%3Cpath d='M70 88c10-8 20-8 30 0-10 8-20 8-30 0z'/%3E%3Ccircle cx='74' cy='88' r='1.4'/%3E%3C/g%3E%3C/svg%3E");
+    background-size:120px 120px}
+  .hero .glow{position:absolute;right:-40px;top:-30px;width:180px;height:180px;border-radius:50%;
+    background:radial-gradient(circle,rgba(245,158,11,.35),transparent 70%)}
+  .hero-inner{position:relative;z-index:2}
+  .chip{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;
+    background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.22);padding:5px 11px;border-radius:999px}
+  .chip .live{width:6px;height:6px;border-radius:50%;background:#4ADE80;box-shadow:0 0 0 3px rgba(74,222,128,.25)}
+  .hero h1{font-size:31px;line-height:1.22;letter-spacing:-.02em;font-weight:800;margin:14px 0 8px}
+  .hero h1 em{font-style:normal;color:var(--a-400)}
+  .hero p.sub{font-size:13.5px;color:rgba(255,255,255,.82)}
+  .hero-cta{display:flex;gap:10px;margin-top:18px}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;font-weight:700;
+    border-radius:14px;padding:13px 16px;font-size:14px;text-decoration:none;border:none;cursor:pointer}
+  .btn svg{width:16px;height:16px}
+  .btn-primary{background:var(--a-500);color:#3B2606;flex:1;box-shadow:var(--shadow-cta)}
+  .btn-line{background:rgba(255,255,255,.14);color:#fff;border:1px solid rgba(255,255,255,.28);
+    flex:0 0 auto;padding:13px 15px}
+  .hero-trust{display:flex;align-items:center;gap:8px;margin-top:16px;font-size:12px;color:rgba(255,255,255,.8)}
+  .stars{color:var(--a-400);letter-spacing:1px}
+  .wave{position:absolute;left:0;right:0;bottom:-1px;color:var(--bg);z-index:3}
+
+  /* 数据条 */
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);background:#fff;margin:-2px 14px 0;
+    border-radius:16px;box-shadow:var(--shadow-card);position:relative;z-index:5;padding:14px 6px}
+  .stat{text-align:center}
+  .stat b{display:block;font-size:17px;font-weight:800;color:var(--p-700);letter-spacing:-.02em}
+  .stat span{font-size:11px;color:var(--n-500)}
+  .stat+.stat{border-left:1px solid var(--n-100)}
+
+  /* 区块通用 */
+  .sec{padding:22px 16px 0}
+  .sec-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+  .sec-head h3{font-size:16.5px;font-weight:800;letter-spacing:-.01em}
+  .sec-head a{font-size:12px;color:var(--p-600);font-weight:600;text-decoration:none}
+
+  /* 塘口卡 */
+  .pond{background:#fff;border-radius:18px;overflow:hidden;box-shadow:var(--shadow-card);margin-bottom:12px}
+  .pond .ph{height:104px;position:relative;display:grid;place-items:center;color:rgba(255,255,255,.9)}
+  .pond.leisure .ph{background:linear-gradient(135deg,#178A8C,#2BBFC6 60%,#9EEBEE)}
+  .pond.comp .ph{background:linear-gradient(135deg,#B45309,#F59E0B 60%,#FCD34D)}
+  .ph-tag{position:absolute;left:12px;top:12px;font-size:11px;font-weight:700;background:rgba(15,23,42,.55);
+    color:#fff;padding:4px 10px;border-radius:999px;backdrop-filter:blur(4px)}
+  .ph-note{font-size:11px;font-weight:600;opacity:.85;letter-spacing:.02em}
+  .pond-body{padding:14px 15px 15px}
+  .pond-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+  .pond-top h4{font-size:16px;font-weight:800}
+  .price{font-size:22px;font-weight:800;color:var(--p-700);letter-spacing:-.02em;white-space:nowrap}
+  .pond.comp .price{color:var(--a-600)}
+  .price small{font-size:11.5px;font-weight:600;color:var(--n-500);margin-left:2px}
+  .feats{list-style:none;margin:10px 0 13px;display:flex;flex-direction:column;gap:5px}
+  .feats li{font-size:12.5px;color:var(--n-600);display:flex;gap:7px;align-items:flex-start}
+  .feats svg{width:14px;height:14px;flex:0 0 auto;margin-top:2px;color:var(--p-500)}
+  .pond.comp .feats svg{color:var(--a-500)}
+  .btn-block{width:100%;border-radius:12px;padding:12px;font-size:13.5px}
+  .btn-teal{background:var(--p-700);color:#fff;box-shadow:var(--shadow-brand)}
+  .btn-amber{background:var(--a-500);color:#3B2606;box-shadow:var(--shadow-cta)}
+
+  /* 四宫格 */
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .gcard{background:#fff;border-radius:16px;overflow:hidden;box-shadow:var(--shadow-card)}
+  .gcard .ph{height:74px;display:grid;place-items:center;color:#fff;font-size:10.5px;font-weight:600}
+  .g1{background:linear-gradient(135deg,#0F4A5C,#1FA6A8)}
+  .g2{background:linear-gradient(135deg,#B45309,#FBBF24)}
+  .g3{background:linear-gradient(135deg,#15803D,#4ADE80)}
+  .g4{background:linear-gradient(135deg,#155E75,#2BBFC6)}
+  .gcard b{display:block;font-size:13px;font-weight:700;padding:10px 12px 3px}
+  .gcard span{display:block;font-size:11px;color:var(--n-500);padding:0 12px 12px}
+
+  /* 餐饮条 */
+  .foodcard{background:#fff;border-radius:18px;padding:14px;box-shadow:var(--shadow-card);
+    display:flex;gap:12px;align-items:center}
+  .foodcard .ph{width:74px;height:74px;border-radius:14px;flex:0 0 auto;display:grid;place-items:center;
+    background:linear-gradient(135deg,#B45309,#FCD34D);color:#fff;font-size:10px;font-weight:700;text-align:center}
+  .foodcard h4{font-size:14px;font-weight:800;margin-bottom:3px}
+  .foodcard p{font-size:12px;color:var(--n-500)}
+  .foodcard .go{margin-left:auto;background:var(--a-500);color:#3B2606;font-size:12px;font-weight:700;
+    padding:9px 13px;border-radius:11px;text-decoration:none;white-space:nowrap}
+
+  /* 钓获墙 */
+  .rail{display:flex;gap:10px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}
+  .rail::-webkit-scrollbar{display:none}
+  .catch{flex:0 0 118px;height:118px;border-radius:16px;position:relative;overflow:hidden;
+    background:linear-gradient(135deg,#0F4A5C,#178A8C)}
+  .catch:nth-child(2){background:linear-gradient(135deg,#15677a,#2BBFC6)}
+  .catch:nth-child(3){background:linear-gradient(135deg,#92400E,#F59E0B)}
+  .catch:nth-child(4){background:linear-gradient(135deg,#166534,#4ADE80)}
+  .catch .kg{position:absolute;left:8px;bottom:8px;font-size:11px;font-weight:800;color:#fff;
+    background:rgba(15,23,42,.55);padding:3px 8px;border-radius:999px;backdrop-filter:blur(4px)}
+  .catch .lk{position:absolute;inset:0;display:grid;place-items:center;color:rgba(255,255,255,.55);font-size:10px}
+
+  /* 评价 */
+  .quote{background:#fff;border-radius:16px;padding:14px;box-shadow:var(--shadow-card);margin-bottom:10px}
+  .quote .row{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+  .avatar{width:28px;height:28px;border-radius:50%;background:var(--p-100);color:var(--p-700);
+    display:grid;place-items:center;font-size:11px;font-weight:800}
+  .quote .row b{font-size:12.5px}
+  .quote .row .stars{margin-left:auto;font-size:11px}
+  .quote p{font-size:12.5px;color:var(--n-600);font-style:italic}
+
+  /* 位置 */
+  .loc{background:#fff;border-radius:18px;overflow:hidden;box-shadow:var(--shadow-card)}
+  .map{height:118px;position:relative;background:
+      linear-gradient(90deg,#DCEEE9 1px,transparent 1px) 0 0/34px 34px,
+      linear-gradient(0deg,#DCEEE9 1px,transparent 1px) 0 0/34px 34px,
+      linear-gradient(135deg,#E6F4F0,#D3EDE7);
+    display:grid;place-items:center}
+  .pin{width:34px;height:34px;border-radius:50% 50% 50% 0;background:var(--p-700);transform:rotate(-45deg);
+    box-shadow:0 6px 14px rgba(21,94,117,.4);position:relative}
+  .pin::after{content:"";position:absolute;inset:11px;background:#fff;border-radius:50%}
+  .loc-body{padding:14px}
+  .loc-row{display:flex;gap:10px;align-items:flex-start;font-size:12.5px;color:var(--n-600);margin-bottom:9px}
+  .loc-row svg{width:15px;height:15px;color:var(--p-600);flex:0 0 auto;margin-top:2px}
+  .loc-row b{color:var(--n-900);font-weight:700;display:block;font-size:12.5px}
+  .loc-cta{display:flex;gap:9px;margin-top:12px}
+  .loc-cta a{flex:1;text-align:center;font-size:12.5px;font-weight:700;padding:11px;border-radius:12px;text-decoration:none}
+  .loc-cta .nav{background:var(--p-700);color:#fff}
+  .loc-cta .call{background:var(--p-50);color:var(--p-700);border:1px solid var(--p-100)}
+
+  /* 社交 */
+  .social{background:linear-gradient(150deg,#0F4A5C,#0A3747);border-radius:18px;padding:16px;color:#fff;
+    margin-bottom:16px}
+  .social h4{font-size:14px;font-weight:800;margin-bottom:3px}
+  .social p{font-size:11.5px;color:rgba(255,255,255,.7);margin-bottom:12px}
+  .social-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+  .sbtn{display:flex;flex-direction:column;align-items:center;gap:5px;background:rgba(255,255,255,.1);
+    border:1px solid rgba(255,255,255,.14);border-radius:13px;padding:11px 6px;text-decoration:none;color:#fff}
+  .sbtn svg{width:19px;height:19px}
+  .sbtn span{font-size:10.5px;font-weight:600;text-align:center;line-height:1.25}
+  .sbtn.fb svg{color:#8AB4F8}
+  .sbtn.li svg{color:#4ADE80}
+  .sbtn.tel svg{color:var(--a-400)}
+
+  /* 底部导航 */
+  .tabbar{position:relative;z-index:50;background:rgba(255,255,255,.96);backdrop-filter:blur(12px);
+    border-top:1px solid var(--n-200);display:flex;padding:8px 4px 12px}
+  .tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10px;
+    color:var(--n-400);text-decoration:none;position:relative}
+  .tab svg{width:21px;height:21px}
+  .tab.on{color:var(--p-700);font-weight:700}
+  .tab.on::before{content:"";position:absolute;top:-8px;width:26px;height:3px;border-radius:999px;background:var(--a-500)}
+
+  /* 改动清单 */
+  table{width:100%;border-collapse:separate;border-spacing:0;background:#fff;border-radius:16px;
+    overflow:hidden;border:1px solid var(--n-200)}
+  th,td{padding:13px 16px;text-align:left;font-size:13px;vertical-align:top}
+  thead th{background:var(--n-50);font-size:12px;font-weight:700;color:var(--n-600);
+    text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--n-200)}
+  tbody tr+tr td{border-top:1px solid var(--n-100)}
+  td:first-child{font-weight:700;white-space:nowrap}
+  td.new{color:var(--p-700)}
+  td.new::before{content:"新增";display:inline-block;font-size:10px;font-weight:700;background:var(--p-50);
+    color:var(--p-700);border:1px solid var(--p-100);border-radius:6px;padding:1px 6px;margin-right:7px;vertical-align:1px}
+  td.up::before{content:"优化";display:inline-block;font-size:10px;font-weight:700;background:var(--a-100);
+    color:var(--a-600);border-radius:6px;padding:1px 6px;margin-right:7px;vertical-align:1px}
+
+  /* 问题卡 */
+  .qlist{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .q{background:#fff;border:1px solid var(--n-200);border-left:3px solid var(--a-500);
+    border-radius:12px;padding:14px 16px}
+  .q b{font-size:13.5px;display:block;margin-bottom:4px}
+  .q p{font-size:12.5px;color:var(--n-500)}
+
+  .foot{margin-top:56px;padding-top:22px;border-top:1px solid var(--n-200);font-size:12.5px;
+    color:var(--n-400);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
+
+  @media(max-width:880px){
+    .stage{grid-template-columns:1fr}
+    .phone{margin:0 auto}
+    .findings,.qlist{grid-template-columns:1fr}
+    .head h1{font-size:30px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ============ 页头 ============ -->
+  <header class="head">
+    <span class="eyebrow">首页改版提案 · v1 · 待讨论</span>
+    <h1>让首页看起来<em>值得专程去一趟</em></h1>
+    <p class="lede">
+      对照 Hook Happyness 的社交阵地与泰国同类鱼塘的线上打法，问题不在功能，而在<b>首页没有"卖相"</b>——
+      没有实景、没有社会认同、没有把"大鱼 / 美食 / 好去处"讲清楚。下面是改版后的首页设计稿，确认方向后再落代码。
+    </p>
+    <div class="meta">
+      <span>📍 目标：手机端首页（站点现为 max-w-lg 移动优先）</span>
+      <span>🎨 沿用现有设计系统：深湖青 #155E75 + 琥珀金 #F59E0B</span>
+      <span>🖼 配图为版式占位，需替换为真实照片</span>
+    </div>
+  </header>
+
+  <!-- ============ 一、研究结论 ============ -->
+  <section class="block">
+    <div class="block-title"><span class="no">1</span><h2>先看清现状</h2></div>
+    <p class="block-sub">三条结论决定了改版该往哪使劲。</p>
+    <div class="findings">
+      <div class="fcard">
+        <h3><span class="dot" style="background:#94A3B8"></span>你的社交阵地</h3>
+        <p>Facebook <b>Hookhappyness</b>、LINE <b>@300bsham</b> 都是登录墙后的封闭页面，我无法直接读取内容。</p>
+        <ul>
+          <li>站内 LINE 机器人<strong>只</strong>用来给管理员发日报</li>
+          <li>前台<strong>没有任何</strong> FB / LINE / 电话 / 地图入口</li>
+          <li>顾客想找你，只能靠搜索</li>
+        </ul>
+      </div>
+      <div class="fcard">
+        <h3><span class="dot" style="background:#F59E0B"></span>泰国同类怎么打</h3>
+        <p>看了 BO SANG（清迈）、Krabi Fishing Park、Palm Tree Lagoon、Bungsamran 等官网与点评页，共性非常一致：</p>
+        <ul>
+          <li>首屏必给 <b>3 个大数字</b>：鱼重 / 塘口面积 / 营业时间</li>
+          <li><b>"可带鱼回家"</b>是泰国人最在意的卖点，单独放大</li>
+          <li>照片即信任：钓获、餐食、钓台，全是实拍</li>
+          <li>餐饮是独立吸引点（Coffee Fish 开成单独官网）</li>
+        </ul>
+      </div>
+      <div class="fcard">
+        <h3><span class="dot" style="background:#155E75"></span>你的首页缺什么</h3>
+        <p>现有首页只有渐变、图标和四行功能说明，整体像"功能目录"，不像"目的地"。</p>
+        <ul>
+          <li>❌ 没有一张实景照片</li>
+          <li>❌ 没有评分、评价、钓获等社会认同</li>
+          <li>❌ 没有地址、时间、电话、地图</li>
+          <li>❌ 没有把"大鱼"和"美食"讲成卖点</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 二、设计稿 ============ -->
+  <section class="block">
+    <div class="block-title"><span class="no">2</span><h2>改版后的首页</h2></div>
+    <p class="block-sub">手机稿可直接上下滚动。右侧编号对应每一处改动。</p>
+
+    <div class="stage">
+
+      <!-- ===== 手机稿 ===== -->
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen">
+
+          <!-- 顶部栏 -->
+          <div class="topbar">
+            <div class="brandline">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <path d="M3 12c4-6 12-6 16 0-4 6-12 6-16 0z"/><circle cx="7" cy="12" r="1.2" fill="currentColor" stroke="none"/>
+                <path d="M19 12c1.6-2 3.4-2 5-1.2"/>
+              </svg>
+              Hook Happyness
+            </div>
+            <div class="topbar-actions">
+              <div class="icobtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 16.9v3a2 2 0 01-2.2 2 19.8 19.8 0 01-8.6-3.1 19.5 19.5 0 01-6-6A19.8 19.8 0 012.1 4.2 2 2 0 014.1 2h3a2 2 0 012 1.7c.1 1 .4 1.9.7 2.8a2 2 0 01-.5 2.1L8.1 9.9a16 16 0 006 6l1.3-1.2a2 2 0 012.1-.5c.9.3 1.8.6 2.8.7a2 2 0 011.7 2z"/></svg></div>
+              <div class="langbtn">中文 ▾</div>
+            </div>
+          </div>
+
+          <!-- Hero -->
+          <div class="hero">
+            <div class="ph"></div>
+            <div class="glow"></div>
+            <div class="hero-inner">
+              <span class="chip"><span class="live"></span>曼谷近郊 · 每日 06:00–22:00</span>
+              <h1>放下手机，<br>来钓一条<em>大鱼</em></h1>
+              <p class="sub">两大塘口 · 20+ 鱼种 · 现做泰餐 · 可带鱼回家</p>
+              <div class="hero-cta">
+                <a class="btn btn-primary">
+                  立即预约钓位
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M14 5l7 7-7 7M21 12H3"/></svg>
+                </a>
+                <a class="btn btn-line">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 11.5a8.4 8.4 0 01-9 8.4 9.8 9.8 0 01-3.2-.5L3 21l1.6-5.1A8.3 8.3 0 013 11.5 8.4 8.4 0 0112 3a8.4 8.4 0 019 8.5z"/></svg>
+                  咨询
+                </a>
+              </div>
+              <div class="hero-trust">
+                <span class="stars">★★★★★</span>
+                <span>谷歌 / 脸书 好评 · 超 1,200 位钓友来过</span>
+              </div>
+            </div>
+            <svg class="wave" viewBox="0 0 1440 60" fill="currentColor" preserveAspectRatio="none" style="height:26px;width:100%">
+              <path d="M0,30 C360,60 720,0 1080,30 C1260,45 1380,40 1440,35 L1440,60 L0,60 Z"/>
+            </svg>
+          </div>
+
+          <!-- 数据条 -->
+          <div class="stats">
+            <div class="stat"><b>20+</b><span>鱼种</span></div>
+            <div class="stat"><b>2 个</b><span>塘口</span></div>
+            <div class="stat"><b>06–22</b><span>每日营业</span></div>
+          </div>
+
+          <!-- 塘口 -->
+          <div class="sec">
+            <div class="sec-head"><h3>选一个塘口</h3><a>查看可约时段 →</a></div>
+
+            <div class="pond leisure">
+              <div class="ph">
+                <span class="ph-tag">塘口实拍 · 待替换</span>
+                <span class="ph-note">休闲塘 · 钓台实景</span>
+              </div>
+              <div class="pond-body">
+                <div class="pond-top">
+                  <h4>休闲塘</h4>
+                  <div class="price">100<small>฿/位</small></div>
+                </div>
+                <ul class="feats">
+                  <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>随时来钓，不用凑人数</li>
+                  <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>可选上午 / 下午 / 傍晚 / 全天</li>
+                  <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>自选钓位，家人可陪同</li>
+                </ul>
+                <button class="btn btn-teal btn-block">立即预约</button>
+              </div>
+            </div>
+
+            <div class="pond comp">
+              <div class="ph">
+                <span class="ph-tag">竞赛现场 · 待替换</span>
+                <span class="ph-note">竞赛塘 · 团队赛</span>
+              </div>
+              <div class="pond-body">
+                <div class="pond-top">
+                  <h4>竞赛塘</h4>
+                  <div class="price">500<small>฿/位/天</small></div>
+                </div>
+                <ul class="feats">
+                  <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>10 人成团，可包场</li>
+                  <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>按天计费，含团队赛制</li>
+                  <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>可为公司团建定制</li>
+                </ul>
+                <button class="btn btn-amber btn-block">团队预约</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 为什么选我们 -->
+          <div class="sec">
+            <div class="sec-head"><h3>为什么大家都在这里钓</h3></div>
+            <div class="grid2">
+              <div class="gcard">
+                <div class="ph g1">大鱼实拍 · 待替换</div>
+                <b>真的有大鱼</b><span>鲶鱼、鲈鱼、罗非，上钩就有手感</span>
+              </div>
+              <div class="gcard">
+                <div class="ph g2">餐食实拍 · 待替换</div>
+                <b>钓完有得吃</b><span>现点现做的泰餐与冰饮</span>
+              </div>
+              <div class="gcard">
+                <div class="ph g3">钓台实拍 · 待替换</div>
+                <b>有遮阳钓台</b><span>不用暴晒，坐一整天也舒服</span>
+              </div>
+              <div class="gcard">
+                <div class="ph g4">带鱼回家 · 待替换</div>
+                <b>可带鱼回家</b><span>钓到的鱼按规则带走，不白跑</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 餐饮 -->
+          <div class="sec">
+            <div class="sec-head"><h3>钓累了，来点热的</h3><a>全部菜单 →</a></div>
+            <div class="foodcard">
+              <div class="ph">菜品<br>实拍</div>
+              <div>
+                <h4>餐饮 &amp; 钓具</h4>
+                <p>美食 35 款 · 饮品 12 款 · 钓具 14 款</p>
+              </div>
+              <a class="go">去点餐</a>
+            </div>
+          </div>
+
+          <!-- 钓获墙 -->
+          <div class="sec">
+            <div class="sec-head"><h3>本周钓获</h3><a>更多 →</a></div>
+            <div class="rail">
+              <div class="catch"><div class="lk">钓获实拍</div><span class="kg">18 kg</span></div>
+              <div class="catch"><div class="lk">钓获实拍</div><span class="kg">12 kg</span></div>
+              <div class="catch"><div class="lk">钓获实拍</div><span class="kg">9 kg</span></div>
+              <div class="catch"><div class="lk">钓获实拍</div><span class="kg">7 kg</span></div>
+            </div>
+          </div>
+
+          <!-- 评价 -->
+          <div class="sec">
+            <div class="sec-head"><h3>钓友怎么说</h3><a>全部评价 →</a></div>
+            <div class="quote">
+              <div class="row"><div class="avatar">K</div><b>Khun Somchai</b><span class="stars">★★★★★</span></div>
+              <p>"鱼很有活力，一个下午钓了三条。钓台有顶棚，带小孩来也不累。"</p>
+            </div>
+            <div class="quote">
+              <div class="row"><div class="avatar">L</div><b>李女士</b><span class="stars">★★★★★</span></div>
+              <p>"本来只想钓鱼，结果饭菜意外地好吃，家人也很满意。"</p>
+            </div>
+            <div style="font-size:10.5px;color:var(--n-400);padding:2px 2px 0">※ 示例文案，上线前替换为真实评价</div>
+          </div>
+
+          <!-- 位置 -->
+          <div class="sec">
+            <div class="sec-head"><h3>怎么来 &amp; 什么时候开</h3></div>
+            <div class="loc">
+              <div class="map"><div class="pin"></div></div>
+              <div class="loc-body">
+                <div class="loc-row">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 1118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                  <div><b>地址待确认</b>（待填入实际地址与 Google Maps 链接）</div>
+                </div>
+                <div class="loc-row">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                  <div><b>每日 06:00 – 22:00</b>（依据现有可约时段）</div>
+                </div>
+                <div class="loc-cta">
+                  <a class="nav">导航前往</a>
+                  <a class="call">打电话</a>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 社交 -->
+          <div class="sec">
+            <div class="social">
+              <h4>关注我们，看最新钓获与活动</h4>
+              <p>新鱼入塘、比赛报名、限时优惠都发在这里</p>
+              <div class="social-grid">
+                <a class="sbtn fb">
+                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M22 12a10 10 0 10-11.6 9.9v-7H7.9V12h2.5V9.8c0-2.5 1.5-3.9 3.8-3.9 1.1 0 2.2.2 2.2.2v2.4h-1.2c-1.2 0-1.6.8-1.6 1.6V12h2.7l-.4 2.9h-2.3v7A10 10 0 0022 12z"/></svg>
+                  <span>Hookhappyness</span>
+                </a>
+                <a class="sbtn li">
+                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 11.5a8.4 8.4 0 01-9 8.4 9.8 9.8 0 01-3.2-.5L3 21l1.6-5.1A8.3 8.3 0 013 11.5 8.4 8.4 0 0112 3a8.4 8.4 0 019 8.5z"/></svg>
+                  <span>@300bsham</span>
+                </a>
+                <a class="sbtn tel">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 16.9v3a2 2 0 01-2.2 2 19.8 19.8 0 01-8.6-3.1 19.5 19.5 0 01-6-6A19.8 19.8 0 012.1 4.2 2 2 0 014.1 2h3a2 2 0 012 1.7c.1 1 .4 1.9.7 2.8a2 2 0 01-.5 2.1L8.1 9.9a16 16 0 006 6l1.3-1.2a2 2 0 012.1-.5c.9.3 1.8.6 2.8.7a2 2 0 011.7 2z"/></svg>
+                  <span>电话咨询</span>
+                </a>
+              </div>
+            </div>
+          </div>
+
+          <!-- 底部导航 -->
+          <nav class="tabbar">
+            <a class="tab on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12l2-2 7-7 7 7 2 2M5 10v10h4v-6h6v6h4V10"/></svg><span>首页</span></a>
+            <a class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.7 18.7A8 8 0 016.3 7.3S7 9 9 10c0-2 .5-5 3-7 2 2 4 2.8 5.7 4.3A8 8 0 0120 13a8 8 0 01-2.3 5.7z"/></svg><span>预约</span></a>
+            <a class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h18v2H3zM3 7h18v14H3zM7 10v8M11 10v8M15 10v8"/></svg><span>菜单</span></a>
+            <a class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.3 2.3c-.6.6-.2 1.7.7 1.7H17"/></svg><span>购物车</span></a>
+            <a class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg><span>我的</span></a>
+          </nav>
+
+        </div>
+      </div>
+
+      <!-- ===== 批注 ===== -->
+      <div class="notes">
+        <div class="note"><b>1</b><div><h4>顶部栏加 LINE / 电话入口</h4><p>顾客最常用的两个动作（问路、问有没有位）现在一步可达，不再藏在页面底部。</p></div></div>
+        <div class="note"><b>2</b><div><h4>Hero 换成实景大图 + 情绪主张</h4><p>从"欢迎来到乐钓鱼塘"改成"放下手机，来钓一条大鱼"。首屏一张好照片 + 一句话，胜过十行功能说明。</p></div></div>
+        <div class="note"><b>3</b><div><h4>双 CTA：预约 + LINE 咨询</h4><p>泰国人习惯先 LINE 问一句再决定。给一条低门槛路径，能多接住一批犹豫的客人。</p></div></div>
+        <div class="note"><b>4</b><div><h4>新增数据条（社会认同）</h4><p>20+ 鱼种 / 2 个塘口 / 06–22 营业——泰国同类官网的标配，三秒建立"这是个正经场地"的认知。</p></div></div>
+        <div class="note"><b>5</b><div><h4>塘口卡加实拍 + 权益清单</h4><p>现在只有图标和一行描述。改成照片 + 价格 + 三条具体好处，顾客一眼知道 100฿ 买的是什么。</p></div></div>
+        <div class="note"><b>6</b><div><h4>新增"为什么选我们"四宫格</h4><p>大鱼 / 美食 / 遮阳钓台 / 可带鱼回家。"可带鱼回家"是泰国人心里的硬指标，BO SANG 直接拿它当标题。</p></div></div>
+        <div class="note"><b>7</b><div><h4>新增钓获实拍墙</h4><p>横向滑动的真实钓获，标上重量。这是最有说服力的广告，而且素材就在你手机里。</p></div></div>
+        <div class="note"><b>8</b><div><h4>新增钓友评价</h4><p>把 Google / 脸书上的好评搬上首页。示例文案上线前会换成真实评价。</p></div></div>
+        <div class="note"><b>9</b><div><h4>新增位置 · 时间 · 导航</h4><p>地址、营业时间、地图、"导航前往"。同类站点都有，你现在完全没有——这是最直接的客流损失。</p></div></div>
+        <div class="note"><b>10</b><div><h4>新增社交关注区</h4><p>Facebook Hookhappyness + LINE @300bsham 正式挂上首页，把网站流量导回你的社交池。</p></div></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============ 三、改动清单 ============ -->
+  <section class="block">
+    <div class="block-title"><span class="no">3</span><h2>改动清单</h2></div>
+    <p class="block-sub">按首页从上到下的顺序。<b>灰色为未提及的部分，不动。</b></p>
+    <table>
+      <thead><tr><th>区块</th><th>现在</th><th>改版后</th></tr></thead>
+      <tbody>
+        <tr><td>顶部栏</td><td>品牌名 + 语言切换</td><td class="new">增加 LINE、电话两个快捷按钮</td></tr>
+        <tr><td>首屏 Hero</td><td>渐变底 + 图标装饰 + "欢迎来到乐钓鱼塘"</td><td class="up">实景大图 + 情绪化主张 + 预约/LINE 双 CTA + 评分社会认同</td></tr>
+        <tr><td>数据条</td><td>无</td><td class="new">鱼种数 / 塘口数 / 营业时间三格</td></tr>
+        <tr><td>塘口卡</td><td>渐变卡 + 图标 + 价格徽章 + 一句描述</td><td class="up">实拍图 + 价格前置 + 三条权益 + 明确 CTA</td></tr>
+        <tr><td>为什么选我们</td><td>四行图标 + 文字（鱼种/美食/饮品/预约）</td><td class="up">四宫格实拍卡：大鱼、美食、遮阳钓台、可带鱼回家</td></tr>
+        <tr><td>餐饮入口</td><td>混在"功能列表"里</td><td class="up">独立卡片，带菜品实拍，直接导到菜单页</td></tr>
+        <tr><td>钓获实拍墙</td><td>无</td><td class="new">横向滑动，标注重量</td></tr>
+        <tr><td>钓友评价</td><td>无</td><td class="new">2–3 条真实好评 + 星级</td></tr>
+        <tr><td>位置与时间</td><td>无</td><td class="new">地图缩略 + 地址 + 营业时间 + 导航/电话按钮</td></tr>
+        <tr><td>社交关注</td><td>无</td><td class="new">Facebook / LINE / 电话三宫格</td></tr>
+        <tr><td>底部导航</td><td>首页·预约·菜单·购物车·我的</td><td>不变</td></tr>
+        <tr><td>管理员入口</td><td>页面底部小字 + 密码弹窗</td><td>不变</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ============ 四、待确认 ============ -->
+  <section class="block">
+    <div class="block-title"><span class="no">4</span><h2>需要你确认的几件事</h2></div>
+    <p class="block-sub">把这几项补齐，我就能把设计稿落成真实代码。</p>
+    <div class="qlist">
+      <div class="q"><b>① 实拍照片</b><p>Hero 一张、塘口两张、大鱼/餐食/钓台/带鱼回家各一张、钓获 4–8 张。手机拍的就行。</p></div>
+      <div class="q"><b>② 地址与地图</b><p>泰文地址 + Google Maps 链接，用于"导航前往"。</p></div>
+      <div class="q"><b>③ 电话与营业时间</b><p>客服电话；是否全年无休、有无固定休息日。</p></div>
+      <div class="q"><b>④ 真实评价</b><p>从 Google / 脸书挑 2–3 条好评（含昵称），或授权我按真实评论整理。</p></div>
+      <div class="q"><b>⑤ "可带鱼回家"规则</b><p>哪些鱼可以带走、有没有限制？这是最值得放大的卖点。</p></div>
+      <div class="q"><b>⑥ 首屏主张</b><p>"放下手机，来钓一条大鱼"是否合你口味？也可以换成更朴实的版本。</p></div>
+    </div>
+  </section>
+
+  <div class="foot">
+    <span>Hook Fishpond · 首页改版提案 v1</span>
+    <span>设计系统沿用现有 token；三语（中/英/泰）文案将在实现时同步补齐</span>
+  </div>
+
+</div>
+</body>
+</html>
