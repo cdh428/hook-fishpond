@@ -32,6 +32,12 @@ interface Category {
   name_th: string;
   type: MenuType;
   itemCount?: number;
+  /**
+   * 分类是否在顾客端可见。
+   * 删除一个「下面还有商品」的分类时服务端只做停用（软删），
+   * 所以后台必须把停用状态显式画出来，并提供一键恢复。
+   */
+  isActive?: boolean;
 }
 
 interface MenuItem {
@@ -144,9 +150,34 @@ export default function AdminMenuPage() {
     }
   };
 
-  const handleDeleteCategory = async (id: string) => {
+  /**
+   * 删除分类。
+   *  - 分类下没有商品 → 真删除
+   *  - 分类下有商品 → 服务端只做停用：顾客端不再显示，商品仍留在后台
+   *
+   * 这种「半隐藏」以前在后台完全看不出来（行长得一样、编辑表也不带状态），
+   * 一旦误点就没有回头路。所以这里先确认，落库后由「已隐藏」徽标显式呈现。
+   */
+  const handleDeleteCategory = async (cat: Category) => {
+    const count = cat.itemCount ?? 0;
+    if (count > 0) {
+      const ok = window.confirm(
+        t('admin.hideCategoryConfirm', { name: getLocaleName(cat), count }),
+      );
+      if (!ok) return;
+    }
     try {
-      await deleteCategory(id);
+      await deleteCategory(cat.id);
+      await loadData();
+    } catch (err: any) {
+      setError(err?.message || t('common.error'));
+    }
+  };
+
+  /** 让一个被隐藏（停用）的分类重新在顾客端显示 */
+  const handleRestoreCategory = async (id: string) => {
+    try {
+      await updateCategory(id, { isActive: true });
       await loadData();
     } catch (err: any) {
       setError(err?.message || t('common.error'));
@@ -472,41 +503,73 @@ export default function AdminMenuPage() {
               </button>
             </div>
             <div className="space-y-2">
-              {filteredCategories.map((cat) => (
-                <div key={cat.id} className="flex items-center justify-between rounded-lg bg-white p-3 shadow-sm">
-                  <span className="min-w-0 truncate text-sm font-medium text-neutral-900">
-                    {getLocaleName(cat)}
-                    {typeof cat.itemCount === 'number' && (
-                      <span className="ml-1.5 text-xs font-normal text-neutral-400">
-                        {cat.itemCount}
+              {filteredCategories.map((cat) => {
+                const hidden = cat.isActive === false;
+                const count = cat.itemCount ?? 0;
+                return (
+                  <div
+                    key={cat.id}
+                    className={`flex items-center justify-between rounded-lg bg-white p-3 shadow-sm ${
+                      hidden ? 'opacity-60' : ''
+                    }`}
+                  >
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <span className="min-w-0 truncate text-sm font-medium text-neutral-900">
+                        {getLocaleName(cat)}
                       </span>
-                    )}
-                  </span>
-                  <div className="flex shrink-0 gap-1">
-                    <button
-                      onClick={() => openMove(idsOfCategory(cat.id))}
-                      disabled={idsOfCategory(cat.id).length === 0}
-                      title={t('adminMove.moveWholeCat')}
-                      aria-label={t('adminMove.moveWholeCat')}
-                      className="rounded px-2 py-1 text-xs text-neutral-500 hover:bg-neutral-100 disabled:opacity-30"
-                    >
-                      ↗
-                    </button>
-                    <button
-                      onClick={() => openCategoryForm(cat)}
-                      className="rounded px-2 py-1 text-xs text-primary-600 hover:bg-primary-50"
-                    >
-                      {t('common.edit')}
-                    </button>
-                    <button
-                      onClick={() => handleDeleteCategory(cat.id)}
-                      className="rounded px-2 py-1 text-xs text-error-600 hover:bg-error-50"
-                    >
-                      {t('common.delete')}
-                    </button>
+                      {typeof cat.itemCount === 'number' && (
+                        <span className="shrink-0 text-xs font-normal text-neutral-400">
+                          {cat.itemCount}
+                        </span>
+                      )}
+                      {hidden && (
+                        <span className="shrink-0 rounded bg-neutral-200 px-1.5 py-0.5 text-[10px] font-medium text-neutral-600">
+                          {t('admin.categoryHidden')}
+                        </span>
+                      )}
+                    </span>
+                    <div className="flex shrink-0 gap-1">
+                      <button
+                        onClick={() => openMove(idsOfCategory(cat.id))}
+                        disabled={idsOfCategory(cat.id).length === 0}
+                        title={t('adminMove.moveWholeCat')}
+                        aria-label={t('adminMove.moveWholeCat')}
+                        className="rounded px-2 py-1 text-xs text-neutral-500 hover:bg-neutral-100 disabled:opacity-30"
+                      >
+                        ↗
+                      </button>
+                      <button
+                        onClick={() => openCategoryForm(cat)}
+                        className="rounded px-2 py-1 text-xs text-primary-600 hover:bg-primary-50"
+                      >
+                        {t('common.edit')}
+                      </button>
+                      {hidden ? (
+                        <button
+                          onClick={() => handleRestoreCategory(cat.id)}
+                          className="rounded px-2 py-1 text-xs text-success-600 hover:bg-success-50"
+                        >
+                          {t('admin.restoreCategory')}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleDeleteCategory(cat)}
+                          title={
+                            count > 0
+                              ? t('admin.hideCategoryHint', { count })
+                              : t('common.delete')
+                          }
+                          className="rounded px-2 py-1 text-xs text-error-600 hover:bg-error-50"
+                        >
+                          {count > 0
+                            ? t('admin.hideCategory')
+                            : t('common.delete')}
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
               {filteredCategories.length === 0 && (
                 <p className="py-4 text-center text-sm text-neutral-400">{t('common.noData')}</p>
               )}
@@ -784,6 +847,9 @@ export default function AdminMenuPage() {
                         cats.map((c) => (
                           <option key={c.id} value={c.id}>
                             {getLocaleName(c)}
+                            {c.isActive === false
+                              ? ` · ${t('admin.categoryHidden')}`
+                              : ''}
                           </option>
                         ))
                       )}
@@ -1167,7 +1233,14 @@ export default function AdminMenuPage() {
                         : 'border-neutral-200 text-neutral-700'
                     }`}
                   >
-                    <span className="truncate">{getLocaleName(c)}</span>
+                    <span className="min-w-0 truncate">
+                      {getLocaleName(c)}
+                      {c.isActive === false && (
+                        <span className="ml-1.5 text-[10px] text-neutral-400">
+                          {t('admin.categoryHidden')}
+                        </span>
+                      )}
+                    </span>
                     {moveCatId === c.id && (
                       <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />

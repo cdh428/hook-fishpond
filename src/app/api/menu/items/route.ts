@@ -36,6 +36,21 @@ const PUBLIC_INCLUDE = {
   optionGroups: optionGroupsInclude,
 };
 
+/**
+ * 公开菜单的可售条件：**商品本身启用 且 所属分类也启用**。
+ *
+ * 后台删除一个「下面还有商品」的分类时走的是软删（只把分类置为停用），
+ * 分类 chip 因此不再渲染。如果这里只看商品自己的 isActive，那些商品就会
+ * 掉进「分类入口没了、商品却还在」的半隐藏状态——列表里看不到、搜索却能
+ * 搜到，后台也无从察觉。两处口径必须一致。
+ *
+ * 注意：后台接口（/api/admin/menu/items）不过滤分类状态，管理员始终看得见。
+ */
+const PUBLIC_ITEM_WHERE = {
+  isActive: true,
+  category: { isActive: true },
+};
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -45,8 +60,8 @@ export async function GET(request: NextRequest) {
     if (popular === "true") {
       const items = await prisma.menuItem.findMany({
         where: {
+          ...PUBLIC_ITEM_WHERE,
           isPopular: true,
-          isActive: true,
         },
         include: PUBLIC_INCLUDE,
         orderBy: { sortOrder: "asc" },
@@ -57,7 +72,7 @@ export async function GET(request: NextRequest) {
 
     const items = await prisma.menuItem.findMany({
       where: {
-        isActive: true,
+        ...PUBLIC_ITEM_WHERE,
         ...(categoryId ? { categoryId } : {}),
       },
       include: PUBLIC_INCLUDE,

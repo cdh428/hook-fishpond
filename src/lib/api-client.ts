@@ -655,10 +655,21 @@ export async function updateBookingStatus(
 
 // ---------- Menu admin (categories) ----------
 
+/**
+ * Admin — 列出分类（含已停用的）。
+ *
+ * `isActive` 是「分类是否在顾客端可见」的开关。后台删除一个下面还有商品的
+ * 分类时，服务端只做停用（软删），所以后台必须把这个状态显示出来，否则
+ * 管理员会以为删掉了、实际上商品只是从顾客端悄悄消失。
+ */
 export async function fetchAdminCategories(type?: MenuType): Promise<any[]> {
   const qs = type ? `?type=${type}` : '';
   const raw = await request<any[]>(`/api/admin/menu/categories${qs}`);
-  return raw.map((c) => ({ ...c, itemCount: c._count?.items ?? 0 }));
+  return raw.map((c) => ({
+    ...c,
+    itemCount: c._count?.items ?? 0,
+    isActive: c.isActive !== false,
+  }));
 }
 
 export async function createCategory(input: {
@@ -680,6 +691,8 @@ export async function updateCategory(
     name_en?: string;
     name_th?: string;
     type?: MenuType;
+    /** 恢复显示 / 手动停用该分类（顾客端是否可见） */
+    isActive?: boolean;
   },
 ): Promise<any> {
   return request<any>(`/api/admin/menu/categories/${id}`, {
@@ -688,10 +701,20 @@ export async function updateCategory(
   });
 }
 
-export async function deleteCategory(id: string): Promise<any> {
-  return request<any>(`/api/admin/menu/categories/${id}`, {
-    method: 'DELETE',
-  });
+/**
+ * 删除分类。
+ *  - 分类下没有商品 → 真删除
+ *  - 分类下有商品 → 服务端只做停用，返回 `deactivated: true`
+ *    （分类从顾客端消失，商品仍在后台可见，可随时恢复）
+ */
+export async function deleteCategory(id: string): Promise<{
+  message: string;
+  deactivated?: boolean;
+}> {
+  return request<{ message: string; deactivated?: boolean }>(
+    `/api/admin/menu/categories/${id}`,
+    { method: 'DELETE' },
+  );
 }
 
 // ---------- Menu admin (items) ----------
