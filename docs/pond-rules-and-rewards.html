@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>钓场规则 &amp; 钓鱼奖励政策 v1.2（定稿）| Hook the happyness</title>
+<style>
+  :root{
+    --p900:#083344; --p800:#0E4A5F; --p700:#155E75; --p600:#0E7490; --p500:#06B6D4;
+    --p100:#CFF5F7; --p50:#EAF6F5;
+    --a600:#D97706; --a500:#F59E0B; --a100:#FEF3C7;
+    --ok:#059669; --ok50:#ECFDF5; --okB:#A7F3D0;
+    --bad:#DC2626; --bad50:#FEF2F2; --badB:#FECACA;
+    --n900:#0F172A; --n700:#334155; --n500:#64748B; --n400:#94A3B8;
+    --n200:#E2E8F0; --n100:#F1F5F9;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; padding:36px 18px 72px;
+    background:var(--p50); color:var(--n900);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans SC","Microsoft YaHei",sans-serif;
+    font-size:15px; line-height:1.7; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:940px;margin:0 auto}
+
+  .hd{background:linear-gradient(135deg,var(--p800),var(--p600));
+    color:#fff;border-radius:18px;padding:30px 32px;margin-bottom:26px;
+    box-shadow:0 10px 30px rgba(21,94,117,.18)}
+  .hd .kicker{font-size:12px;letter-spacing:.16em;text-transform:uppercase;opacity:.72;font-weight:600}
+  .hd h1{margin:9px 0 8px;font-size:27px;letter-spacing:-.01em;line-height:1.25}
+  .hd p{margin:0;opacity:.88;font-size:14px;max-width:70ch}
+  .hd .meta{margin-top:18px;padding-top:15px;border-top:1px solid rgba(255,255,255,.2);
+    display:flex;gap:20px;flex-wrap:wrap;font-size:12.5px;opacity:.84}
+  .hd .meta b{font-weight:700;opacity:1}
+
+  h2{font-size:17.5px;margin:42px 0 13px;padding-left:12px;
+    border-left:4px solid var(--a500);line-height:1.35}
+  h2 .no{color:var(--n400);font-weight:600;margin-right:7px;font-variant-numeric:tabular-nums}
+  h2 small{display:block;font-size:12.5px;font-weight:400;color:var(--n500);margin-top:2px;letter-spacing:0}
+  h3{font-size:14.5px;margin:20px 0 8px}
+  .card{background:#fff;border:1px solid var(--n200);border-radius:14px;padding:20px 22px;
+    box-shadow:0 1px 3px rgba(15,23,42,.04)}
+  .muted{color:var(--n500)}
+  code{background:var(--n100);padding:1px 6px;border-radius:5px;font-size:12.5px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  .th{font-family:"Sarabun","Noto Sans Thai",sans-serif}
+  .src{font-size:11.5px;color:var(--n400);margin-top:8px;line-height:1.6}
+  .src b{color:var(--n500);font-weight:600}
+
+  .callout{background:#fff;border:1px solid var(--p100);border-left:4px solid var(--p600);
+    border-radius:12px;padding:18px 20px}
+  .callout strong{color:var(--p700)}
+  .callout.warn{border-color:var(--badB);border-left-color:var(--bad)}
+  .callout.warn strong{color:var(--bad)}
+
+  .oneline{background:linear-gradient(135deg,var(--p800),var(--p600));color:#fff;
+    border-radius:16px;padding:26px 28px;text-align:center}
+  .oneline .lb{font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;opacity:.7;font-weight:600}
+  .oneline .big{font-size:20px;font-weight:800;margin:10px 0 6px;line-height:1.45}
+  .oneline .big em{font-style:normal;background:rgba(255,255,255,.16);
+    border-bottom:2px solid var(--a500);padding:0 6px;border-radius:4px}
+  .oneline .sub{font-size:13px;opacity:.85}
+
+  table{width:100%;border-collapse:separate;border-spacing:0;font-size:13.5px;
+    background:#fff;border:1px solid var(--n200);border-radius:12px;overflow:hidden}
+  th{background:var(--p50);color:var(--p800);text-align:left;font-weight:700;
+    padding:11px 14px;border-bottom:1px solid var(--n200);white-space:nowrap;font-size:13px}
+  td{padding:10px 14px;border-bottom:1px solid var(--n100);vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  td.name{font-weight:600}
+  .hl{background:var(--a100);font-weight:600;padding:1px 5px;border-radius:4px}
+  .tbl-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  tbody tr.banned td{background:var(--bad50)}
+  tbody tr.decided td{background:var(--ok50)}
+
+  .chip{display:inline-block;font-size:11px;font-weight:700;border-radius:20px;
+    padding:1.5px 9px;white-space:nowrap;vertical-align:2px}
+  .c-cur{background:var(--p100);color:var(--p700);border:1px solid #A5F3FC}
+  .c-done{background:var(--ok50);color:var(--ok);border:1px solid var(--okB)}
+  .c-opt{background:var(--n100);color:var(--n500);border:1px solid var(--n200)}
+  .c-tbd{background:var(--a100);color:var(--a600);border:1px solid #FDE68A}
+  .c-key{background:var(--bad50);color:var(--bad);border:1px solid var(--badB)}
+
+  .group{background:#fff;border:1px solid var(--n200);border-radius:14px;
+    padding:6px 20px 16px;margin-bottom:14px;box-shadow:0 1px 3px rgba(15,23,42,.04)}
+  .ghead{display:flex;align-items:center;gap:10px;padding:14px 0 10px;
+    border-bottom:1px dashed var(--n200);margin-bottom:10px;flex-wrap:wrap}
+  .ghead .gid{font-weight:800;color:var(--p700);font-size:15px}
+  .ghead .gtitle{font-weight:700;font-size:14.5px}
+  .ghead .gnote{font-size:12.5px;color:var(--n500);margin-left:auto}
+  .rule{display:flex;gap:11px;padding:8px 0;align-items:flex-start}
+  .rule + .rule{border-top:1px solid var(--n100)}
+  .rid{flex:0 0 42px;font-size:12.5px;font-weight:700;color:var(--n400);
+    font-variant-numeric:tabular-nums;padding-top:2px}
+  .rtxt{flex:1;min-width:0;font-size:14px}
+  .rtxt .sub{display:block;font-size:12.5px;color:var(--n500);margin-top:3px}
+  .rtxt .quote{display:block;font-size:12.5px;color:var(--p700);margin-top:4px;
+    padding-left:9px;border-left:2px solid var(--p100)}
+  .blank{display:inline-block;min-width:56px;border-bottom:1.5px dashed var(--n400);
+    margin:0 3px;font-weight:700;color:var(--p700);text-align:center}
+  .sugg{color:var(--a600);font-weight:700}
+  .fix{color:var(--ok);font-weight:700}
+  .yes{color:var(--ok);font-weight:800}
+  .no{color:var(--bad);font-weight:800}
+
+  /* findings */
+  .find{background:#fff;border:1px solid var(--n200);border-radius:12px;
+    padding:15px 18px;margin-bottom:11px;border-left:4px solid var(--n400)}
+  .find.sev1{border-left-color:var(--bad)}
+  .find.sev2{border-left-color:var(--a500)}
+  .find.sev3{border-left-color:var(--p600)}
+  .find.ok{border-left-color:var(--ok)}
+  .find .fh{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap}
+  .find .fn{font-size:11.5px;font-weight:800;color:#fff;background:var(--n400);
+    border-radius:6px;padding:1px 7px;letter-spacing:.04em}
+  .find.sev1 .fn{background:var(--bad)}
+  .find.sev2 .fn{background:var(--a500)}
+  .find.sev3 .fn{background:var(--p600)}
+  .find.ok .fn{background:var(--ok)}
+  .find .ft{font-weight:700;font-size:14.5px}
+  .find .fb{margin-top:7px;font-size:13.5px}
+  .find .fa{margin-top:8px;font-size:13px;background:var(--p50);border-radius:8px;padding:9px 12px}
+  .find .fa b{color:var(--p700)}
+  .find.ok .fa{background:var(--ok50)}
+  .find.ok .fa b{color:var(--ok)}
+
+  .rw{background:#fff;border:1px solid var(--n200);border-left:4px solid var(--a500);
+    border-radius:12px;padding:15px 18px;margin-bottom:11px}
+  .rw-key{border-left-color:var(--p600)}
+  .rw.on{border-left-color:var(--ok)}
+  .rw .rwh{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap}
+  .rw .rwn{font-size:11.5px;font-weight:800;color:#fff;background:var(--a500);
+    border-radius:6px;padding:1px 7px;letter-spacing:.04em}
+  .rw.on .rwn{background:var(--ok)}
+  .rw .rwt{font-weight:700;font-size:14.5px}
+  .rw .rwm{margin-top:7px;font-size:13.5px}
+  .rw .rwm b{color:var(--p700)}
+  .rw .rws{display:block;font-size:12.5px;color:var(--n500);margin-top:4px}
+
+  ol.ask{margin:0;padding-left:0;list-style:none;counter-reset:q}
+  ol.ask li{counter-increment:q;position:relative;padding:9px 0 9px 36px;
+    border-bottom:1px dashed var(--n100);font-size:14px}
+  ol.ask li:last-child{border-bottom:none}
+  ol.ask li::before{content:"Q" counter(q);position:absolute;left:0;top:9px;
+    font-size:11px;font-weight:800;color:#fff;background:var(--a500);
+    border-radius:6px;padding:2px 6px;line-height:1.4}
+
+  .steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(196px,1fr));gap:12px;margin-top:4px}
+  .step{background:var(--p50);border:1px solid var(--p100);border-radius:12px;padding:14px 16px}
+  .step .sn{font-size:11px;font-weight:800;color:var(--p600);letter-spacing:.1em}
+  .step h4{margin:5px 0 4px;font-size:14px}
+  .step p{margin:0;font-size:12.5px;color:var(--n500);line-height:1.6}
+
+  /* poster mock */
+  .poster{background:#fff;border:1px solid var(--n200);border-radius:14px;padding:0;overflow:hidden;
+    box-shadow:0 1px 3px rgba(15,23,42,.04)}
+  .poster .ph{background:var(--p800);color:#fff;padding:14px 20px;font-size:14px;font-weight:700}
+  .poster .pb{padding:16px 20px 18px}
+  .poster .prow{display:flex;gap:10px;padding:7px 0;font-size:13.5px;align-items:flex-start}
+  .poster .prow + .prow{border-top:1px solid var(--n100)}
+  .poster .pn{flex:0 0 22px;font-weight:800;color:var(--p600);font-variant-numeric:tabular-nums}
+  .poster .pnew{background:var(--a100);border-radius:5px;padding:0 5px;font-weight:700;font-size:11px;color:var(--a600)}
+
+  footer{margin-top:36px;padding-top:16px;border-top:1px solid var(--n200);
+    font-size:12px;color:var(--n400);line-height:1.75}
+  footer b{color:var(--n500)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="hd">
+    <div class="kicker">Hook the happyness · 乐钓鱼塘</div>
+    <h1>钓场规则 &amp; 钓鱼奖励政策</h1>
+    <p>你已经逐条拍板，这一版是<b>定稿</b>。第 00 节是你 10 条答复的落地台账，第 03 节是休闲塘规则终稿，
+       第 05 节是竞赛塘规则卡（按你要求单出一张）。剩下没定的只有 4 件小事，都堆在第 06 节。</p>
+    <div class="meta">
+      <span>版本 <b>v1.2（定稿）</b></span>
+      <span>拍板日 <b>2026-09-24</b></span>
+      <span>依据 <b>现行海报 + 你的 10 条答复</b></span>
+      <span>站点三语文案 <b>已同步更正</b></span>
+    </div>
+  </div>
+
+  <!-- ============ 00 ============ -->
+  <h2><span class="no">00</span>你的答复 → 已落定<small>10 个问题，8 条定了，1 条你没答（我按建议先留着），1 条你让我定（已定）</small></h2>
+
+  <div class="tbl-scroll">
+  <table>
+    <thead><tr><th>#</th><th>问题</th><th>你的答复</th><th>结果</th></tr></thead>
+    <tbody>
+      <tr class="decided"><td><b>1</b></td><td>100฿ 是一个时段还是全天？</td>
+        <td><b>全天一档</b>，什么时候来都一样</td>
+        <td><span class="chip c-done">已定</span> 取消四时段；网站本来就只有「全天」一档，<b>与现状一致</b></td></tr>
+      <tr class="decided"><td><b>2</b></td><td>100฿ 与 150฿ 是二选一还是叠加？</td>
+        <td><b>二选一</b>：自带竿 100，租竿 150</td>
+        <td><span class="chip c-done">已定</span> 两条商品已在后台改名并加说明</td></tr>
+      <tr class="decided"><td><b>3</b></td><td>营业时间与公休日</td>
+        <td><b>09:00–18:00</b>，<b>每周一公休</b></td>
+        <td><span class="chip c-done">已定</span> 网站文案已有，海报需补</td></tr>
+      <tr class="decided"><td><b>4</b></td><td>押金与赔偿</td>
+        <td><b>无押金</b>；赔偿 <b>1,000 泰铢</b></td>
+        <td><span class="chip c-done">已定</span> 押金条款作废；赔偿改统一额度</td></tr>
+      <tr class="decided"><td><b>5</b></td><td>「禁止下水」要不要明确写</td>
+        <td><b>要</b></td>
+        <td><span class="chip c-done">已定</span> 单列一条安全条款</td></tr>
+      <tr class="decided"><td><b>6</b></td><td>「禁止自带饵」要不要加回海报</td>
+        <td><b>OK</b></td>
+        <td><span class="chip c-done">已定</span> 加回，列为第 8 条</td></tr>
+      <tr><td><b>7</b></td><td>「禁止自带餐饮」要不要开例外</td>
+        <td class="muted">（未答）</td>
+        <td><span class="chip c-tbd">待确认</span> 我按「生日蛋糕 / 婴儿食品与奶粉 / 药品与医疗饮食」三例外先留着</td></tr>
+      <tr class="decided"><td><b>8</b></td><td>竞赛塘规则要不要单出一张</td>
+        <td><b>好</b></td>
+        <td><span class="chip c-done">已定</span> 见第 05 节规则卡</td></tr>
+      <tr class="decided"><td><b>9</b></td><td>代加工要不要收费</td>
+        <td><b>是</b></td>
+        <td><span class="chip c-done">已定</span> 采纳；<b>具体金额还没给</b>（第 06 节）</td></tr>
+      <tr class="decided"><td><b>10</b></td><td>奖励先上哪几条</td>
+        <td>你决定</td>
+        <td><span class="chip c-done">已定</span> <b>M1–M5 先上</b>（第 04 节）</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="callout" style="margin-top:14px">
+    <strong>顺带修掉的一处三语不一致：</strong>竞赛塘的英文／泰文原本写「<code>500฿/spot/day</code>」「<code>500฿/จุด/วัน</code>」
+    （每<b>钓位</b>），但代码是按<b>人头</b>算的（<code>500 × 参加人数</code>），中文文案「500฿/位/天」才是对的。
+    一个人从英文页面上读，会以为 10 人只要买 1 个「位」就付 500฿ —— 这是会漏钱的口径。已改成
+    <code>500฿/person/day</code> / <code>500฿/ท่าน/วัน</code>。
+  </div>
+
+  <!-- ============ 01 ============ -->
+  <h2><span class="no">01</span>你们现行的规定<small>照海报全文还原，含泰文原文，方便你核对我有没有读错</small></h2>
+
+  <div class="oneline">
+    <div class="lb">Poster headline · 海报主规则</div>
+    <div class="big">塘里<em>所有鱼都可以带走</em>，<em>免费 1 公斤</em></div>
+    <div class="sub">超过 1 公斤部分按 60 泰铢／公斤称重计费 &nbsp;·&nbsp; 唯一例外：ปลาบึก（湄公巨鲶）禁止带出池塘</div>
+  </div>
+
+  <h3>1.1 收费（海报第 1、2 条）—— 二选一</h3>
+  <div class="tbl-scroll">
+  <table>
+    <thead><tr><th>项目</th><th>价格</th><th>泰文原文</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr class="decided"><td class="name">自带钓竿 · 服务费</td><td><b>100 ฿ / 根竿</b></td>
+        <td class="th">ค่าบริการตกปลา คันละ 100 บาท (ค่าเบ็ด/ค่าบริการ)</td>
+        <td rowspan="2"><b>二选一，不叠加</b><br><span class="muted">（你的答复 #2）</span></td></tr>
+      <tr class="decided"><td class="name">租借钓竿 · 含服务费</td><td><b>150 ฿ / 根竿</b></td>
+        <td class="th">บริการให้เช่าเบ็ด คันละ 150 บาท</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="src">
+    <b>计价单位：</b>海报用 <span class="th">คันละ</span>（<b>每根竿</b>），不是「每人」。
+    我 v1.0 里写的「100฿/位」是错的，v1.1 起已全文更正。<br>
+    <b>时长：</b><b>全天一档</b>，09:00–18:00 内什么时候来都一样（你的答复 #1、#3）。
+  </div>
+
+  <h3>1.2 鱼种与能否带走（海报「ชนิดปลาในบ่อ」）</h3>
+  <div class="tbl-scroll">
+  <table>
+    <thead>
+      <tr><th>泰文名</th><th>中文</th><th>英文</th><th>能否带走</th><th>超出计价</th></tr>
+    </thead>
+    <tbody>
+      <tr><td class="name th">ปลานิล</td><td>尼罗罗非鱼</td><td>Nile tilapia</td><td><span class="chip c-done">可带走</span></td><td>60 ฿/kg</td></tr>
+      <tr><td class="name th">ปลาช่อน</td><td>线鳢（泰式黑鱼）</td><td>Snakehead</td><td><span class="chip c-done">可带走</span></td><td>60 ฿/kg</td></tr>
+      <tr><td class="name th">ปลาหมอ</td><td>攀鲈（爬树鱼）</td><td>Climbing perch</td><td><span class="chip c-done">可带走</span></td><td>60 ฿/kg</td></tr>
+      <tr><td class="name th">ปลาตะเพียน</td><td>泰国银鲃</td><td>Silver barb</td><td><span class="chip c-done">可带走</span></td><td>60 ฿/kg</td></tr>
+      <tr><td class="name th">ปลาบู่</td><td>笋壳鱼（斑驳塘鳢）</td><td>Marbled goby</td><td><span class="chip c-done">可带走</span></td><td>60 ฿/kg</td></tr>
+      <tr><td class="name th">ปลาดุก</td><td>胡鲶（泰国塘虱）</td><td>Walking catfish</td><td><span class="chip c-done">可带走</span></td><td>60 ฿/kg</td></tr>
+      <tr><td class="name th">ปลาสวาย</td><td>条纹鲶</td><td>Striped catfish</td><td><span class="chip c-done">可带走</span></td><td>60 ฿/kg</td></tr>
+      <tr class="banned"><td class="name th">ปลาบึก</td><td>湄公巨鲶</td><td>Mekong giant catfish</td>
+        <td><span class="chip c-key">禁止带出</span></td><td>—</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="src">
+    <b>海报原文：</b><span class="th">ทุกปลาในบ่อสามารถนำออกได้ ฟรี 1 กิโลกรัม หากเกิน 1 กิโลกรัม ชั่งออก กิโลกรัมละ 60 บาท</span>
+    ／<span class="th">ปลาบึก ห้ามนำออกจากบ่อ</span>
+    <br><b>中文名是我翻的</b>，泰英两列以海报为准；若有出入告诉我。
+  </div>
+
+  <h3>1.3 服务规则（海报「กติกาการใช้บริการ」）</h3>
+  <div class="card">
+    <div class="rule"><span class="rid"><span class="yes">3</span></span><span class="rtxt">
+      <b>禁止自带餐饮入场</b>
+      <span class="quote th">ห้ามนำอาหารและเครื่องดื่มจากภายนอกเข้ามา (ภายในร้านมีอาหารและเครื่องดื่ม บริการครบครับ)</span>
+      <span class="sub">店内提供完整的餐饮服务</span></span></div>
+    <div class="rule"><span class="rid"><span class="yes">4</span></span><span class="rtxt">
+      <b>禁止在场内奔跑嬉戏</b>（为了客人及水族的安全）
+      <span class="quote th">ห้ามวิ่งเล่นในบ่อ เพื่อความปลอดภัยของลูกค้าและสัตว์น้ำ</span></span></div>
+    <div class="rule"><span class="rid"><span class="yes">5</span></span><span class="rtxt">
+      <b>儿童必须由监护人看管；12 岁以下须全程在家长看护之下</b>
+      <span class="quote th">เด็กต้องมีผู้ปกครองดูแล เด็กอายุต่ำกว่า 12 ปี ต้องอยู่ในความดูแลของผู้ปกครองตลอดเวลา</span></span></div>
+    <div class="rule"><span class="rid"><span class="yes">6</span></span><span class="rtxt">
+      <b>保持清洁，垃圾请丢在指定位置</b>
+      <span class="quote th">รักษาความสะอาด กรุณาทิ้งขยะในจุดที่กำหนด ช่วยกันรักษาความสะอาดของร้าน</span></span></div>
+    <div class="rule"><span class="rid"><span class="yes">7</span></span><span class="rtxt">
+      <b>禁止大声喧哗、影响其他客人</b>
+      <span class="quote th">ห้ามส่งเสียงดัง รบกวนลูกค้าคนอื่น เพื่อให้ทุกท่านได้พักผ่อนและผ่อนคลายอย่างเพลิดเพลิน</span></span></div>
+    <div class="rule"><span class="rid"><span class="yes">8</span></span><span class="rtxt">
+      <b>只准使用店里的饵料，禁止自带饵</b> <span class="chip c-done">新加回</span>
+      <span class="quote th">ใช้เหยื่อเฉพาะที่ร้านเท่านั้น ห้ามนำเหยื่อจากภายนอกเข้ามา</span>
+      <span class="sub">这条原本只在第一版海报（<code>rules.jpg</code>）里，<code>rule1.jpg</code> 漏掉了 —— 按你答复 #6 加回，并向顾客公示</span></span></div>
+    <div class="src">
+      <b>目录：</b>第 3–8 条按海报顺序排列。加回的第 8 条是营收条款（你店里在售 14 项钓具，
+      饵料是从你这里买的），漏掉一条就漏一个收入来源。
+    </div>
+  </div>
+
+  <!-- ============ 02 ============ -->
+  <h2><span class="no">02</span>体检结果的收口<small>v1.1 提的 7 个缺口 + 5 点提醒，现在只剩 1 个半还是开着的</small></h2>
+
+  <p style="font-size:13.5px;margin:0 0 14px">
+    <span class="chip c-done">绿＝你已拍板</span> <span class="chip c-tbd">黄＝还开着</span>
+  </p>
+
+  <div class="find ok">
+    <div class="fh"><span class="fn">G1</span><span class="ft">100฿ 能钓多久 —— 已定：全天一档</span><span class="chip c-done">已收口</span></div>
+    <div class="fb">你答：<b>全天，只有一档，什么时候来都一样。</b></div>
+    <div class="fa"><b>落地：</b>海报上 100฿ 旁边补一句 <span class="th">คันละ 100 บาท (ตกได้ทั้งวัน)</span>；
+      网站预约页本来就只卖「全天」一档，<b>不需要改代码</b>。同时还确认了营业时间
+      <b>09:00–18:00、每周一公休</b>，这两条现在也该上海报（G4）。</div>
+  </div>
+
+  <div class="find ok">
+    <div class="fh"><span class="fn">G2</span><span class="ft">100฿ 与 150฿ 的关系 —— 已定：二选一</span><span class="chip c-done">已收口</span></div>
+    <div class="fb">
+      你答：<b>二选一。自带钓竿 100，租借钓竿 150。</b>
+      原本后台两条商品都叫「钓竿 / Fishing rod」，中英文完全分不出来 —— 这就是我上次把它误判成「重复商品」的原因。
+    </div>
+    <div class="fa"><b>已落地（生产库已生效）：</b>
+      <br>· ฿100 → 中文「<b>自带竿</b>」/ 英「<b>Own rod</b>」/ 泰「<span class="th">ค่าเบ็ด (นำมาเอง)</span>」
+      <br>· ฿150 → 中文「<b>租竿</b>」/ 英「<b>Rod rental</b>」/ 泰「<span class="th">ค่าเช่าคันเบ็ด</span>」
+      <br>· 两条都加了三语说明「与另一项二选一」，客人点哪条都看得懂。
+      <br>· 顺带修了泰文笔误：<span class="th">คันเบ็ด (นำมาเอง）</span> 半角括号配全角括号。</div>
+  </div>
+
+  <div class="find ok">
+    <div class="fh"><span class="fn">G3</span><span class="ft">押金与赔偿 —— 已定：无押金，赔偿 1,000฿</span><span class="chip c-done">已收口</span></div>
+    <div class="fb">你答：<b>押金没有，赔偿 1,000 泰铢。</b>我 v1.1 建议的「押金 500฿」作废。</div>
+    <div class="fa"><b>但要提醒你一个执行难点（这条比规则本身重要）：</b><br>
+      没有押金，客人把竿折断或甩进塘里，<b>你手上没有任何可以扣的东西</b>，1,000฿ 只能靠客人自愿掏钱。
+      同类里 BO SANG 押 ฿2,000、EFT/Leks 直接罚 ฿4,000–8,000，就是靠押金兜底。
+      <br><b>零成本补法：</b>把 1,000฿ 写成「<b>登记在预约手机号上，下次入场一并结清</b>」——
+      你的预约本来就要填手机号，等于用现成的资料做了一个软押金，不用真的收钱、也不赶客。
+      这条我放在第 06 节等你点头。</div>
+  </div>
+
+  <div class="find ok">
+    <div class="fh"><span class="fn">G4</span><span class="ft">营业时间与公休 —— 已定：09:00–18:00，周一公休</span><span class="chip c-done">已收口</span></div>
+    <div class="fb">你答：<b>营业时间 9–18:00，公休日每周一。</b></div>
+    <div class="fa"><b>落地：</b>网站预约页已有「<b>营业时间 09:00–18:00 · 每周一休息</b>」三语文案（
+      <code>booking.businessHours</code> / <code>booking.mondayClosed</code>），口径一致，不用改。
+      报纸海报和门店招牌要补上。</div>
+  </div>
+
+  <div class="find ok">
+    <div class="fh"><span class="fn">G5</span><span class="ft">禁止下水 —— 已定：明确写</span><span class="chip c-done">已收口</span></div>
+    <div class="fb">你答：<b>要。</b>原海报第 4 条只写「<span class="th">ห้ามวิ่งเล่นในบ่อ</span>」（别在塘里跑闹），
+      没有人看得出到底能不能下水 —— 出事时你没有任何依据。</div>
+    <div class="fa"><b>落地：</b>新增一条 <b>ห้ามลงน้ำ / ห้ามว่ายน้ำ（禁止下水、禁止游泳）</b>，
+      并明写「<b>严禁自行下水捞竿、追鱼；需要时请联系员工</b>」。这条和「禁止奔跑」是两件事，必须分开写。</div>
+  </div>
+
+  <div class="find sev2">
+    <div class="fh"><span class="fn">G6</span><span class="ft">没说「在哪称、怎么称」</span><span class="chip c-tbd">仍建议补</span></div>
+    <div class="fb">海报只写「超出部分按 60฿/公斤称重」，没写称重点在哪、是不是当面称、能不能分次称。</div>
+    <div class="fa"><b>建议（低成本、高回报）：</b>写明「<b>离场前在柜台称重，当着客人面称，客人可看秤；可分次称重累计到同一张单</b>」。
+      这一句能省掉绝大多数「你家秤不准」的争执。已列入第 03 节 D6。</div>
+  </div>
+
+  <div class="find sev2">
+    <div class="fh"><span class="fn">G7</span><span class="ft">渔获费不参与折扣</span><span class="chip c-tbd">仍建议补</span></div>
+    <div class="fb">
+      系统允许员工给到 10% 折扣。如果折扣能套在渔获费上，员工就等于可以<b>用折扣额度把鱼送出去</b> ——
+      鱼是真金白银的成本，从塘里捞走一条就少一条。
+    </div>
+    <div class="fa"><b>深圳青青世界</b>明文写「<b>购鱼不享受折扣</b>」。
+      <b>建议：</b>渔获费从任何折扣范围里剔除，并在结算页文案里说明（已列入 D7）。</div>
+  </div>
+
+  <div class="find sev3">
+    <div class="fh"><span class="fn">R1</span><span class="ft">「禁止自带餐饮」的三个例外</span><span class="chip c-tbd">等你一句话</span></div>
+    <div class="fb">
+      这条本身很正当（Leks 等泰国同类都禁，你也靠餐厅赚钱）。但现实里一定有：生日蛋糕、
+      婴儿辅食与奶粉、客人自备的药品与特殊饮食。
+    </div>
+    <div class="fa"><b>我建议开三个明确例外：</b>「<b>生日蛋糕 / 婴儿食品与奶粉 / 药品与医疗饮食</b>可带入」。
+      否则员工要跟提着蛋糕来给小孩过生日的妈妈讲道理 —— 赢不了，而且是在客人面前输。
+      <b>你回一句「OK」我就写进规则。</b></div>
+  </div>
+
+  <div class="find ok">
+    <div class="fh"><span class="fn">R2</span><span class="ft">ปลาบึก 禁带走 —— 你和 BO SANG 判断一致</span><span class="chip c-done">保留</span></div>
+    <div class="fb">
+      BO SANG 明令禁带 4 种鱼（湄公巨鲶、条纹鲶、巨暹罗鲤、大丝足鲈），
+      其中<b>唯一你也禁的是湄公巨鲶</b> —— 两边在「招牌巨物只钓不带」上的判断一样，这是专业判断，不用动。
+    </div>
+    <div class="fa"><b>顺带一句：</b>你也养 <span class="th">ปลาสวาย</span>（条纹鲶）并开放带走，而 BO SANG 是禁的。
+      这没什么问题（它是常见食用鱼），只是让你知道同类怎么划线 —— <b>不用改</b>。</div>
+  </div>
+
+  <div class="find ok">
+    <div class="fh"><span class="fn">R3</span><span class="ft">海报只有泰文，站点要三语</span><span class="chip c-done">已纳入计划</span></div>
+    <div class="fb">网站是中文／英文／泰文三语，规则页也必须三语；线下海报目前只有泰文版。</div>
+    <div class="fa"><b>BO SANG 的价目牌是泰英中三语同一张图。</b>
+      <b>做法：</b>等站点规则页三语文案定稿，反向生成一版三语海报，两处口径完全一致（第 06 节）。</div>
+  </div>
+
+  <div class="find ok">
+    <div class="fh"><span class="fn">R4</span><span class="ft">竞赛塘不在这张海报里 —— 已定：单出一张</span><span class="chip c-done">已收口</span></div>
+    <div class="fb">你答：<b>好。</b>竞赛塘（500฿/位/天、10 人起）的规则、能否带走渔获、赛后怎么排名，原件完全没有。</div>
+    <div class="fa"><b>已单独成卡，见第 05 节</b>（含排名口径、渔获口径、奖品、迟到与退赛、安全）。</div>
+  </div>
+
+  <div class="find sev3">
+    <div class="fh"><span class="fn">R5</span><span class="ft">品牌英文写法有几种并存（低优先）</span><span class="chip c-tbd">有空再定</span></div>
+    <div class="fb">
+      海报上的英文署名是「<b>Hook the happyness</b>」；站上和 Facebook 用的是
+      「Hook Happyness」/ <code>Hookhappyness</code>。
+    </div>
+    <div class="fa"><b>建议：</b>定一个官方写法（含大小写与是否带 the），此后海报、网站、FB、LINE 全站统一。
+      不急，但趁现在只有两个地方用着，改起来最省事。</div>
+  </div>
+
+  <!-- ============ 03 ============ -->
+  <h2><span class="no">03</span>休闲塘规则终稿<small>A–H 八组。标「现行」＝海报已有，标「已定」＝你拍板的，标「建议」＝我加的、等你增减</small></h2>
+
+  <div class="group">
+    <div class="ghead">
+      <span class="gid">A</span><span class="gtitle">入场、收费与时间</span>
+      <span class="gnote"><span class="chip c-cur">现行 3</span> <span class="chip c-done">已定 3</span> <span class="chip c-tbd">建议 2</span></span>
+    </div>
+    <div class="rule"><span class="rid">A1</span><span class="rtxt">自带竿服务费 <b>100฿ / 根竿</b>
+      <span class="sub"><span class="chip c-cur">现行</span> 海报第 1 条</span></span></div>
+    <div class="rule"><span class="rid">A2</span><span class="rtxt">租借竿 <b>150฿ / 根竿</b>（含服务费）
+      <span class="sub"><span class="chip c-cur">现行</span> 海报第 2 条</span></span></div>
+    <div class="rule"><span class="rid">A3</span><span class="rtxt"><b>A1 与 A2 二选一，不叠加</b>
+      <span class="sub"><span class="chip c-done">已定</span> 答复 #2。客人不会同时付 250฿</span></span></div>
+    <div class="rule"><span class="rid">A4</span><span class="rtxt"><b>时长：全天一档</b>，不分时段，什么时候来都一样
+      <span class="sub"><span class="chip c-done">已定</span> 答复 #1。原「上午/下午/傍晚」四时段作废；系统里本来就只卖全天一档，<b>代码无需改动</b></span></span></div>
+    <div class="rule"><span class="rid">A5</span><span class="rtxt"><b>营业时间 09:00–18:00，每周一公休</b>（泰国法定节假日另行公告）
+      <span class="sub"><span class="chip c-done">已定</span> 答复 #3</span></span></div>
+    <div class="rule"><span class="rid">A6</span><span class="rtxt">竞赛塘 <b>500฿ / 位 / 天</b>，10 人起，按天包场（团体预约）
+      <span class="sub"><span class="chip c-cur">现行（系统里已有）</span> 详见第 05 节规则卡</span></span></div>
+    <div class="rule"><span class="rid">A7</span><span class="rtxt"><b>建议</b>：不钓鱼的陪同客人<b>免收入场费</b>（点餐即算）
+      <span class="sub">BO SANG 收 300฿/人；但你有餐厅，陪同客人会点餐，收门票反而赶客</span></span></div>
+    <div class="rule"><span class="rid">A8</span><span class="rtxt"><b>建议</b>：最后入场 17:00、最后称重 17:30（关塘前 30 分钟）
+      <span class="sub">避免 18:00 打烊后还在称重结算。你若觉得太早，改 17:30 / 17:45 也行</span></span></div>
+    <div class="rule" style="opacity:.6"><span class="rid">A9</span><span class="rtxt"><s><b>晚场优惠价</b>（我 v1.1 提的 17:00 后 70฿）—— <b>已按你的答复 #1 撤下</b></s>
+      <span class="sub">你说「全天一档、什么时候来都一样」，那就不该再分时段定价，否则和 A4 自相矛盾。这条我主动删掉。</span></span></div>
+  </div>
+
+  <div class="group">
+    <div class="ghead">
+      <span class="gid">B</span><span class="gtitle">儿童与陪同</span>
+      <span class="gnote"><span class="chip c-cur">现行 1</span> <span class="chip c-done">已定 1</span></span>
+    </div>
+    <div class="rule"><span class="rid">B1</span><span class="rtxt">儿童必须由监护人看管；<b>12 岁以下须全程在家长看护之下</b>
+      <span class="sub"><span class="chip c-cur">现行</span> 海报第 5 条</span></span></div>
+    <div class="rule"><span class="rid">B2</span><span class="rtxt"><b>不设儿童票价</b> → 儿童与成人同价（按竿收费）；不钓鱼的儿童不收费
+      <span class="sub"><span class="chip c-done">已定（隐含）</span> 你的答复里「按竿」口径已经定了，儿童本身不是计价单位</span></span></div>
+    <div class="rule"><span class="rid">B3</span><span class="rtxt"><b>建议</b>：家庭套票见第 04 节 M7（可选，不急）</span></div>
+  </div>
+
+  <div class="group">
+    <div class="ghead">
+      <span class="gid">C</span><span class="gtitle">钓法与器材</span>
+      <span class="gnote"><span class="chip c-done">已定 1</span> <span class="chip c-tbd">建议 5</span></span>
+    </div>
+    <div class="rule"><span class="rid">C1</span><span class="rtxt"><b>只准使用店里的饵料，禁止自带饵</b>
+      <span class="sub"><span class="chip c-done">已定加回</span> 答复 #6 —— 这条得上海报，也要上网站规则页</span></span></div>
+    <div class="rule"><span class="rid">C2</span><span class="rtxt"><b>建议</b>：一人最多同时下水 <b>1 根竿</b>
+      <span class="sub">泰国塘通行做法，也和「一根竿一份服务费」的计价口径对得上</span></span></div>
+    <div class="rule"><span class="rid">C3</span><span class="rtxt"><b>建议</b>：只限<b>竿钓</b>（手竿 / 抛竿 / 笼式钓组 <span class="th">ตะกร้อ</span>）
+      <span class="sub">你店里在售「钓组（笼式）」，说明这是主打钓法</span></span></div>
+    <div class="rule"><span class="rid">C4</span><span class="rtxt"><b>建议</b>：禁用网具、电鱼、毒饵、串钩
+      <span class="sub">前两项是法律底线，写出来是保护你自己</span></span></div>
+    <div class="rule"><span class="rid">C5</span><span class="rtxt"><b>建议</b>：未使用的竿不得留在水边无人看管；禁止抛竿越界
+      <span class="sub">这是丢竿事故的主因</span></span></div>
+    <div class="rule"><span class="rid">C6</span><span class="rtxt"><b>建议</b>：起鱼 / 抄网由场内员工协助，尤其大鱼
+      <span class="sub">BO SANG 与 EFT 都配「钓鱼助手」。你已经有员工在称重，顺手把起鱼也包进来</span></span></div>
+  </div>
+
+  <div class="group">
+    <div class="ghead">
+      <span class="gid">D</span><span class="gtitle">渔获与称重</span>
+      <span class="gnote"><span class="chip c-cur">现行 3</span> <span class="chip c-tbd">建议 5</span> <span class="chip c-key">本节是核心</span></span>
+    </div>
+    <div class="rule"><span class="rid">D1</span><span class="rtxt">塘里<b>所有鱼都可以带走</b>（ปลาบึก 除外）
+      <span class="sub"><span class="chip c-cur">现行</span> 海报主规则</span></span></div>
+    <div class="rule"><span class="rid">D2</span><span class="rtxt"><b>首 1 公斤免费</b>；超出部分 <b>60฿/公斤</b>
+      <span class="sub"><span class="chip c-cur">现行</span> 同类对照：日本五濑钓堀只给 500g 免费、Bungsamran 按公斤买回（罗非 60฿/公斤），<b>你的 1 公斤是同类里最慷慨的</b></span></span></div>
+    <div class="rule"><span class="rid">D3</span><span class="rtxt"><b>ปลาบึก（湄公巨鲶）禁止带出池塘</b>，不分大小
+      <span class="sub"><span class="chip c-cur">现行</span> 海报唯一禁带鱼种</span></span></div>
+    <div class="rule"><span class="rid">D4</span><span class="rtxt">禁止带出的鱼，<b>由员工现场放回</b>；客人可先拍照留念
+      <span class="sub"><span class="chip c-tbd">建议</span> 写清「谁放回」，不然客人会自己抱走</span></span></div>
+    <div class="rule"><span class="rid">D5</span><span class="rtxt"><b>客人可自愿放回任何鱼</b>，放回的不称重、不计费，且计入放流奖励
+      <span class="sub"><span class="chip c-tbd">建议</span> 给「纯为钓鱼而来」的客人一条出路，同时把放流变成可积累的好处（见 M4）</span></span></div>
+    <div class="rule"><span class="rid">D6</span><span class="rtxt">称重点固定在柜台，<b>当着客人面称、客人可看秤；可分次称重累计到同一张单</b>
+      <span class="sub"><span class="chip c-tbd">建议</span> G6</span></span></div>
+    <div class="rule"><span class="rid">D7</span><span class="rtxt"><b>渔获费不参与任何折扣</b>，与餐费同单一次结清
+      <span class="sub"><span class="chip c-tbd">建议</span> G7</span></span></div>
+    <div class="rule"><span class="rid">D8</span><span class="rtxt">钓上的鱼若已死亡，<b>请勿抛入塘中</b>，交给员工处理
+      <span class="sub"><span class="chip c-tbd">建议</span> 香港鱼排守则明文如此。死鱼入塘会带菌、影响水质</span></span></div>
+  </div>
+
+  <div class="group">
+    <div class="ghead">
+      <span class="gid">E</span><span class="gtitle">护鱼规则（Fish Care）</span>
+      <span class="gnote"><span class="chip c-tbd">建议新增</span></span>
+    </div>
+    <div class="rule"><span class="rid">E1</span><span class="rtxt">用<b>抄网</b>起鱼，上岸后再摘钩
+      <span class="sub">照抄 BO SANG 的 Fish Care Guide</span></span></div>
+    <div class="rule"><span class="rid">E2</span><span class="rtxt">拍照时<b>不许用手指抠进鱼鳃</b>；用手托住鳍部与尾部下方
+      <span class="sub">BO SANG 原文：<span class="th">ห้ามจับปลาโดยการใช้นิ้วล้วงเข้าไปในเหงือก ให้ใช้มือรองใต้ครีบและบริเวณใต้หาง</span></span></span></div>
+    <div class="rule"><span class="rid">E3</span><span class="rtxt">拍照<b>不超过 3 分钟</b>；轻轻把鱼放回水里，<b>严禁把鱼抛进水中</b>
+      <span class="sub">BO SANG 用「<b>一张示范照片 + 红线标出正确抱鱼位置</b>」来教这件事，比写十条文字有效 —— 建议我们也拍一张贴在塘边</span></span></div>
+    <div class="rule"><span class="rid">E4</span><span class="rtxt">不要把鱼放在干地上或水泥地上；不要用干毛巾擦鱼身、不要挤压腹部
+      <span class="sub">会破坏鱼体表的保护黏液，放回去容易感染</span></span></div>
+    <div class="rule"><span class="rid">E5</span><span class="rtxt"><b>幼鱼与怀卵母鱼请放回</b>
+      <span class="sub">出自香港渔农自然护理署《鱼排闲钓守则》：「只取个人今日所需 · 放生幼鱼 · 放生即将生产的鱼类」。官方语言，客人接受度高</span></span></div>
+  </div>
+
+  <div class="group">
+    <div class="ghead">
+      <span class="gid">F</span><span class="gtitle">安全与秩序</span>
+      <span class="gnote"><span class="chip c-cur">现行 3</span> <span class="chip c-done">已定 1</span> <span class="chip c-tbd">建议 4</span></span>
+    </div>
+    <div class="rule"><span class="rid">F1</span><span class="rtxt">保持清洁，垃圾丢在指定位置
+      <span class="sub"><span class="chip c-cur">现行</span> 海报第 6 条</span></span></div>
+    <div class="rule"><span class="rid">F2</span><span class="rtxt">禁止大声喧哗、影响其他客人
+      <span class="sub"><span class="chip c-cur">现行</span> 海报第 7 条</span></span></div>
+    <div class="rule"><span class="rid">F3</span><span class="rtxt">禁止在场内奔跑嬉戏
+      <span class="sub"><span class="chip c-cur">现行</span> 海报第 4 条</span></span></div>
+    <div class="rule"><span class="rid">F4</span><span class="rtxt"><b>禁止下水、禁止游泳</b>；严禁自行下水捞竿、追鱼；需要时请联系员工
+      <span class="sub"><span class="chip c-done">已定</span> 答复 #5。<b>这是新增的第 9 条</b>，和 F3 是两件事，必须分开写</span></span></div>
+    <div class="rule"><span class="rid">F5</span><span class="rtxt"><b>建议</b>：岸边备救生圈 / 救生杆并标示位置
+      <span class="sub">成本极低，出了事差别很大</span></span></div>
+    <div class="rule"><span class="rid">F6</span><span class="rtxt"><b>建议</b>：雷雨、大风、季风雨期间暂停营业，员工通知离场
+      <span class="sub">泰国雨季常态，提前写进规则，避免客人觉得被赶</span></span></div>
+    <div class="rule"><span class="rid">F7</span><span class="rtxt"><b>建议</b>：鱼钩扎伤、滑倒等意外请立即通知员工，场内有急救箱</span></div>
+    <div class="rule"><span class="rid">F8</span><span class="rtxt"><b>建议</b>：鱼线、鱼钩、废弃饵料袋不得丢入塘中；免费 WiFi 作为卖点列出
+      <span class="sub">BO SANG 就把「ฟรี! Wifi」列在服务里；有网客人才能发动态 —— 正好配合 M6 分享奖励</span></span></div>
+  </div>
+
+  <div class="group">
+    <div class="ghead">
+      <span class="gid">G</span><span class="gtitle">餐饮与渔获加工</span>
+      <span class="gnote"><span class="chip c-cur">现行 1</span> <span class="chip c-done">已定 1</span> <span class="chip c-tbd">建议 5</span></span>
+    </div>
+    <div class="rule"><span class="rid">G1</span><span class="rtxt"><b>禁止自带餐饮入场</b>
+      <span class="sub"><span class="chip c-cur">现行</span> 海报第 3 条</span></span></div>
+    <div class="rule"><span class="rid">G2</span><span class="rtxt"><b>（待确认）</b>开三个例外 —— 生日蛋糕 / 婴儿食品与奶粉 / 药品与医疗饮食
+      <span class="sub"><span class="chip c-tbd">待确认</span> 答复 #7 你没答。不开例外，员工要跟提着蛋糕来给小孩过生日的妈妈讲道理</span></span></div>
+    <div class="rule"><span class="rid">G3</span><span class="rtxt"><b>免费代杀鱼、去鳞、去内脏</b>（客人自己带回家）
+      <span class="sub"><span class="chip c-tbd">建议</span> 日本钓堀普遍免费；「由紀釣魚」甚至是免费去内脏 + 装冰块塑胶袋交付。几乎零成本的好评项</span></span></div>
+    <div class="rule"><span class="rid">G4</span><span class="rtxt"><b>餐厅代加工（清蒸 / 油炸 / 烤）＝ 菜品价 + 加工费 <span class="blank">?</span> ฿/条</b>
+      <span class="sub"><span class="chip c-done">已定采纳</span> 答复 #9 —— <b>但金额还没给，见第 06 节</b><br>
+      参照：日本「元田養鱒場」分级收费，盐烤/油炸 250 円/尾、剖腹 50 円/尾、三枚开 250 円/尾、刺身用 350 円/尾。<b>你有餐厅，这条能把渔获直接变成餐费</b></span></span></div>
+    <div class="rule"><span class="rid">G5</span><span class="rtxt"><b>冰块 / 泡沫箱打包 <span class="blank">?</span> ฿</b>
+      <span class="sub"><span class="chip c-tbd">建议</span> 泰国天热，不冰的鱼带回家会腥。你店里已在售泡沫塑料颗粒，供应链是现成的</span></span></div>
+    <div class="rule"><span class="rid">G6</span><span class="rtxt">委托加工的鱼需<b>先完成称重结算</b>再送厨房
+      <span class="sub"><span class="chip c-tbd">建议</span> 避免「加工了却说不要」的纠纷，也让渔获费不漏失</span></span></div>
+  </div>
+
+  <div class="group">
+    <div class="ghead">
+      <span class="gid">H</span><span class="gtitle">器材赔偿与违规处理</span>
+      <span class="gnote"><span class="chip c-done">已定 1 · 无押金</span></span>
+    </div>
+    <div class="rule"><span class="rid">H1</span><span class="rtxt"><b>不收押金</b>
+      <span class="sub"><span class="chip c-done">已定</span> 答复 #4（我 v1.1 建议的 500฿ 押金作废）</span></span></div>
+    <div class="rule"><span class="rid">H2</span><span class="rtxt"><b>竿具或场内器具损坏、落水、丢失 → 赔偿 1,000฿（统一额度）</b>
+      <span class="sub"><span class="chip c-done">已定</span> 答复 #4。原来我建议的「丢竿/断竿分别定价」简化为一个数字，现场更好执行</span></span></div>
+    <div class="rule"><span class="rid">H3</span><span class="rtxt"><b>（建议）赔偿登记在预约手机号上，下次入场一并结清</b>
+      <span class="sub"><span class="chip c-tbd">待你点头</span> 无押金时唯一的兜底方式；你的预约本来就要填手机号，等于用现成资料做了软押金</span></span></div>
+    <div class="rule"><span class="rid">H4</span><span class="rtxt">违规处理三级：<b>提醒 → 补收费用 → 终止服务</b>
+      <span class="sub">绝大多数情况到第一级就结束。规则的作用是「有据可依」，不是用来罚人</span></span></div>
+    <div class="rule"><span class="rid">H5</span><span class="rtxt">未称重带鱼离场，按「同鱼种最高单价 × 估算重量」补收，并写明估算依据</span></div>
+    <div class="rule"><span class="rid">H6</span><span class="rtxt">偷鱼、破坏塘鱼、攻击员工或客人 → 立即终止服务
+      <span class="sub">丑话前置，真正的作用是让正常人不敢试</span></span></div>
+    <div class="rule"><span class="rid">H7</span><span class="rtxt">现场争议<b>以当值主管判断为准</b>，客人可事后通过 LINE <span class="th">@300bsham</span> 反映
+      <span class="sub">EFT 明文写「guide 的决定为最终决定」。不写这条，员工在现场会陷入无休止争论</span></span></div>
+    <div class="rule"><span class="rid">H8</span><span class="rtxt">规则公示四处：<b>入口海报 · 称重柜台 · 网站规则页 · 结算小票背面</b></span></div>
+  </div>
+
+  <!-- ============ 04 ============ -->
+  <h2><span class="no">04</span>钓鱼奖励政策<small>答复 #10 你交给我定 —— 定 M1–M5 先上，M6–M11 留到后面</small></h2>
+
+  <p style="font-size:13.5px;margin:0 0 14px">
+    分两层：<b>第一层「带走奖励」</b>就是你们现行主规则（BO SANG 也是把它写在首屏当奖励讲的）；
+    <b>第二层「回头奖励」</b>是让人想再来一次。<b>下面加粗绿边的前五条就是首批发车清单。</b>
+  </p>
+
+  <div class="rw rw-key on">
+    <div class="rwh"><span class="rwn">M1</span><span class="rwt">带走奖励 · 首 1 公斤免费</span>
+      <span class="chip c-done">首批上线</span><span class="chip c-cur">现行，只改讲法</span></div>
+    <div class="rwm">
+      规则本身已经在跑（海报主规则）。要改的只有一件事：<b>把它从「收费条款」改讲成「给客人的奖励」</b>。
+      BO SANG 的原文是「<b>Scale fish you catch may be taken home as a reward</b>」——
+      一个 <em>reward</em> 字，同一件事就从「限制」变成了「福利」。
+    </div>
+    <div class="rwm">
+      <b>落地：</b>现在这条只写在海报和菜单页的一行小字里。应该搬到<b>网站首页首屏可视区</b>，
+      用「<b>你钓到的鱼可以带回家 —— 首 1 公斤免费</b>」这种口吻讲。
+      <span class="rws">同类对照：日本五濑钓堀只给 500g 免费、Bungsamran 按公斤买回（罗非 60฿/公斤）—— 你的 1 公斤是同类里最慷慨的，值得大声讲</span>
+    </div>
+  </div>
+
+  <div class="rw on">
+    <div class="rwh"><span class="rwn">M2</span><span class="rwt">首次钓获 · 首钓证书 + 今日鱼获墙</span>
+      <span class="chip c-done">首批上线</span></div>
+    <div class="rwm">
+      客人（尤其小孩）钓到<b>第一条鱼</b>，员工登记并写一张<b>首钓证书</b>：日期、鱼种、重量、姓名，当场盖章。
+    </div>
+    <div class="rwm"><b>「今日鱼获墙」</b>：塘边一块白板，写当天最大三条鱼的重量与钓手名字，每天擦掉重写。
+      <span class="rws">成本：一张纸 + 一块白板。回报：家长必拍照发 Facebook —— 零成本传播，还帮你把 M6 的素材攒下来</span></div>
+  </div>
+
+  <div class="rw rw-key on">
+    <div class="rwh"><span class="rwn">M3</span><span class="rwt">大鱼徽章 · 钓到就送，下次抵扣</span>
+      <span class="chip c-done">首批上线</span><span class="chip c-key">最有性价比</span></div>
+    <div class="rwm">
+      钓到 <b>≥ 5 公斤</b> 的鱼（不分鱼种，<b>含必须放回的 ปลาบึก</b>），
+      拍照登记后赠送<b>一枚大鱼徽章 / 贴纸</b>，并<b>下次入场抵扣 50฿</b>。
+    </div>
+    <div class="rwm">
+      出处在日本 <b>PICA 富士西湖</b>：钓到 30cm 以上虹鳟即成为「つりんちゅ」一员，送原创徽章；
+      <b>下次凭徽章，钓竿费从 2,000 円降到 1,500 円</b>。一个成本几十日元的东西，
+      换来了「客户主动带着徽章回来」。
+    </div>
+    <div class="rwm">
+      <b>为什么特别适合你：</b>ปลาบึก 是禁带鱼，客人钓到它本来「什么都带不走」——
+      给他一枚徽章 + 下次抵扣，就把一个遗憾变成了<b>再来一次的理由</b>。
+      徽章成本 &lt; 20฿，抵扣只让利 50฿，却把一次性客人变成有凭证的回头客。
+    </div>
+  </div>
+
+  <div class="rw on">
+    <div class="rwh"><span class="rwn">M4</span><span class="rwt">放流奖励 · 集章换一场</span>
+      <span class="chip c-done">首批上线</span></div>
+    <div class="rwm">
+      客人<b>自愿放回</b>大鱼（<b>≥ 3 公斤</b>），员工在卡片上盖一个章；
+      集满 <b>3 个章</b> → 换<b>休闲塘一场免费</b>（价值 100฿，或抵扣 100฿）。
+    </div>
+    <div class="rwm">
+      逻辑：塘里的大鱼越留越值钱。你付出的是「一场的边际成本」，换回来的是<b>大鱼不被拿走</b>。
+      <span class="rws">注意：这条要和 M1 配套讲 —— 客人是「我选择放回」而不是「被强制放回」，感受完全不同</span>
+    </div>
+  </div>
+
+  <div class="rw on">
+    <div class="rwh"><span class="rwn">M5</span><span class="rwt">榜单 · 日榜 / 月榜</span>
+      <span class="chip c-done">首批上线</span><span class="chip c-keep">系统已有基础</span></div>
+    <div class="rwm">
+      <b>日榜</b>：当天最大鱼 → 鱼获墙 + 拍照（= M2 的鱼获墙，同一件事）。<br>
+      <b>月榜</b>：当月最大鱼 → 免单一场 + 照片上墙 + Facebook / LINE 各发一条。
+    </div>
+    <div class="rwm">
+      <b>竞赛塘</b>：按当日<b>总重</b>排名（不是单尾最大）—— 排名与奖品细则见第 05 节。
+      <span class="rws">奖品建议给<b>下场免单券</b>或<b>你店里的钓具</b>，不要给现金 —— 现金是纯支出，钓具是清库存还能把人带回塘边</span>
+    </div>
+  </div>
+
+  <h3>后面的储备（M6–M11，别一次上太多）</h3>
+  <div class="tbl-scroll">
+  <table>
+    <thead><tr><th>编号</th><th>做法</th><th>成本/难度</th><th>出处</th></tr></thead>
+    <tbody>
+      <tr><td class="name">M6</td><td><b>社交分享奖励</b>：在 Facebook <code>Hookhappyness</code> 或 LINE <code>@300bsham</code> 打卡 + 带定位 + 至少一张塘景照，出示给柜台 → 下次抵扣 50฿ 或赠一份饮品/小吃</td>
+        <td><span class="chip c-done">极低</span></td><td>赠品是你自己餐厅出的，边际成本近乎为零</td></tr>
+      <tr><td class="name">M7</td><td><b>家庭套票</b>：2 大 2 小（按竿计）含竿与饵，比单买便宜 10–15%</td>
+        <td><span class="chip c-tbd">需定价</span></td><td>补上 B2「儿童无票价」的缺口</td></tr>
+      <tr><td class="name">M8</td><td><b>常客次数卡</b>：付 8 场的钱用 10 场（≈8 折）</td>
+        <td><span class="chip c-tbd">需定价</span></td><td>Bungsamran 年卡 ฿22,000/年；「次数卡」形态可直接借用</td></tr>
+      <tr><td class="name">M9</td><td><b>钓不到鱼保证（限竞赛塘包场）</b>：当天整队都没钓到 → 送下一场 5 折券（送券不退款）</td>
+        <td><span class="chip c-opt">成本较高，谨慎</span></td><td>Fish Thailand 在 Bungsamran 承诺「一日场钓不到 30lb 以上巨鲶退 50%」</td></tr>
+      <tr><td class="name">M10</td><td><b>儿童专属</b>：12 岁以下首钓 → 小徽章 + 首钓证书 + 免费冰淇淋一份</td>
+        <td><span class="chip c-done">极低</span><span class="chip c-key">建议至少做这条</span></td><td>成本近乎零，但决定了一家人下周末去哪 —— 家庭客的复购开关</td></tr>
+      <tr><td class="name">M11</td><td><b>季度大鱼赛 / 主题活动</b>：每季半日大鱼赛，报名费 <span class="sugg">?</span>฿，奖品由钓具供应商或你自己的店赞助</td>
+        <td><span class="chip c-opt">运营后期</span></td><td>泰国本地做法：普吉钓鱼大赛以「最重鱼」评奖；佛丕府 Kaeng Krachan 大坝捕捞活动每条鱼 1,000฿ 预算 + 上岸后由餐馆 100–150฿/公斤收购</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <!-- ============ 05 ============ -->
+  <h2><span class="no">05</span>竞赛塘规则卡<small>答复 #8：单出一张。下面是可直接印上墙的条文</small></h2>
+
+  <div class="oneline" style="background:linear-gradient(135deg,#92400E,var(--a500))">
+    <div class="lb">Competition Pond · 竞赛塘</div>
+    <div class="big"><em>500฿ / 位 / 天</em> · <em>10 人起</em> · <em>最多 40 位</em></div>
+    <div class="sub">按天包场，09:00–18:00 全天使用 &nbsp;·&nbsp; 按当日<b>总重</b>排名</div>
+  </div>
+
+  <div class="poster" style="margin-top:14px">
+    <div class="ph">บ่อแข่งขัน · 竞赛塘 · Competition Pond &nbsp;— 规则条文（草案）</div>
+    <div class="pb">
+      <div class="prow"><span class="pn">1</span><span><b>收费：500฿ / 位 / 天</b>，最少 10 位，最多 40 位（按<b>参加人数</b>计费，不是按钓位）</span></div>
+      <div class="prow"><span class="pn">2</span><span><b>时间：09:00–18:00 全天</b>，按天包场；<b>每周一公休</b></span></div>
+      <div class="prow"><span class="pn">3</span><span><b>预约：团体预约制</b>，需提供团体名称、参加人数、负责人手机号；<b>至少提前 1 天</b>确认 <span class="pnew">建议</span></span></div>
+      <div class="prow"><span class="pn">4</span><span><b>排名：按当日渔获总重</b>（不分鱼种，<b>当场放回的鱼也计入</b>，凭员工称重记录）</span></div>
+      <div class="prow"><span class="pn">5</span><span><b>渔获口径：与休闲塘一致</b> —— 所有鱼可带走、首 1 公斤免费、超出 60฿/公斤；<b>ปลาบึก 禁带</b> <span class="pnew">待你确认</span></span></div>
+      <div class="prow"><span class="pn">6</span><span><b>必须遵守护鱼规则</b>（第 03 节 E 组）：抄网起鱼、不抠鳃、拍照 ≤3 分钟、严禁抛鱼入水</span></div>
+      <div class="prow"><span class="pn">7</span><span><b>禁止下水、禁止游泳</b>；严禁自行下水捞竿（同休闲塘 F4，竞赛期间从严执行）</span></div>
+      <div class="prow"><span class="pn">8</span><span><b>迟到与退赛：入场即计费，未到不退</b>；减少人数需<b>提前 1 天</b>通知，当天减员不退差额</span></div>
+      <div class="prow"><span class="pn">9</span><span><b>器材：无押金；损坏或丢失赔 1,000฿</b>（同休闲塘 H2）</span></div>
+      <div class="prow"><span class="pn">10</span><span><b>计时与称重由场内员工执行，成绩以主办方记录为准</b>；现场争议以当值主管判断为准（同 H7）</span></div>
+      <div class="prow"><span class="pn">11</span><span><b>奖品 <span class="pnew">待你定</span></b>：建议冠军 = 下次包场抵扣 1,000฿ ＋ 钓具 1 件；亚军 = 抵扣 500฿；季军 = 抵扣 300฿；再送「下场免单券」给总重第一的团体 <span class="muted">（金额全部可改）</span></span></div>
+    </div>
+  </div>
+
+  <div class="src" style="margin-top:10px">
+    <b>这张卡上有 2 处等你定：</b>① 竞赛塘渔获能不能带走（第 5 条，我建议与休闲塘一致）② 奖品金额（第 11 条）。
+    其余都是从休闲塘规则和你的答复直接推出来的。<br>
+    <b>为什么第 4 条要写「放回的鱼也计入总重」：</b>竞赛塘最容易出的争议是「我放回了一条大的，算不算」。
+    写清楚算，客人才敢放，塘里的大鱼也才留得住 —— 和 M4 是一个逻辑。
+  </div>
+
+  <!-- ============ 06 ============ -->
+  <h2><span class="no">06</span>只剩 4 件事等你<small>其余全部定稿，可以直接进执行</small></h2>
+  <div class="card">
+    <ol class="ask">
+      <li><b>「禁止自带餐饮」要不要开三个例外</b>（生日蛋糕 / 婴儿食品与奶粉 / 药品与医疗饮食）？—— 答复 #7 你没答</li>
+      <li><b>代加工收费金额</b>：清蒸 / 油炸 / 烤 各收多少 ฿/条？冰袋打包多少 ฿？—— 答复 #9 只说「采纳」，没给数字</li>
+      <li><b>无押金下的赔偿如何执行</b>：要不要按我建议的「登记在预约手机号、下次入场结清」？（H3）</li>
+      <li><b>竞赛塘两处</b>：渔获能否带走？奖品金额定多少？（第 05 节第 5、11 条）</li>
+    </ol>
+    <div class="src" style="margin-top:10px">
+      <b>另有一项不用现在答：</b>品牌英文官方写法（Hook the happyness / Hook Happyness / Hookhappyness）—— R5，低优先。
+    </div>
+  </div>
+
+  <h3>定稿之后的落地清单</h3>
+  <div class="steps">
+    <div class="step">
+      <div class="sn">✅ 已完成</div>
+      <h4>网站三语文案</h4>
+      <p>休闲塘「全天畅钓 ＋ 什么时候来都一样」、两条竿具改名与二选一说明、竞赛塘计价单位修正 —— 均已在生产环境生效。</p>
+    </div>
+    <div class="step">
+      <div class="sn">下一步 1</div>
+      <h4>网站首页 · 「可带鱼回家」区块</h4>
+      <p>大规则（所有鱼可带走 ＋ 首 1kg 免费）＋ ปลาบึก 例外 ＋ 奖励徽章预告。放首屏可视区。</p>
+    </div>
+    <div class="step">
+      <div class="sn">下一步 2</div>
+      <h4>网站独立页 · 钓场规则（三语）</h4>
+      <p>第 01 节现行规则 ＋ 第 03 节采纳的补充 ＋ 8 种鱼种卡（含 ปลาบึก 配图）＋ 营业时间。</p>
+    </div>
+    <div class="step">
+      <div class="sn">下一步 3</div>
+      <h4>网站独立页 · 奖励政策（三语）</h4>
+      <p>M1–M5 清单 ＋ 领取方式。可与规则页同页不同 tab。</p>
+    </div>
+    <div class="step">
+      <div class="sn">下一步 4</div>
+      <h4>网站结算页 · 渔获文案</h4>
+      <p>现有 <code>menu.fishChargeNotice</code> 等键按终稿改写；补「渔获费不参与折扣」一句。</p>
+    </div>
+    <div class="step">
+      <div class="sn">下一步 5</div>
+      <h4>线下海报 · 补 5 处</h4>
+      <p>补「全天」「二选一」「09:00–18:00 周一公休」「无押金·损坏赔 1,000฿」「禁止下水」，重新排版。</p>
+    </div>
+    <div class="step">
+      <div class="sn">下一步 6</div>
+      <h4>线下 · 竞赛塘规则卡</h4>
+      <p>第 05 节内容单独出一张，与休闲塘海报同尺寸同风格。</p>
+    </div>
+    <div class="step">
+      <div class="sn">下一步 7</div>
+      <h4>三语海报（泰／英／中）</h4>
+      <p>等网站规则页文案定稿后，反向生成一版三语海报，线上线下口径完全一致。</p>
+    </div>
+  </div>
+
+  <!-- ============ 对标 ============ -->
+  <h2><span class="no">附</span>建议的出处（对标一览）</h2>
+  <div class="card">
+    <div class="tbl-scroll">
+    <table>
+      <thead><tr><th>场地</th><th>关键做法</th><th>本文档用在哪</th></tr></thead>
+      <tbody>
+        <tr><td class="name">BO SANG<br><span class="muted" style="font-weight:400;font-size:12px">清迈</span></td>
+          <td>首页只讲一条大规则（有鳞鱼可带走当 <b>reward</b>）；禁带清单另开一页、只列 4 种；
+            「按根竿」计价 + 按进场时间递减（09:00 ฿500 → 17:00 ฿350）；竿押金 ฿2,000 损坏丢失不退；
+            Fish Care Guide 五条 + 示范照片；三语同图价目牌；免费 WiFi</td>
+          <td>M1 讲法 · E 护鱼全套 · G3 押金对照（你已决定不收）· R3 三语海报</td></tr>
+        <tr><td class="name">Bungsamran<br><span class="muted" style="font-weight:400;font-size:12px">曼谷</span></td>
+          <td>泰国人 ฿500 / 外国人 ฿6,000；按公斤买回 罗非·银鲃 <b>฿60/kg</b>、笋壳·丝足鲈 ฿150/kg；
+            年卡 ฿22,000；租竿押金 ฿2,000 + 竿租 ฿500</td>
+          <td>D2 定价锚（与你同价）· M8 次数卡</td></tr>
+        <tr><td class="name">Fish Thailand<br><span class="muted" style="font-weight:400;font-size:12px">Bungsamran 导钓</span></td>
+          <td>一日场钓不到 30lb 以上巨鲶<b>退 50%</b></td><td>M9 钓不到鱼保证</td></tr>
+        <tr><td class="name">PICA 富士西湖<br><span class="muted" style="font-weight:400;font-size:12px">日本</span></td>
+          <td>钓到 ≥30cm 虹鳟 → 赠原创徽章；<b>下次凭徽章竿费 2,000→1,500 円</b></td>
+          <td>M3 大鱼徽章（原型）</td></tr>
+        <tr><td class="name">EFT / Leks<br><span class="muted" style="font-weight:400;font-size:12px">泰国</span></td>
+          <td>EFT 丢竿 ฿6,000、竿不得放水泥地、指定钓位、签规则确认书、guide 决定为最终决定；
+            Leks 丢竿 ฿8,000 / 断竿 ฿4,000 / 禁外带餐饮</td>
+          <td>H 赔偿与违规处理 · H7 主管判断为准</td></tr>
+        <tr><td class="name">日本钓堀<br><span class="muted" style="font-weight:400;font-size:12px">元田養鱒場 / 由紀釣魚</span></td>
+          <td>加工费分级（盐烤·油炸 250 円、剖腹 50 円、三枚开 250 円、刺身 350 円）；免费去内脏 + 冰块袋交付</td>
+          <td>G3/G4 渔获加工</td></tr>
+        <tr><td class="name">香港渔农自然护理署<br><span class="muted" style="font-weight:400;font-size:12px">鱼排守则</span></td>
+          <td>只取今日所需 · 放生幼鱼 · 放生即将生产的鱼 · 不虐待</td><td>E5 护鱼条款</td></tr>
+        <tr><td class="name">深圳青青世界</td>
+          <td>场地费 + 带走 15 元/斤 + <b>「购鱼不享受折扣」</b></td><td>D7 渔获不参与折扣</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <div class="src">价格为公开资料整理，实际以各场现价为准。</div>
+  </div>
+
+  <footer>
+    <b>本文档依据：</b>现行规则海报 <code>rule1.jpg</code>（含第一版 <code>rules.jpg</code>）×
+    你 2026-09-24 的 10 条答复 ×
+    BO SANG Fishing Park 官网 × Bungsamran × Exotic Fishing Thailand × Leks × Pichit/Phuket 钓鱼活动报道 ×
+    日本 PICA 富士西湖 · 有馬鱒魚池 · 元田養鱒場 · 由紀釣魚 × 香港渔农自然护理署《鱼排闲钓守则》× 深圳青青世界。
+    <br><b>状态：</b>v1.2 为<b>定稿版</b>。标「现行」的条文照海报原文保留；标「已定」的来自你的答复；
+    标「建议」的仍待你增减。第 06 节 4 项答复后即可进入执行。
+  </footer>
+
+</div>
+</body>
+</html>
