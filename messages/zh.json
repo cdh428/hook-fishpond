@@ -39,7 +39,8 @@
     "close": "关闭",
     "retry": "重试",
     "saving": "保存中…",
-    "refresh": "刷新"
+    "refresh": "刷新",
+    "rules": "钓场规则"
   },
   "home": {
     "welcome": "欢迎来到乐钓鱼塘",
@@ -62,7 +63,12 @@
       "drinksDesc": "多种饮料任您选择",
       "booking": "便捷预约",
       "bookingDesc": "在线预约钓位，即时确认"
-    }
+    },
+    "keepFishTitle": "钓到的鱼，可以带回家",
+    "keepFishBig": "首 1 公斤免费",
+    "keepFishSub": "超出部分 60฿ / 公斤 · 柜台当面称重",
+    "keepFishBek": "唯一例外：湄公巨鲶（Pla Buek）不分大小，必须放回塘里",
+    "keepFishCta": "钓场规则 & 奖励"
   },
   "pond": {
     "leisure": "休闲塘",
@@ -879,5 +885,115 @@
     "acknowledge": "已接收",
     "acknowledged": "处理中",
     "done": "完成"
+  },
+  "pondRules": {
+    "meta": {
+      "title": "钓场规则 & 奖励",
+      "subtitle": "休闲塘 · 竞赛塘 · 钓鱼奖励",
+      "updated": "更新于 2026-09-21"
+    },
+    "tab": {
+      "leisure": "休闲塘",
+      "competition": "竞赛塘",
+      "rewards": "钓鱼奖励"
+    },
+    "fee": {
+      "title": "收费与入场",
+      "ownRod": "自带钓竿",
+      "ownRodPrice": "100฿ / 根竿",
+      "ownRodNote": "含店内饵料",
+      "rentRod": "租借钓竿",
+      "rentRodPrice": "150฿ / 根竿",
+      "rentRodNote": "含服务费与店内饵料",
+      "either": "两者二选一，不重复收费",
+      "allDay": "全天一档 · 不限时段，什么时候来都一样",
+      "hours": "营业时间 09:00–18:00",
+      "monday": "每周一公休（泰国法定节假日另行公告）"
+    },
+    "catch": {
+      "title": "渔获可以带回家",
+      "allTakeHome": "塘里所有鱼都可以带走",
+      "first1kg": "首 1 公斤免费",
+      "overPrice": "超出部分 60฿ / 公斤",
+      "weigh": "在柜台当面称重，可分次称、累计到同一张单",
+      "speciesTitle": "可带走的鱼种",
+      "noTake": "禁止带出池塘 · 不分大小"
+    },
+    "fish": {
+      "tilapia": "尼罗罗非鱼",
+      "snakehead": "线鳢",
+      "climbingPerch": "攀鲈",
+      "silverBarb": "泰国银鲃",
+      "marbledGoby": "笋壳鱼",
+      "walkingCatfish": "胡鲶",
+      "stripedCatfish": "条纹鲶",
+      "mekongCatfish": "湄公巨鲶"
+    },
+    "dining": {
+      "title": "餐饮与加工",
+      "noOutside": "禁止自带餐饮入场",
+      "exceptionsLabel": "可带入的例外",
+      "exceptions": "生日蛋糕 · 婴儿食品与奶粉 · 药品与医疗饮食",
+      "processing": "代加工 100฿ / 条",
+      "processingNote": "清蒸 · 油炸 · 烤 同价；加工费与渔获费分开计算",
+      "processingExample": "例：一条 2 公斤的鱼 = 渔获费 60฿ + 加工费 100฿"
+    },
+    "gear": {
+      "title": "器材与赔偿",
+      "noDeposit": "不收押金",
+      "compensation": "竿具或场内器具损坏、落水、丢失：统一赔偿 1,000฿",
+      "collectRod": "称重时当面收回鱼竿，先收竿清点，再出结算单"
+    },
+    "safety": {
+      "title": "安全与秩序",
+      "child": "12 岁以下儿童须全程在家长看护之下",
+      "noRunning": "禁止在场内奔跑嬉戏",
+      "noSwim": "禁止下水、禁止游泳；严禁自行下水捞竿、追鱼",
+      "noSwimNote": "需要协助请联系场内员工",
+      "keepClean": "保持清洁，垃圾丢在指定位置",
+      "noNoise": "禁止大声喧哗，不影响其他客人"
+    },
+    "bait": {
+      "title": "钓法与饵料",
+      "noOwnBait": "只准使用店里的饵料，禁止自带饵"
+    },
+    "comp": {
+      "title": "竞赛塘规则",
+      "price": "500฿ / 位 / 天",
+      "priceNote": "最少 10 位 · 最多 40 位 · 按参加人数计费，不是按钓位",
+      "time": "09:00–18:00 全天包场 · 每周一公休",
+      "booking": "团体预约制",
+      "bookingNote": "需提供团体名称、参加人数、负责人手机号",
+      "catch": "渔获全部放回，不能带走",
+      "catchNote": "称重登记后由员工当场放回；湄公巨鲶 与其他鱼种同样处理",
+      "ranking": "按当日渔获总重排名",
+      "rankingNote": "所有鱼都过秤登记，所以每一条都计入成绩",
+      "noSwim": "禁止下水、禁止游泳；严禁自行下水捞竿",
+      "absent": "入场即计费，未到不退",
+      "absentNote": "减少人数请提前通知；当天减员不退差额",
+      "gear": "器材：不收押金；损坏或丢失赔 1,000฿；同样在称重时当面收回竿",
+      "judging": "计时与称重由场内员工执行，成绩以主办方记录为准；现场争议以当值主管判断为准",
+      "prize": "奖品：每场不同的「惊喜奖」，现场公布"
+    },
+    "rewards": {
+      "title": "钓鱼奖励",
+      "subtitle": "钓得多，拿得多 —— 下面 5 项正在执行",
+      "m1Name": "带走奖励",
+      "m1Title": "首 1 公斤免费",
+      "m1Desc": "你钓到的鱼可以带回家。首 1 公斤免费，超出部分 60฿ / 公斤。",
+      "m2Name": "首次钓获",
+      "m2Title": "首钓证书 + 今日鱼获墙",
+      "m2Desc": "钓到人生第一条鱼，员工为你登记并写下首钓证书（日期 / 鱼种 / 重量 / 姓名）。当天最大的三条鱼会写上塘边的鱼获墙。",
+      "m3Name": "大鱼徽章",
+      "m3Title": "钓到 5 公斤以上：送徽章 + 下次抵扣 50฿",
+      "m3Desc": "不分鱼种，含必须放回的湄公巨鲶（Pla Buek）。拍照登记后领徽章，下次入场抵扣 50฿。",
+      "m4Name": "放流奖励",
+      "m4Title": "自主放回 3 公斤以上大鱼，集 3 章换一场",
+      "m4Desc": "自愿放回的鱼不称重、不计费，由员工盖章。集满 3 个章，换休闲塘免费一场。",
+      "m5Name": "榜单",
+      "m5Title": "日榜 / 月榜",
+      "m5Desc": "日榜：当天最大鱼上鱼获墙。月榜：当月最大鱼免单一场、照片上墙，并同步到 Facebook 与 LINE。",
+      "note": "以上 5 项已在执行，更多奖励陆续推出。"
+    }
   }
 }

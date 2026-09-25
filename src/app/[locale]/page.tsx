@@ -75,6 +75,17 @@ const quickActions = [
     ),
     color: 'bg-success-50 text-success-600',
   },
+  {
+    href: '/pond-rules',
+    labelKey: 'common.rules',
+    icon: (
+      <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h7l5 5v11a2 2 0 01-2 2z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 3v5h5" />
+      </svg>
+    ),
+    color: 'bg-warning-50 text-warning-600',
+  },
 ];
 
 const features = [
@@ -230,9 +241,49 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* Take Your Catch Home — the single biggest selling point on the Thai
+          market, so it gets its own block right under the pond cards. */}
+      <section className="px-4 pt-5">
+        <div className="relative overflow-hidden rounded-2xl border border-accent-200 bg-gradient-to-br from-accent-50 to-accent-100 p-5 shadow-md">
+          <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-accent-500/10" />
+          <div className="relative z-10">
+            <div className="flex items-center gap-2">
+              <span className="text-lg leading-none">🐟</span>
+              <h3 className="text-base font-bold text-neutral-900">
+                {t('home.keepFishTitle')}
+              </h3>
+            </div>
+
+            <div className="mt-3 rounded-xl bg-white/75 px-4 py-3">
+              <div className="text-2xl font-bold tracking-tight text-neutral-900">
+                {t('home.keepFishBig')}
+              </div>
+              <div className="mt-0.5 text-sm font-semibold text-accent-700">
+                {t('home.keepFishSub')}
+              </div>
+            </div>
+
+            <p className="mt-3 flex gap-2 text-xs leading-relaxed text-neutral-600">
+              <span className="mt-[4px] h-1.5 w-1.5 shrink-0 rounded-full bg-error-500" />
+              {t('home.keepFishBek')}
+            </p>
+
+            <Link
+              href="/pond-rules"
+              className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-accent-500 py-3 text-sm font-semibold text-white shadow-cta transition hover:bg-accent-600"
+            >
+              {t('home.keepFishCta')}
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+              </svg>
+            </Link>
+          </div>
+        </div>
+      </section>
+
       {/* Quick Actions */}
       <section className="px-4 py-6">
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-4 gap-3">
           {quickActions.map((action) => (
             <Link
               key={action.href}

@@ -139,6 +139,7 @@ function checkMessages() {
 /** 需要扫描的页面（不含 locale 前缀）——新增页面时请补进来 */
 const ROUTES = [
   '',
+  '/pond-rules',
   '/menu',
   '/booking',
   '/cart',

@@ -39,7 +39,8 @@
     "close": "Close",
     "retry": "Retry",
     "saving": "Saving…",
-    "refresh": "Refresh"
+    "refresh": "Refresh",
+    "rules": "Rules"
   },
   "home": {
     "welcome": "Welcome to Happy Fishing Pond",
@@ -62,7 +63,12 @@
       "drinksDesc": "Wide selection of beverages",
       "booking": "Easy Booking",
       "bookingDesc": "Book your spot online, instant confirmation"
-    }
+    },
+    "keepFishTitle": "Take your catch home",
+    "keepFishBig": "First 1 kg free",
+    "keepFishSub": "Then 60฿ per kg · weighed at the counter in front of you",
+    "keepFishBek": "One exception: Pla Buek (Mekong Giant Catfish) must go back, whatever its size",
+    "keepFishCta": "Pond rules & rewards"
   },
   "pond": {
     "leisure": "Leisure Pond",
@@ -879,5 +885,115 @@
     "acknowledge": "Acknowledge",
     "acknowledged": "In progress",
     "done": "Done"
+  },
+  "pondRules": {
+    "meta": {
+      "title": "Pond Rules & Rewards",
+      "subtitle": "Leisure Pond · Competition Pond · Rewards",
+      "updated": "Updated 21 Sep 2026"
+    },
+    "tab": {
+      "leisure": "Leisure Pond",
+      "competition": "Competition Pond",
+      "rewards": "Rewards"
+    },
+    "fee": {
+      "title": "Fees & Entry",
+      "ownRod": "Bring your own rod",
+      "ownRodPrice": "100฿ / rod",
+      "ownRodNote": "Bait included",
+      "rentRod": "Rod rental",
+      "rentRodPrice": "150฿ / rod",
+      "rentRodNote": "Service charge and bait included",
+      "either": "Choose one only — never charged twice",
+      "allDay": "One flat rate for the whole day — come any time, same price",
+      "hours": "Open 09:00–18:00",
+      "monday": "Closed every Monday (public holidays announced separately)"
+    },
+    "catch": {
+      "title": "Take Your Catch Home",
+      "allTakeHome": "Every fish in the pond can be taken home",
+      "first1kg": "First 1 kg free",
+      "overPrice": "Then 60฿ per kg",
+      "weigh": "Weighed at the counter in front of you — can be weighed in parts and added to the same bill",
+      "speciesTitle": "Species you can take home",
+      "noTake": "May not leave the pond · no size limit"
+    },
+    "fish": {
+      "tilapia": "Nile Tilapia",
+      "snakehead": "Snakehead",
+      "climbingPerch": "Climbing Perch",
+      "silverBarb": "Silver Barb",
+      "marbledGoby": "Marbled Goby",
+      "walkingCatfish": "Walking Catfish",
+      "stripedCatfish": "Striped Catfish",
+      "mekongCatfish": "Mekong Giant Catfish"
+    },
+    "dining": {
+      "title": "Food & Cooking Service",
+      "noOutside": "No outside food or drinks allowed",
+      "exceptionsLabel": "Allowed exceptions",
+      "exceptions": "Birthday cake · Baby food and formula · Medicine and medical diet",
+      "processing": "We cook your fish — 100฿ / fish",
+      "processingNote": "Steamed, deep-fried or grilled — same price. Cooking and catch fees are charged separately.",
+      "processingExample": "Example: a 2 kg fish = 60฿ catch fee + 100฿ cooking fee"
+    },
+    "gear": {
+      "title": "Equipment & Compensation",
+      "noDeposit": "No deposit required",
+      "compensation": "Rod or on-site equipment damaged, dropped in the water or lost: 1,000฿ flat",
+      "collectRod": "Rods are collected face-to-face at weighing — we count first, then issue the bill"
+    },
+    "safety": {
+      "title": "Safety & Order",
+      "child": "Children under 12 must be supervised by a parent at all times",
+      "noRunning": "No running or playing around the pond",
+      "noSwim": "No entering the water, no swimming — never wade in to retrieve a rod or chase a fish",
+      "noSwimNote": "Ask our staff if you need help",
+      "keepClean": "Keep the area clean; put rubbish in the bins provided",
+      "noNoise": "Please keep the noise down for other guests"
+    },
+    "bait": {
+      "title": "Fishing Method & Bait",
+      "noOwnBait": "Bait from our shop only — outside bait is not allowed"
+    },
+    "comp": {
+      "title": "Competition Pond",
+      "price": "500฿ / person / day",
+      "priceNote": "Minimum 10, maximum 40 people · charged per participant, not per swim",
+      "time": "Full-day booking 09:00–18:00 · closed every Monday",
+      "booking": "Group booking only",
+      "bookingNote": "Please provide the team name, number of participants and the team leader's phone number",
+      "catch": "All fish are released — none may be taken home",
+      "catchNote": "Weighed, recorded and released on the spot by our staff. Pla Buek is handled the same way.",
+      "ranking": "Ranked by total weight for the day",
+      "rankingNote": "Every fish is weighed and recorded, so every fish counts",
+      "noSwim": "No entering the water, no swimming — never wade in to retrieve a rod",
+      "absent": "Charged on entry; no refund for no-shows",
+      "absentNote": "Tell us in advance if you reduce your group; same-day reductions are not refunded",
+      "gear": "Equipment: no deposit; 1,000฿ flat if damaged or lost; rods likewise collected at weighing",
+      "judging": "Timekeeping and weighing are done by our staff; results follow the organiser's record. On-site disputes are settled by the supervisor on duty.",
+      "prize": "Prize: a different surprise prize each round, announced on the day"
+    },
+    "rewards": {
+      "title": "Fishing Rewards",
+      "subtitle": "Catch more, get more — these five are live today",
+      "m1Name": "Take-home reward",
+      "m1Title": "First 1 kg free",
+      "m1Desc": "The fish you catch go home with you. The first 1 kg is free, then 60฿ per kg.",
+      "m2Name": "First catch",
+      "m2Title": "First-catch certificate + today's board",
+      "m2Desc": "Catch your very first fish and our staff will register it and write you a certificate (date / species / weight / name). The three biggest fish of the day go up on the board by the pond.",
+      "m3Name": "Big fish badge",
+      "m3Title": "Catch 5 kg or more: badge + 50฿ off your next visit",
+      "m3Desc": "Any species counts, including Pla Buek, which must be released. We photograph and record it, you take the badge, and your next visit is 50฿ off.",
+      "m4Name": "Release reward",
+      "m4Title": "Release a fish over 3 kg — collect 3 stamps for a free session",
+      "m4Desc": "Fish you choose to release are not weighed or charged, and our staff stamps your card. Three stamps earn you one free session at the Leisure Pond.",
+      "m5Name": "Leaderboards",
+      "m5Title": "Daily / monthly board",
+      "m5Desc": "Daily: the biggest fish of the day goes on the board. Monthly: the biggest fish of the month wins a free session, a place on the board and a post on Facebook and LINE.",
+      "note": "These five are live now. More rewards are on the way."
+    }
   }
 }
