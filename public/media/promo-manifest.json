@@ -1,0 +1,22 @@
+[
+  {
+    "stem": "promo-16x9",
+    "w": 1920,
+    "h": 1080,
+    "seconds": 18.6,
+    "shots": 10,
+    "mp4Bytes": 7022276,
+    "webmBytes": 0,
+    "poster": "promo-16x9-poster.jpg"
+  },
+  {
+    "stem": "promo-9x16",
+    "w": 1080,
+    "h": 1920,
+    "seconds": 18.6,
+    "shots": 10,
+    "mp4Bytes": 6502895,
+    "webmBytes": 0,
+    "poster": "promo-9x16-poster.jpg"
+  }
+]

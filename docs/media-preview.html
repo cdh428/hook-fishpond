@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hook the happyness · 影像素材方案（待确认）</title>
+<style>
+  :root{
+    --p900:#0A3747; --p800:#0F4A5C; --p700:#155E75; --p600:#178A8C; --p500:#1FA6A8;
+    --p100:#CFF5F7; --p50:#ECFBFC;
+    --a600:#D97706; --a500:#F59E0B; --a100:#FEF3C7; --a50:#FFFBEB;
+    --n900:#171717; --n700:#404040; --n600:#525252; --n500:#737373; --n400:#A3A3A3;
+    --n200:#E5E5E5; --n100:#F5F5F5; --n50:#FAFAFA;
+    --page:#EAF6F5; --ok:#16A34A; --warn:#DC2626;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{margin:0;background:var(--page);color:var(--n900);
+    font:15px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans SC","Microsoft YaHei",sans-serif;}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 20px 80px}
+  h1{font-size:26px;line-height:1.35;margin:0 0 6px}
+  h2{font-size:19px;margin:44px 0 14px;padding-left:12px;border-left:4px solid var(--a500)}
+  h3{font-size:15px;margin:26px 0 10px;color:var(--p700)}
+  p{margin:10px 0}
+  small{color:var(--n500)}
+  code{background:var(--n100);padding:1px 6px;border-radius:6px;font-size:13px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  a{color:var(--p700)}
+
+  .top{background:linear-gradient(135deg,var(--p800),var(--p700) 55%,var(--p900));
+    color:#fff;padding:34px 0 30px;margin-bottom:8px}
+  .top .wrap{padding-bottom:0}
+  .top h1{color:#fff}
+  .top p{color:#bfe6ea;margin:4px 0}
+  .badges{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+  .badge{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.2);
+    border-radius:999px;padding:5px 12px;font-size:13px;color:#eaf9fb}
+
+  .card{background:#fff;border-radius:16px;padding:20px 22px;box-shadow:0 2px 14px rgba(15,74,92,.08);
+    margin:16px 0}
+  .card.tight{padding:16px 18px}
+  .grid{display:grid;gap:14px}
+  .g2{grid-template-columns:repeat(2,1fr)}
+  .g3{grid-template-columns:repeat(3,1fr)}
+  .g4{grid-template-columns:repeat(4,1fr)}
+  @media(max-width:820px){.g3,.g4{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:560px){.g2,.g3,.g4{grid-template-columns:1fr}}
+
+  figure{margin:0}
+  figure img{width:100%;display:block;border-radius:12px;background:var(--n100)}
+  figcaption{font-size:12.5px;color:var(--n500);margin-top:6px;line-height:1.5}
+  figcaption b{color:var(--n700);font-weight:600}
+
+  /* 首屏模拟：桌面 */
+  .browser{border-radius:14px;overflow:hidden;box-shadow:0 10px 34px rgba(15,74,92,.22);background:#0d2a33}
+  .bar{height:30px;background:#123844;display:flex;align-items:center;gap:6px;padding:0 12px}
+  .dot{width:9px;height:9px;border-radius:50%;background:#2b5a67}
+  .bar span{margin-left:8px;font-size:11px;color:#7fb3bd}
+  .hero{position:relative;aspect-ratio:16/9;overflow:hidden}
+  .hero img{width:100%;height:100%;object-fit:cover;display:block}
+  .hero .scrim{position:absolute;inset:0;
+    background:linear-gradient(100deg,rgba(5,34,43,.86) 0%,rgba(5,34,43,.55) 42%,rgba(5,34,43,.12) 78%)}
+  .hero .copy{position:absolute;left:5%;top:50%;transform:translateY(-50%);color:#fff;max-width:56%}
+  .hero .copy .kicker{display:inline-block;background:var(--a500);color:#3b2500;font-weight:700;
+    font-size:11px;letter-spacing:.06em;padding:3px 9px;border-radius:999px}
+  .hero .copy h3{color:#fff;font-size:clamp(17px,3.1vw,30px);margin:12px 0 6px;line-height:1.25}
+  .hero .copy p{color:#d7f0f3;font-size:clamp(11px,1.5vw,14px);margin:0 0 14px}
+  .hero .copy .cta{display:inline-block;background:var(--a500);color:#3b2500;font-weight:700;
+    font-size:clamp(11px,1.4vw,13px);padding:9px 16px;border-radius:11px}
+  .hero .dots{position:absolute;bottom:14px;left:5%;display:flex;gap:6px}
+  .hero .dots i{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.45)}
+  .hero .dots i.on{background:var(--a500);width:20px;border-radius:99px}
+
+  /* 首屏模拟：手机 */
+  .phone{width:100%;max-width:290px;margin:0 auto;border:9px solid #0d2a33;border-radius:32px;
+    overflow:hidden;background:#0d2a33;box-shadow:0 10px 30px rgba(15,74,92,.24)}
+  .phone .hero{aspect-ratio:9/16}
+  .phone .hero .copy{max-width:82%}
+
+  /* 区块演示 */
+  .blk{border-radius:16px;overflow:hidden;background:#fff;box-shadow:0 2px 14px rgba(15,74,92,.08)}
+  .blk .pix{position:relative;aspect-ratio:4/3;overflow:hidden}
+  .blk .pix img{width:100%;height:100%;object-fit:cover;display:block}
+  .blk .body{padding:14px 16px}
+  .blk .body h4{margin:0 0 4px;font-size:15px}
+  .blk .body p{margin:0;font-size:13px;color:var(--n600)}
+
+  .pill{display:inline-block;font-size:11.5px;font-weight:700;border-radius:999px;padding:3px 9px}
+  .pill.use{background:#DCFCE7;color:#15803D}
+  .pill.opt{background:var(--a100);color:var(--a600)}
+  .pill.no{background:#FEE2E2;color:#B91C1C}
+  .pill.new{background:var(--p100);color:var(--p700)}
+
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--n200);vertical-align:top}
+  th{background:var(--n50);font-weight:600;color:var(--n700);position:sticky;top:0}
+  td.mono{font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--n600)}
+  .tblwrap{max-height:520px;overflow:auto;border:1px solid var(--n200);border-radius:12px}
+
+  video{width:100%;display:block;border-radius:12px;background:#000}
+
+  .note{border-left:4px solid var(--p500);background:var(--p50);border-radius:0 12px 12px 0;
+    padding:12px 16px;margin:14px 0;font-size:13.5px}
+  .warnbox{border-left:4px solid var(--warn);background:#FEF2F2;border-radius:0 12px 12px 0;
+    padding:12px 16px;margin:14px 0;font-size:13.5px}
+  .okbox{border-left:4px solid var(--ok);background:#F0FDF4;border-radius:0 12px 12px 0;
+    padding:12px 16px;margin:14px 0;font-size:13.5px}
+  ol,ul{padding-left:22px;margin:10px 0}
+  li{margin:5px 0}
+  .kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:4px}
+  @media(max-width:640px){.kpi{grid-template-columns:repeat(2,1fr)}}
+  .kpi div{background:var(--n50);border-radius:12px;padding:12px}
+  .kpi b{display:block;font-size:22px;color:var(--p700)}
+  .kpi span{font-size:12px;color:var(--n500)}
+  .hr{height:1px;background:var(--n200);margin:34px 0}
+  .story{position:relative}
+  .story img{aspect-ratio:3/2;object-fit:cover}
+  .arrow{display:flex;align-items:center;justify-content:center;color:var(--a500);font-size:22px;font-weight:700}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="wrap">
+    <h1>影像素材整理方案 · 待你确认</h1>
+    <p>Hook the happyness（乐钓鱼塘）· 开塘至今全部实拍</p>
+    <p style="font-size:13px;color:#8fd0d8">来源：<code style="background:rgba(255,255,255,.12);color:#dff6f8">D:\HTH\photo\Pictures</code> · 拍摄期 2026-02-25 → 2026-09-24</p>
+    <div class="badges">
+      <span class="badge">252 张照片</span>
+      <span class="badge">8 段影像 · 共 78 秒</span>
+      <span class="badge">已整理 64 项成品（网页用图 46 项 · 12.7MB）+ 2 版小影片</span>
+      <span class="badge">已做隐私处理（全局）</span>
+      <span class="badge">未推送到线上</span>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <div class="card">
+    <h3 style="margin-top:0">一句话结论</h3>
+    <p><b>你的照片里有一批非常好的素材</b>——日落、亮灯后的塘边、举鱼、烤鱼，
+    这四类足以撑起首屏和图库。<b>全部用实拍，没有一张 AI 生成画面</b>。
+    但有两块要如实说：<b>① 白天施工期的照片占了一半以上</b>（阴天、砂石、脚手架），
+    一律只走「开塘故事」那一条线；<b>② 8 段影像里只有 2 段适合营销</b>，所以小影片是用你的好照片合成的。</p>
+    <div class="kpi">
+      <div><b>252</b><span>张原片逐张过筛</span></div>
+      <div><b>44</b><span>项网页用图</span></div>
+      <div><b>18</b><span>个影片帧</span></div>
+      <div><b>100%</b><span>人脸已遮挡</span></div>
+    </div>
+  </div>
+
+  <h2>1 · 首屏（hero）——网站第一眼</h2>
+  <p><b>桌面 4 张轮播、手机 3 张轮播</b>。<b>最弱的那张（原第 5 张「白天」）已按你的要求删掉</b>——
+   它天色灰、水面还漂着蓝色鱼盘，留着只会拉低第一眼。现在 4 张全是日落／夜间，没有一张是凑数的。
+   下面都是真实叠层效果（真实成品图 + 真实文案排布）。</p>
+
+  <div class="browser" style="margin-top:14px">
+    <div class="bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><span>hook-fishpond.com</span></div>
+    <div class="hero">
+      <img src="../public/media/hero-01-sunset.jpg" alt="">
+      <div class="scrim"></div>
+      <div class="copy">
+        <span class="kicker">首 1 公斤免费</span>
+        <h3>钓到的鱼，可以带回家</h3>
+        <p>休闲塘 100฿ 全天 · 09:00–18:00 · 每周一公休</p>
+        <span class="cta">立即预约钓位 →</span>
+      </div>
+      <div class="dots"><i class="on"></i><i></i><i></i><i></i></div>
+    </div>
+  </div>
+  <figcaption style="margin-top:8px">首屏第 1 张 · <b>hero-01-sunset</b>（原片 P210 · 2026-07-25 18:46）· 1920×1080 · 203KB</figcaption>
+
+  <div class="grid g3" style="margin-top:18px">
+    <figure>
+      <div class="browser"><div class="hero"><img src="../public/media/hero-02-evening.jpg" alt="">
+        <div class="scrim"></div><div class="copy" style="max-width:72%">
+        <h3 style="font-size:15px">华灯初上，塘边最舒服的时候</h3></div></div></div>
+      <figcaption>第 2 张 · <b>hero-02-evening</b><br>P190 · 07-09 21:06 · 215KB</figcaption>
+    </figure>
+    <figure>
+      <div class="browser"><div class="hero"><img src="../public/media/hero-03-catch.jpg" alt="">
+        <div class="scrim"></div><div class="copy" style="max-width:72%">
+        <h3 style="font-size:15px">今天钓到的，就是你的</h3></div></div></div>
+      <figcaption>第 3 张 · <b>hero-03-catch</b><br>P211 · 07-30 19:02 · 113KB · 与手机版第 3 张同场景</figcaption>
+    </figure>
+    <figure>
+      <div class="browser"><div class="hero"><img src="../public/media/hero-04-moon.jpg" alt="">
+        <div class="scrim"></div><div class="copy" style="max-width:72%">
+        <h3 style="font-size:15px">月夜静水</h3></div></div></div>
+      <figcaption>第 4 张 · <b>hero-04-moon</b><br>P098 · 03-27 17:10 · 206KB</figcaption>
+    </figure>
+  </div>
+
+  <h3>手机首屏（4 张 · 与桌面逐张同场景配对）</h3>
+  <div class="grid g4">
+    <figure>
+      <div class="phone"><div class="hero"><img src="../public/media/hero-m-sunset.jpg" alt="">
+        <div class="scrim"></div><div class="copy">
+        <span class="kicker" style="font-size:10px">首 1 公斤免费</span>
+        <h3 style="font-size:14px">钓到的鱼<br>可以带回家</h3>
+        <span class="cta" style="font-size:10px;padding:7px 12px">立即预约 →</span></div></div></div>
+      <figcaption><b>hero-m-sunset</b> · 89KB</figcaption>
+    </figure>
+    <figure>
+      <div class="phone"><div class="hero"><img src="../public/media/hero-m-evening.jpg" alt="">
+        <div class="scrim"></div><div class="copy">
+        <h3 style="font-size:14px">华灯初上<br>塘边最舒服</h3></div></div></div>
+      <figcaption><b>hero-m-evening</b> · 114KB</figcaption>
+    </figure>
+    <figure>
+      <div class="phone"><div class="hero"><img src="../public/media/hero-m-catch.jpg" alt="">
+        <div class="scrim"></div><div class="copy">
+        <h3 style="font-size:14px">今天钓到的<br>就是你的</h3></div></div></div>
+      <figcaption><b>hero-m-catch</b> · P211 · 原片本身就是竖构图，举鱼＋蓝水<br>
+        <span class="pill use">换掉原 P180</span> 人脸、施工地面、球衣品牌三样全避开了</figcaption>
+    </figure>
+    <figure>
+      <div class="phone"><div class="hero"><img src="../public/media/hero-m-moon.jpg" alt="">
+        <div class="scrim"></div><div class="copy">
+        <h3 style="font-size:14px">月夜静水<br>还能再钓一竿</h3></div></div></div>
+      <figcaption><b>hero-m-moon</b> · 124KB · 补的，让手机和桌面都是 4 张<br>
+        <span class="pill use">同场景配对</span> 桌面/手机切到第 N 张看到的是同一处景</figcaption>
+    </figure>
+  </div>
+
+  <div class="note">
+    <b>为什么这样排：</b>首屏第一张的任务是建立「目的地感」，不是上来讲价目。
+    第 1 张选日落，是因为它同时给出「有水、有屋、有灯、有天空」四个信息，
+    是全部 252 张里信息量最大的一张。<br>
+    手机第 3 张原本用的是 P180（客人抱大鱼），<b>现在换成 P211</b>——
+    同一个人同一场，但 P211 的机位避开了人脸、避开了碎石地、鱼也更大，是纯赚的替换。
+  </div>
+
+  <h2>2 · 小影片（从实拍照片合成，无 AI 生成画面）</h2>
+  <p>9 个镜头 + 片尾徽标，每镜 2.4 秒，交叉溶解 0.6 秒，<b>成片 18.6 秒，无声</b>（网页静音自动循环播放）。</p>
+  <p><b>横版（网页主推）</b>：日落金光 → 举鱼 → 白天塘景全貌 → 烤鱼 → 烤串 → 电子秤称鱼 →
+   夜间灯带 → 月夜 → <b>日落全景</b> → 徽标。<br>
+   <b>竖版（FB / LINE / TikTok）用另一套顺序</b>：举鱼 → 烤鱼 → 烤串 → 电子秤称鱼 →
+   亮灯凉亭 → 夜间入口 → 月夜 → 白天塘景 → 日落全景 → 徽标 ——
+   竖屏在信息流里只有前一兩秒会被看完，所以把「手里这条鱼」提到第一镜当钩子。</p>
+  <p style="font-size:13px;color:var(--n500)">三次返工都记在这儿，免得下次再踩：
+   <b>①</b> 第一版把白天塘景放开场，成片前 8 秒是全场最灰的两张（饱和度 0.17 / 0.19）
+   → 重排成日落开场、日落收尾，平光图压到中段；
+   <b>②</b> 竖构图原片裁 16:9 把主体裁掉了（电子秤只剩桌腿）→ 逐镜补取景锚点；
+   <b>③</b> 横片裁 9:16 更麻烦 —— 宽度被切掉一大半、高度正好贴合，纵向锚点直接失效，
+   剪出来是一条「中间带」（第一版竖版开场只剩天空与停车场）→ 给竖版单独加了横向锚点与额外放大，逐镜重定取景。</p>
+
+  <div class="grid g2" style="margin-top:14px">
+    <figure>
+      <video src="../public/media/promo-16x9.mp4" controls autoplay muted loop playsinline
+             poster="../public/media/promo-16x9-poster.jpg"></video>
+      <figcaption><b>promo-16x9.mp4</b> · 1920×1080 · 18.6s · 7.18MB · 网页主推</figcaption>
+    </figure>
+    <figure>
+      <video src="../public/media/promo-9x16.mp4" controls autoplay muted loop playsinline
+             poster="../public/media/promo-9x16-poster.jpg"></video>
+      <figcaption><b>promo-9x16.mp4</b> · 1080×1920 · 18.6s · 6.50MB · 适合 Facebook / LINE / TikTok 竖版</figcaption>
+    </figure>
+  </div>
+
+  <div class="warnbox">
+    <b>关于你拍的 8 段影像，我要说实话：</b>真正能用于营销的只有
+    <code>VID_20260629_184006</code>（4.65 秒，爸爸带孩子钓鱼，有情绪）
+    和 <code>VID_20260629_184012</code>（1.67 秒，电子秤称重）。
+    其余 6 段是鱼苗入塘、水底砂石、小虾、夜钓浮漂特写——<b>镜头是固定的、画面偏暗、
+    内容是"放苗记录"而不是"客人体验"</b>，放到官网上会拉低档次。
+    <br><br>所以这段小影片我<b>用你最好的照片合成</b>，而不是硬剪那 6 段。
+    如果你希望成片里有真人动态，唯一的路是<b>按下面的清单补拍一次</b>。
+  </div>
+
+  <h2>3 · 「可带鱼回家」区块（核心卖点）</h2>
+  <p>规则页已经上线了这个区块，但现在是纯文字。配上实拍照片后说服力完全不同——
+   尤其是那张<b>客人在塘边双手举鱼</b>的照片。</p>
+  <div class="grid g3" style="margin-top:14px">
+    <figure><img src="../public/media/catch-01-holdfish.jpg" alt="">
+      <figcaption><b>catch-01-holdfish</b> · P211 · 07-30<br>双手举鱼，背景是塘水 —— 最贴合"带回家"<span class="pill use">首推</span></figcaption></figure>
+    <figure><img src="../public/media/catch-03-scale.jpg" alt="">
+      <figcaption><b>catch-03-scale</b> · P229 · 08-21<br>电子秤当面称重 —— 支撑"首 1kg 免费、超出 60฿/kg"<span class="pill opt">可用</span></figcaption></figure>
+    <figure><img src="../public/media/catch-04-anger.jpg" alt="">
+      <figcaption><b>catch-04-anger</b> · P180 · 06-29<br>客人抱着大鱼 —— <b>脸用鱼塘徽标盖住、球衣品牌已模糊</b><span class="pill use">已处理</span></figcaption></figure>
+  </div>
+  <p style="font-size:13px;color:var(--n500)">第三张现在是这样：徽标盖脸 + 6 处第三方品牌柔化。
+   看下面「隐私保护」那一节。</p>
+
+  <h2>隐私保护（全局规则 · 已执行）</h2>
+  <p>按你的要求「全局：不能露脸」。这件事我没有靠肉眼扫，而是把 <b>全部 252 张原片</b>
+   都跑了一遍人脸检测（正视两套 ＋ 侧脸 ＋ 侧脸镜像，三路并行），命中 118 张；
+   <b>再把每一处命中的框放大、逐张目视复核</b>，把误报剔掉——
+   烤串、鱼鳞、水泥墙、云、价目牌这些纹理都会被人脸检测当成脸，实测误报率很高。</p>
+
+  <div class="note">
+    <b>复核结论：会用到的照片里，只有 1 张有清晰人脸</b>——P180（客人抱大鱼）。
+    举鱼 P211／P212 只拍到手臂、头本来就不在画内；称鱼 P229 是电子秤加鱼；
+    <b>小影片用的 9 个镜头也全部没有人脸</b>。
+    所以全局真正要处理的只有这一张，其余 61 项成品都是零风险的。
+  </div>
+
+  <h3>处理前后</h3>
+  <figure><img src="../public/media/privacy/before-after.jpg" alt="">
+    <figcaption>左：原片（脸、YAMAHA、BURIRAM UNITED、Chang 啤酒字样、adidas 全部在）
+      → 右：<b>鱼塘徽标盖住整张脸 + 6 处第三方品牌柔化</b></figcaption></figure>
+
+  <h3>可换的贴纸（一条命令切换）</h3>
+  <figure><img src="../public/media/privacy/stickers-overview.png" alt="">
+    <figcaption>全部是我手绘的，不用系统 emoji 字体——系统彩色 emoji 渲出来是糊色块。
+      现在用的是<b>鱼塘自己的徽标</b>（你提的），换成小熊就是
+      <code>--sticker bear</code>。</figcaption></figure>
+
+  <div class="card">
+    <h3 style="margin-top:0">两个判断，供你复核</h3>
+    <ul style="font-size:13.5px;line-height:1.75">
+      <li><b>用徽标盖脸 vs 用小熊盖脸：</b>徽标的好处是把「遮挡」变成了「露出品牌」，
+        一眼看过去是刻意设计而不是打码；缺点是「拿自家 logo 盖住客人的脸」在观感上稍微妙。
+        小熊更中性、明确就是隐私遮挡。两种都已经出好，随时可换。</li>
+      <li><b>遮挡方式选「贴纸」而不是「模糊」：</b>模糊会让读者意识到「这张照片有问题」，
+        贴纸则读起来是设计元素。这是很多社媒账号的做法，对家庭客群更友好。</li>
+      <li><b>球衣品牌我一共处理了 6 处</b>：YAMAHA、BURIRAM UNITED 队徽、右胸圆形徽章、
+        袖口赞助商（น้ำปลา）、腹部的 <b>Chang 啤酒字样</b>、以及<b>短裤上的 adidas</b>——
+        最后这个是模糊时顺带发现的，你没提到但同一类风险。
+        模糊用了椭圆羽化，不会出现生硬的小方块。</li>
+      <li><b>另外 5 张被检测命中的照片都不用处理</b>：P134／P140 里是施工的工人，只有背影；
+        P231／P239／P249 的命中是误报，放大看实际是水泥墙、香蕉叶、篷布这类纹理。</li>
+    </ul>
+  </div>
+
+  <h2>4 · 餐饮区块（你的第二个卖点）</h2>
+  <p>「代加工 100฿/条」这条规则，配一张整条烤鱼的照片比写十行字有用。</p>
+  <div class="grid g3" style="margin-top:14px">
+    <figure><img src="../public/media/food-01-grilledfish.jpg" alt="">
+      <figcaption><b>food-01-grilledfish</b> · P184 · 06-29 20:04<br>整条烤鱼 + 蘸料，俯拍<span class="pill use">首推</span></figcaption></figure>
+    <figure><img src="../public/media/food-02-bbq.jpg" alt="">
+      <figcaption><b>food-02-bbq</b> · P183 · 06-29<br>烤炉上的肉串与青柠<span class="pill use">首推</span></figcaption></figure>
+    <figure><img src="../public/media/food-04-window.jpg" alt="">
+      <figcaption><b>food-04-window</b> · P206 · 07-25<br>窗边小酌，外面就是塘<span class="pill opt">可用</span>（右上角有雨点）</figcaption></figure>
+  </div>
+
+  <h2>5 · 环境与设施</h2>
+  <div class="grid g3" style="margin-top:14px">
+    <figure><img src="../public/media/place-06-nightpath.jpg" alt="">
+      <figcaption><b>place-06-nightpath</b> · P172 · 06-24<br>入夜后的塘边灯带<span class="pill use">首推</span></figcaption></figure>
+    <figure><img src="../public/media/place-03-dining.jpg" alt="">
+      <figcaption><b>place-03-dining</b> · P239 · 08-29<br>餐饮区内景，正对塘面<span class="pill use">首推</span></figcaption></figure>
+    <figure><img src="../public/media/place-04-rodwall.jpg" alt="">
+      <figcaption><b>place-04-rodwall</b> · P240 · 08-29<br>餐饮区的鱼竿墙（顺带交代钓具）<span class="pill use">首推</span></figcaption></figure>
+  </div>
+  <div class="grid g2" style="margin-top:14px">
+    <figure><img src="../public/media/place-07-nightarch.jpg" alt="">
+      <figcaption><b>place-07-nightarch</b> · P169 · 06-24 · 夜间建筑入口（可见鱼缸）<span class="pill opt">可用</span></figcaption></figure>
+    <figure><img src="../public/media/place-sq-walkway.jpg" alt="">
+      <figcaption><b>place-sq-walkway</b> · P231 · 08-28 · 钓位与遮阳伞骨架<br>
+      <b>⚠️ 这张偏弱</b>：地面还是砂石、没有客人。先留着占位，建议补拍<span class="pill opt">勉强可用</span></figcaption></figure>
+  </div>
+
+  <h2>6 · 图库（8 张方格）</h2>
+  <div class="grid g4" style="margin-top:14px">
+    <figure><img src="../public/media/catch-sq-holdfish.jpg" alt=""><figcaption>双手举鱼</figcaption></figure>
+    <figure><img src="../public/media/food-sq-grilledfish.jpg" alt=""><figcaption>整条烤鱼</figcaption></figure>
+    <figure><img src="../public/media/food-sq-bbq.jpg" alt=""><figcaption>烤炉肉串</figcaption></figure>
+    <figure><img src="../public/media/place-sq-dining.jpg" alt=""><figcaption>餐饮区内景</figcaption></figure>
+    <figure><img src="../public/media/catch-sq-scale.jpg" alt=""><figcaption>当面称重 <small>（偏弱）</small></figcaption></figure>
+    <figure><img src="../public/media/place-sq-walkway.jpg" alt=""><figcaption>钓位 <small>（偏弱）</small></figcaption></figure>
+    <figure><img src="../public/media/food-03-skewers.jpg" alt=""><figcaption>烤串与玉米</figcaption></figure>
+    <figure><img src="../public/media/place-05-pondview.jpg" alt=""><figcaption>塘全景</figcaption></figure>
+  </div>
+
+  <h2>7 · 页面底纹（深色区块用）</h2>
+  <p>把上面的照片做<b>高斯模糊 + 压暗</b>，用作深色区块的背景（每张只有 30–42KB，几乎不占流量）。</p>
+  <div class="grid g3" style="margin-top:14px">
+    <figure>
+      <div style="position:relative;border-radius:12px;overflow:hidden;aspect-ratio:16/9">
+        <img src="../public/media/bg-warm.jpg" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover">
+        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+          color:#fff;text-align:center;padding:16px">
+          <div><div style="font-size:19px;font-weight:700">为什么选我们</div>
+          <div style="font-size:12px;color:#cfe9ec;margin-top:6px">首 1 公斤免费 · 当面称重 · 无押金</div></div>
+        </div>
+      </div>
+      <figcaption><b>bg-warm</b> · 37KB</figcaption>
+    </figure>
+    <figure>
+      <div style="position:relative;border-radius:12px;overflow:hidden;aspect-ratio:16/9">
+        <img src="../public/media/bg-quiet.jpg" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover">
+        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+          color:#fff;text-align:center;padding:16px">
+          <div><div style="font-size:19px;font-weight:700">奖励政策</div>
+          <div style="font-size:12px;color:#cfe9ec;margin-top:6px">大鱼徽章 · 放流集章 · 日榜月榜</div></div>
+        </div>
+      </div>
+      <figcaption><b>bg-quiet</b> · 30KB</figcaption>
+    </figure>
+    <figure>
+      <div style="position:relative;border-radius:12px;overflow:hidden;aspect-ratio:16/9">
+        <img src="../public/media/bg-place.jpg" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover">
+        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+          color:#fff;text-align:center;padding:16px">
+          <div><div style="font-size:19px;font-weight:700">立即预约</div>
+          <div style="font-size:12px;color:#cfe9ec;margin-top:6px">休闲塘 100฿ · 竞赛塘 500฿/位</div></div>
+        </div>
+      </div>
+      <figcaption><b>bg-place</b> · 42KB</figcaption>
+    </figure>
+  </div>
+
+  <h2>8 · 开塘故事（已扩成完整时间线 · 12 步）</h2>
+  <p>从 2026-02-25 的荒地到有餐厅的钓场，你有<b>完整的过程记录</b>——
+   这是一个很强的「我们是真的在做这件事」的信任信号，也是唯一一条能把
+   「施工期照片」变成资产的用法。<b>已从 6 张扩到 12 步，覆盖每一个月。</b></p>
+  <div class="grid g3" style="margin-top:14px">
+    <figure><img src="../public/media/story-01-dayone.jpg" alt=""><figcaption><b>2026-02-25</b> · 第一天，还是一片荒地</figcaption></figure>
+    <figure><img src="../public/media/story-02-excavator.jpg" alt=""><figcaption><b>2026-03-04</b> · 挖机进场</figcaption></figure>
+    <figure><img src="../public/media/story-03-pondbase.jpg" alt=""><figcaption><b>2026-03-20</b> · 塘底与石笼</figcaption></figure>
+    <figure><img src="../public/media/story-04-embank.jpg" alt=""><figcaption><b>2026-03-29</b> · 石砌护坡完成</figcaption></figure>
+    <figure><img src="../public/media/story-05-frame.jpg" alt=""><figcaption><b>2026-04-07</b> · 房屋上梁</figcaption></figure>
+    <figure><img src="../public/media/story-06-roof.jpg" alt=""><figcaption><b>2026-04-22</b> · 主体成型</figcaption></figure>
+    <figure><img src="../public/media/story-07-building.jpg" alt=""><figcaption><b>2026-05-08</b> · 建筑完工</figcaption></figure>
+    <figure><img src="../public/media/story-08-firstlight.jpg" alt=""><figcaption><b>2026-06-24</b> · 夜里亮起第一盏灯</figcaption></figure>
+    <figure><img src="../public/media/story-09-lights.jpg" alt=""><figcaption><b>2026-07-09</b> · 灯火初上</figcaption></figure>
+    <figure><img src="../public/media/story-10-scale.jpg" alt=""><figcaption><b>2026-08-21</b> · 第一条过秤的鱼</figcaption></figure>
+    <figure><img src="../public/media/story-11-dining.jpg" alt=""><figcaption><b>2026-08-29</b> · 餐饮区开张</figcaption></figure>
+    <figure><img src="../public/media/story-12-now.jpg" alt=""><figcaption><b>现在</b> · 鱼竿墙与吧台</figcaption></figure>
+  </div>
+  <p style="font-size:13px;color:var(--n500)">⚠️ 9 月之后只剩水质维护与清塘的记录照（绿色水华、碎石地上的作业）
+   ——没有能上网站的，所以时间线收在 8 月底。<b>下次清塘或换水时拍 2～3 张「水面清亮」的，这条线才算完整。</b></p>
+
+  <h2>9 · 品牌徽标（已抠成透明圆形）</h2>
+  <p>原图（<code>MEITU_20260404_154641101.jpg</code>）是白底方图，直接放到深色页脚会有一块白方块。
+   我已经做成<b>圆形透明 PNG</b>，白/深色/浅色底都干净：</p>
+  <figure style="margin-top:14px">
+    <img src="../public/media/brand-logo-flat.jpg" alt="" style="max-width:260px;border-radius:12px">
+    <figcaption>另有 <b>brand-logo-640.png / 256 / 128</b>（透明圆形）可直接用</figcaption>
+  </figure>
+
+  <h2>10 · 全部成品清单（64 项图片 + 4 个影片文件）</h2>
+  <div class="tblwrap">
+    <table>
+      <thead><tr><th>用途</th><th>文件</th><th>尺寸</th><th>体积</th><th>原片</th><th>说明</th></tr></thead>
+      <tbody id="manifest"><tr><td colspan="6">载入中…</td></tr></tbody>
+    </table>
+  </div>
+  <p style="margin-top:8px"><small>注：<code>vid01–vid09</code> / <code>vidt01–vidt09</code> 是小影片的中间帧，不用单独上线。</small></p>
+
+  <div class="hr"></div>
+
+  <h2>11 · 已按你的决策定稿（5 条）</h2>
+  <p>你上一轮给的四条决策 + 一条全局要求，已经全部落进上面的素材里。</p>
+  <div class="grid g2">
+    <div class="card tight">
+      <h3 style="margin-top:0">① 首屏：4 张，砍掉最弱的那张</h3>
+      <p style="font-size:13.5px">「日落金光 → 晚霞凉亭 → 蓝调步道 → 月夜水面」。
+      <b>删掉了原来的「白天 · 塘景与云」</b>——它是这几张里最平的（低饱和、无光比），
+      留着只会稀释第一眼。</p>
+      <p style="font-size:13.5px">手机竖版 3 张，第三张换成<b>客人抱大鱼</b>。</p>
+      <p style="font-size:13px;color:var(--n500)">首屏总量约 1.0MB：每张都导了 WebP + JPG 双份，
+      页面按浏览器能力自动选。</p>
+    </div>
+    <div class="card tight">
+      <h3 style="margin-top:0">② 小影片：要</h3>
+      <p style="font-size:13.5px">18.6 秒、无声、自动循环，<b>16:9 + 9:16 两个版本</b>各一份，另附封面图。</p>
+      <p style="font-size:13.5px">位置：<b>首屏下方单独一段</b>。不做首屏背景——
+      那会让首屏一次吃掉 7MB，手机流量不友好。</p>
+      <p style="font-size:13px;color:var(--n500)">横竖两版各排过顺序：横版日落开场收尾、平光图放中段；
+      竖版把「手里这条鱼」提到第一镜当钩子。</p>
+    </div>
+    <div class="card tight">
+      <h3 style="margin-top:0">③ 开塘故事：要，而且是完整的</h3>
+      <p style="font-size:13.5px"><b>12 步完整时间线</b>，从 <b>2026-02-25 第一张荒地照</b>一直到现在：
+      荒地 → 挖机进场 → 塘底夯实 → 围堤 → 钢架 → 封顶 → 建屋 → 首次亮灯 → 灯火初上 →
+      第一条过秤的鱼 → 餐饮区开张 → 鱼竿墙与吧台。</p>
+      <p style="font-size:13px;color:var(--n500)">放「关于我们」页，首页只放入口；
+      9 月之后只剩水质维护与清塘的记录照，没有能上网站的，所以时间线收在 8 月底。</p>
+    </div>
+    <div class="card tight">
+      <h3 style="margin-top:0">④ 餐饮照片：上</h3>
+      <p style="font-size:13.5px">先用现有 4 张（烤鱼 / 肉串 / 烤串 / 窗边小酌），
+      另出方形裁切版做照片墙。</p>
+      <p style="font-size:13px;color:var(--n500)">现有素材里<b>没有一张拍到客人吃饭</b>，
+      也没有出餐摆盘照 —— 补拍后替换。</p>
+    </div>
+    <div class="card tight">
+      <h3 style="margin-top:0">⑤ 全局隐私保护：已执行</h3>
+      <p style="font-size:13.5px">全库 <b>252 张</b>逐张跑人脸检测（118 处命中），
+      <b>逐框放大复核后确认只有 1 张是真脸</b>。</p>
+      <p style="font-size:13.5px">这一张用<b>鱼塘徽标盖脸</b>（工具已备好，一键可换成小熊 / 笑脸 / 小鱼 / 爪印贴纸），
+      姿势与渔获都保留；顺带<b>模糊了球衣上 6 处第三方品牌</b>：
+      YAMAHA / BURIRAM UNITED 队徽 / 右胸徽章 / 袖口赞助商 / <b>Chang 啤酒</b> / 短裤 adidas。</p>
+      <p style="font-size:13.5px">小影片 <b>9 个镜头全部无人脸</b>，不需要处理。</p>
+    </div>
+  </div>
+  <p style="margin-top:12px">除下面这个问题，<b>没有别的在等你拍板了</b>。</p>
+
+  <div class="warnbox">
+    <h3 style="margin-top:0;color:#B91C1C">⚠️ 顺带发现一处口径不一致（跟照片无关，但更要紧）</h3>
+    <p>你的<b>价目牌</b>（<code>ป้าย.jpg</code>）上写的是：</p>
+    <ul style="font-size:13.5px">
+      <li><code>ค่าเบ็ดตกปลา 100 บาท/คัน (ฟรี! ปลาตะเพียน 1 กก.)</code> —— <b>免费的是「ปลาตะเพียน（泰国银鲃）1 公斤」</b></li>
+      <li><code>ปลาตะเพียนน้ำออก กก.ละ 60 บาท</code> —— 60฿/公斤也只挂在<b>ปลาตะเพียน</b>上</li>
+      <li><code>ห้ามนำปลาบึกออก</code> —— ปลาบึก 不可带走</li>
+    </ul>
+    <p>而<b>昨天刚上线的规则页</b>写的是「塘里所有鱼都可以带走，<b>首 1 公斤免费</b>，超出部分 60฿/公斤」——
+    没限定鱼种。两个口径不一致：<b>价目牌读起来只对泰国银鲃生效，其他 6 种鱼没写价格。</b></p>
+    <p>请确认哪一个是准的：<br>
+      <b>(a)</b> 所有鱼都首 1kg 免费、超出 60฿/kg（= 现在网页上的写法，价目牌写窄了）<br>
+      <b>(b)</b> 只有 ปลาตะเพียน 首 1kg 免费，其他鱼种规则另定<br>
+      <b>(c)</b> 其他口径（请说明）</p>
+  </div>
+
+  <h2>12 · 建议补拍的 6 类照片</h2>
+  <p>现有素材的缺口很集中，补拍一轮就能让整个网站质感上一个台阶。
+   都是<b>手机横竖各拍 3 张</b>的量，一次拍完：</p>
+  <div class="card">
+    <ol>
+      <li><b>客人正在钓鱼的钓位</b>（白天，遮阳伞撑开、鱼竿在水里、有客人背影/侧脸）——
+        现在完全缺，而这是你卖的核心产品。</li>
+      <li><b>餐厅上菜的菜品照</b>（俯拍 + 平拍各一张，至少 6 道招牌菜；有手端盘入镜更好）——
+        现在只有烤鱼和烤串。</li>
+      <li><b>客人吃饭的场景</b>（一桌人围着烤鱼，脸上有表情）—— 现在 0 张。</li>
+      <li><b>称重结算全过程</b>（鱼上秤 + 数字清晰 + 客人看着秤）——
+        现在那张只有秤和鱼，没有人和环境，说服力弱。</li>
+      <li><b>大鱼的"英雄照"</b>（客人双手举鱼、鱼占画面 1/3，背景是水面）——
+        P211 已经接近，但只有一张、且是傍晚，需要白天版。</li>
+      <li><b>竞赛塘</b>（多人同时作钓、计时板、发奖瞬间）—— 现在 0 张，竞赛塘 500฿/位却没有任何画面证明。</li>
+    </ol>
+    <div class="okbox" style="margin-bottom:0">
+      <b>拍法提示：</b>手机横屏、开启网格线、地平线放在下三分之一；宁可多拍别只拍一张；
+      正午直射光不要拍（泰国中午 11:00–14:00 尽量避免），<b>早上 7–9 点、傍晚 16:30–18:30 是最好的光</b>。
+    </div>
+  </div>
+
+  <div class="hr"></div>
+  <div class="card">
+    <h3 style="margin-top:0">接下来我会怎么做</h3>
+    <p>你已经点头，这些都<b>已经接进网站</b>，现在正式上线：</p>
+    <ol>
+      <li>✅ 首页首屏换成<b>这 4 张实拍轮播</b>（替换原来的纯渐变色块），手机端用竖版 <b>4 张、逐张同场景配对</b></li>
+      <li>✅ 首屏下方新增<b>小影片</b>区块（桌面 16:9 / 手机 9:16，先出封面图，滚到才加载；检测到「减少动态效果」只显封面）</li>
+      <li>✅ 「可带鱼回家」区块换成<b>举鱼实拍</b>（用方形裁切，避开右上角头部）</li>
+      <li>✅ 新增<b>美食</b>与<b>环境</b>两块照片墙（方形裁切 + 点击看大图）</li>
+      <li>✅ 新增「<b>关于我们 / 开塘故事</b>」页：12 步时间线 + 三语文案（<code>/zh/about</code>）</li>
+      <li>✅ 规则页「渔获可带走」配上<b>钓到 → 称重</b>两张流程实拍</li>
+      <li>✅ 新增<b>页脚</b>：透明圆形徽标 + Facebook / LINE 入口 + 营业时间</li>
+    </ol>
+    <div class="okbox">
+      <b>两件我主动没做的事，先跟你报备：</b>
+      <ul style="margin:8px 0 0">
+        <li><b>没有用 AI 生成照片</b>。你说了「甚至用 AI 创造」，但真实场地配 AI 冒充实景，
+        客人到现场会觉得被骗，反而伤信任。要补空缺我建议改成<b>插画风格</b>（明确是画、不是照片），
+        你说要我再出。</li>
+        <li><b>影片中间帧不入库</b>。合成用的 18 张 <code>vid*.jpg / vidt*.jpg</code> 只是过程文件，
+        连同片尾卡一起排除在版本控制外，仓库里只留成片与封面。</li>
+      </ul>
+    </div>
+    <p style="margin-bottom:0"><small>技术上：每张图都导出了 <b>WebP + JPG 双份</b>，页面用
+    <code>&lt;picture&gt;</code> 按浏览器能力自动选，流量最省；小影片同理给了 mp4 + 封面图。
+    本次提交的素材 = <b>46 项网页用图（12.7MB）+ 2 版影片与封面（13.3MB）+ 4 个徽标 png（0.7MB）</b>，
+    合计约 <b>26.7MB</b>；影片中间帧与片尾卡<b>不进仓库</b>。</small></p>
+  </div>
+
+</div>
+
+<script>
+const M={"count":64,"items":[{"id":"P210","file":"hero-01-sunset","recipe":"hero","zh":"日落金光 · 塘面倒影","source":"IMG_20260725_184602.jpg","w":1920,"h":1080,"jpgBytes":208094,"webpBytes":119528},{"id":"P190","file":"hero-02-evening","recipe":"hero","zh":"晚霞 · 亮灯凉亭与步道","source":"IMG_20260709_213752.jpg","w":1920,"h":1080,"jpgBytes":220459,"webpBytes":130468},{"id":"P211","file":"hero-03-catch","recipe":"hero","zh":"双手举鱼 · 塘边","source":"IMG_20260730_190228.jpg","w":1920,"h":1080,"jpgBytes":115606,"webpBytes":43348},{"id":"P098","file":"hero-04-moon","recipe":"hero","zh":"月夜 · 平静水面","source":"IMG_20260327_171046.jpg","w":1920,"h":1080,"jpgBytes":211356,"webpBytes":131680},{"id":"P210","file":"hero-m-sunset","recipe":"hero-mobile","zh":"日落（手机竖版）","source":"IMG_20260725_184602.jpg","w":900,"h":1125,"jpgBytes":91331,"webpBytes":51594},{"id":"P190","file":"hero-m-evening","recipe":"hero-mobile","zh":"晚霞（手机竖版）","source":"IMG_20260709_213752.jpg","w":900,"h":1125,"jpgBytes":116536,"webpBytes":71488},{"id":"P211","file":"hero-m-catch","recipe":"hero-mobile","zh":"举鱼（手机竖版）","source":"IMG_20260730_190228.jpg","w":900,"h":1125,"jpgBytes":82572,"webpBytes":37586},{"id":"P098","file":"hero-m-moon","recipe":"hero-mobile","zh":"月夜（手机竖版）","source":"IMG_20260327_171046.jpg","w":900,"h":1125,"jpgBytes":126876,"webpBytes":89870},{"id":"P210","file":"wide-sunset","recipe":"wide","zh":"日落通栏","source":"IMG_20260725_184602.jpg","w":2400,"h":1029,"jpgBytes":266954,"webpBytes":158148},{"id":"P190","file":"bg-wide-evening","recipe":"bg-wide","zh":"晚霞页脚底纹","source":"IMG_20260709_213752.jpg","w":2400,"h":1029,"jpgBytes":35088,"webpBytes":11334},{"id":"P211","file":"catch-01-holdfish","recipe":"card-tall","zh":"双手举鱼 · 塘边","source":"IMG_20260730_190228.jpg","w":1000,"h":1250,"jpgBytes":97064,"webpBytes":42818},{"id":"P212","file":"catch-02-holdfish","recipe":"card-tall","zh":"双手举鱼 · 另一角度","source":"IMG_20260730_190232.jpg","w":1000,"h":1250,"jpgBytes":84994,"webpBytes":40904},{"id":"P229","file":"catch-03-scale","recipe":"card-tall","zh":"电子秤称鱼","source":"IMG_20260821_194012.jpg","w":1000,"h":1250,"jpgBytes":188265,"webpBytes":117164},{"id":"P180","file":"catch-04-anger","recipe":"card-tall","zh":"客人抱大鱼 · 塘边","source":"IMG_20260629_184238.jpg","w":1000,"h":1250,"jpgBytes":246138,"webpBytes":190936},{"id":"P211","file":"catch-sq-holdfish","recipe":"square","zh":"双手举鱼（方）","source":"IMG_20260730_190228.jpg","w":1080,"h":1080,"jpgBytes":90372,"webpBytes":38852},{"id":"P229","file":"catch-sq-scale","recipe":"square","zh":"电子秤称鱼（方）","source":"IMG_20260821_194012.jpg","w":1080,"h":1080,"jpgBytes":179970,"webpBytes":114114},{"id":"P184","file":"food-01-grilledfish","recipe":"card","zh":"整条烤鱼 · 俯拍","source":"IMG_20260629_200450.jpg","w":1400,"h":933,"jpgBytes":262709,"webpBytes":192566},{"id":"P183","file":"food-02-bbq","recipe":"card-tall","zh":"烤炉肉串","source":"IMG_20260629_185036.jpg","w":1000,"h":1250,"jpgBytes":273531,"webpBytes":199522},{"id":"P186","file":"food-03-skewers","recipe":"card-tall","zh":"烤串与玉米","source":"IMG_20260709_181631.jpg","w":1000,"h":1250,"jpgBytes":305841,"webpBytes":239826},{"id":"P206","file":"food-04-window","recipe":"card-tall","zh":"窗边饮料 · 塘景","source":"IMG_20260725_174635.jpg","w":1000,"h":1250,"jpgBytes":304799,"webpBytes":226418},{"id":"P184","file":"food-sq-grilledfish","recipe":"square","zh":"整条烤鱼（方）","source":"IMG_20260629_200450.jpg","w":1080,"h":1080,"jpgBytes":235912,"webpBytes":174220},{"id":"P183","file":"food-sq-bbq","recipe":"square","zh":"烤炉肉串（方）","source":"IMG_20260629_185036.jpg","w":1080,"h":1080,"jpgBytes":252127,"webpBytes":186130},{"id":"P239","file":"place-03-dining","recipe":"card","zh":"餐饮区内景 · 看塘","source":"IMG_20260829_121716.jpg","w":1400,"h":933,"jpgBytes":195911,"webpBytes":123746},{"id":"P240","file":"place-04-rodwall","recipe":"card","zh":"餐饮区内景 · 鱼竿墙","source":"IMG_20260829_121725.jpg","w":1400,"h":933,"jpgBytes":249819,"webpBytes":174098},{"id":"P237","file":"place-05-pondview","recipe":"card","zh":"塘全景","source":"IMG_20260828_172150.jpg","w":1400,"h":933,"jpgBytes":138815,"webpBytes":85772},{"id":"P172","file":"place-06-nightpath","recipe":"card","zh":"夜间步道灯带","source":"IMG_20260624_222042.jpg","w":1400,"h":933,"jpgBytes":145339,"webpBytes":80182},{"id":"P169","file":"place-07-nightarch","recipe":"card-tall","zh":"夜间建筑入口","source":"IMG_20260624_220340.jpg","w":1000,"h":1250,"jpgBytes":156822,"webpBytes":86054},{"id":"P191","file":"place-08-bluehour","recipe":"card","zh":"蓝调时刻 · 灯光步道（原首屏第 3 张）","source":"IMG_20260709_213233.jpg","w":1400,"h":933,"jpgBytes":139163,"webpBytes":78914},{"id":"P231","file":"place-sq-walkway","recipe":"square","zh":"钓位步道（方）","source":"IMG_20260828_112231.jpg","w":1080,"h":1080,"jpgBytes":226525,"webpBytes":168194},{"id":"P239","file":"place-sq-dining","recipe":"square","zh":"餐饮区内景（方）","source":"IMG_20260829_121716.jpg","w":1080,"h":1080,"jpgBytes":179559,"webpBytes":112402},{"id":"P098","file":"bg-quiet","recipe":"bg","zh":"月夜水面（柔和底纹）","source":"IMG_20260327_171046.jpg","w":1920,"h":1080,"jpgBytes":30725,"webpBytes":9902},{"id":"P210","file":"bg-warm","recipe":"bg","zh":"日落暖色底纹","source":"IMG_20260725_184602.jpg","w":1920,"h":1080,"jpgBytes":38003,"webpBytes":13044},{"id":"P231","file":"bg-place","recipe":"bg","zh":"钓位步道底纹","source":"IMG_20260828_112231.jpg","w":1920,"h":1080,"jpgBytes":43410,"webpBytes":13748},{"id":"P001","file":"story-01-dayone","recipe":"story","zh":"2026-02-25 · 第一天，还是一片荒地","source":"IMG_20260225_133602.jpg","w":1400,"h":933,"jpgBytes":284620,"webpBytes":244752},{"id":"P013","file":"story-02-excavator","recipe":"story","zh":"2026-03-04 · 挖机进场","source":"IMG_20260304_114122.jpg","w":1400,"h":933,"jpgBytes":271812,"webpBytes":224310},{"id":"P089","file":"story-03-pondbase","recipe":"story","zh":"2026-03-20 · 塘底与石笼","source":"IMG_20260320_114302.jpg","w":1400,"h":933,"jpgBytes":328707,"webpBytes":281838},{"id":"P115","file":"story-04-embank","recipe":"story","zh":"2026-03-29 · 石砌护坡完成","source":"IMG_20260329_090458.jpg","w":1400,"h":933,"jpgBytes":187364,"webpBytes":128866},{"id":"P128","file":"story-05-frame","recipe":"story","zh":"2026-04-07 · 房屋上梁","source":"IMG_20260407_092116.jpg","w":1400,"h":933,"jpgBytes":186936,"webpBytes":108724},{"id":"P162","file":"story-06-roof","recipe":"story","zh":"2026-04-22 · 主体成型","source":"IMG_20260422_173307.jpg","w":1400,"h":933,"jpgBytes":145698,"webpBytes":77788},{"id":"P165","file":"story-07-building","recipe":"story","zh":"2026-05-08 · 建筑完工","source":"IMG_20260508_120332.jpg","w":1400,"h":933,"jpgBytes":150705,"webpBytes":81610},{"id":"P169","file":"story-08-firstlight","recipe":"story","zh":"2026-06-24 · 夜里亮起第一盏灯","source":"IMG_20260624_220340.jpg","w":1400,"h":933,"jpgBytes":163690,"webpBytes":91578},{"id":"P190","file":"story-09-lights","recipe":"story","zh":"2026-07-09 · 灯火初上","source":"IMG_20260709_213752.jpg","w":1400,"h":933,"jpgBytes":153572,"webpBytes":95462},{"id":"P229","file":"story-10-scale","recipe":"story","zh":"2026-08-21 · 第一条过秤的鱼","source":"IMG_20260821_194012.jpg","w":1400,"h":933,"jpgBytes":186439,"webpBytes":114154},{"id":"P239","file":"story-11-dining","recipe":"story","zh":"2026-08-29 · 餐饮区开张","source":"IMG_20260829_121716.jpg","w":1400,"h":933,"jpgBytes":195911,"webpBytes":123746},{"id":"P240","file":"story-12-now","recipe":"story","zh":"现在 · 鱼竿墙与吧台","source":"IMG_20260829_121725.jpg","w":1400,"h":933,"jpgBytes":249819,"webpBytes":174098},{"id":"P190","file":"vid01","recipe":"vid","zh":"视频镜头 1（横）","source":"IMG_20260709_213752.jpg","w":1920,"h":1080,"jpgBytes":374775,"webpBytes":0},{"id":"P211","file":"vid02","recipe":"vid","zh":"视频镜头 2（横）","source":"IMG_20260730_190228.jpg","w":1920,"h":1080,"jpgBytes":218905,"webpBytes":0},{"id":"P205","file":"vid03","recipe":"vid","zh":"视频镜头 3（横）","source":"IMG_20260725_151937.jpg","w":1920,"h":1080,"jpgBytes":582928,"webpBytes":0},{"id":"P184","file":"vid04","recipe":"vid","zh":"视频镜头 4（横）","source":"IMG_20260629_200450.jpg","w":1920,"h":1080,"jpgBytes":597802,"webpBytes":0},{"id":"P186","file":"vid05","recipe":"vid","zh":"视频镜头 5（横）","source":"IMG_20260709_181631.jpg","w":1920,"h":1080,"jpgBytes":656059,"webpBytes":0},{"id":"P229","file":"vid06","recipe":"vid","zh":"视频镜头 6（横）","source":"IMG_20260821_194012.jpg","w":1920,"h":1080,"jpgBytes":426415,"webpBytes":0},{"id":"P172","file":"vid07","recipe":"vid","zh":"视频镜头 7（横）","source":"IMG_20260624_222042.jpg","w":1920,"h":1080,"jpgBytes":367932,"webpBytes":0},{"id":"P098","file":"vid08","recipe":"vid","zh":"视频镜头 8（横）","source":"IMG_20260327_171046.jpg","w":1920,"h":1080,"jpgBytes":383533,"webpBytes":0},{"id":"P210","file":"vid09","recipe":"vid","zh":"视频镜头 9（横）","source":"IMG_20260725_184602.jpg","w":1920,"h":1080,"jpgBytes":355492,"webpBytes":0},{"id":"P211","file":"vidt01","recipe":"vid-tall","zh":"视频镜头 1（竖）","source":"IMG_20260730_190228.jpg","w":1080,"h":1920,"jpgBytes":246209,"webpBytes":0},{"id":"P184","file":"vidt02","recipe":"vid-tall","zh":"视频镜头 2（竖）","source":"IMG_20260629_200450.jpg","w":1080,"h":1920,"jpgBytes":537972,"webpBytes":0},{"id":"P186","file":"vidt03","recipe":"vid-tall","zh":"视频镜头 3（竖）","source":"IMG_20260709_181631.jpg","w":1080,"h":1920,"jpgBytes":670717,"webpBytes":0},{"id":"P229","file":"vidt04","recipe":"vid-tall","zh":"视频镜头 4（竖）","source":"IMG_20260821_194012.jpg","w":1080,"h":1920,"jpgBytes":447139,"webpBytes":0},{"id":"P190","file":"vidt05","recipe":"vid-tall","zh":"视频镜头 5（竖）","source":"IMG_20260709_213752.jpg","w":1080,"h":1920,"jpgBytes":365527,"webpBytes":0},{"id":"P172","file":"vidt06","recipe":"vid-tall","zh":"视频镜头 6（竖）","source":"IMG_20260624_222042.jpg","w":1080,"h":1920,"jpgBytes":340585,"webpBytes":0},{"id":"P098","file":"vidt07","recipe":"vid-tall","zh":"视频镜头 7（竖）","source":"IMG_20260327_171046.jpg","w":1080,"h":1920,"jpgBytes":409625,"webpBytes":0},{"id":"P205","file":"vidt08","recipe":"vid-tall","zh":"视频镜头 8（竖）","source":"IMG_20260725_151937.jpg","w":1080,"h":1920,"jpgBytes":414973,"webpBytes":0},{"id":"P210","file":"vidt09","recipe":"vid-tall","zh":"视频镜头 9（竖）","source":"IMG_20260725_184602.jpg","w":1080,"h":1920,"jpgBytes":294020,"webpBytes":0},{"id":"P119","file":"brand-logo","recipe":"circle-alpha","zh":"品牌徽标（圆形 · 透明）","source":"MEITU_20260404_154641101.jpg","w":640,"h":640,"png":["brand-logo-640.png","brand-logo-256.png","brand-logo-128.png","brand-logo-flat.jpg"]}],"videos":[{"file":"promo-16x9.mp4","zh":"宣传片 · 横版 1920×1080","bytes":7179513},{"file":"promo-9x16.mp4","zh":"宣传片 · 竖版 1080×1920","bytes":6502895},{"file":"promo-16x9-poster.jpg","zh":"宣传片横版封面","bytes":176911},{"file":"promo-9x16-poster.jpg","zh":"宣传片竖版封面","bytes":99361}],"totalBytes":35752567};
+(function(m){
+  const role={
+    'hero':'首屏','hero-mobile':'首屏·手机','wide':'通栏','card':'卡片','card-tall':'竖卡片',
+    'square':'图库方格','bg':'页面底纹','bg-wide':'页脚底纹','story':'开塘故事',
+    'vid':'视频帧','vid-tall':'视频帧·竖','circle-alpha':'品牌徽标'
+  };
+  const rows=m.items.filter(i=>i.recipe!=='vid'&&i.recipe!=='vid-tall').map(i=>{
+    const b=[];
+    if(i.jpgBytes) b.push((i.jpgBytes/1024).toFixed(0)+'KB JPG');
+    if(i.webpBytes) b.push((i.webpBytes/1024).toFixed(0)+'KB WebP');
+    if(i.png) b.push(i.png.join(' / '));
+    return `<tr><td>${role[i.recipe]||i.recipe}</td><td class="mono">${i.file}</td>
+      <td class="mono">${i.w}×${i.h}</td><td class="mono">${b.join('<br>')}</td>
+      <td class="mono">${i.id}<br><small>${i.source}</small></td><td>${i.zh}</td></tr>`;
+  }).join('');
+  const vids=(m.videos||[]).map(v=>`<tr><td>小影片</td><td class="mono">${v.file}</td>
+      <td class="mono">—</td><td class="mono">${(v.bytes/1e6).toFixed(2)}MB</td>
+      <td class="mono">—</td><td>${v.zh}</td></tr>`).join('');
+  document.getElementById('manifest').innerHTML=rows+vids;
+})(M);
+</script>
+</body>
+</html>

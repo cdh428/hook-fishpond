@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>渔获带回家 · 规则草案 v1 | Hook Happyness</title>
+<style>
+  :root{
+    --p900:#083344; --p800:#0E4A5F; --p700:#155E75; --p600:#0E7490; --p500:#06B6D4;
+    --p100:#CFF5F7; --p50:#EAF6F5;
+    --a600:#D97706; --a500:#F59E0B; --a100:#FEF3C7;
+    --ok:#059669; --ok50:#ECFDF5;
+    --n900:#0F172A; --n700:#334155; --n500:#64748B; --n400:#94A3B8;
+    --n200:#E2E8F0; --n100:#F1F5F9;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; padding:40px 20px 72px;
+    background:var(--p50); color:var(--n900);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans SC","Microsoft YaHei",sans-serif;
+    font-size:15px; line-height:1.72;
+  }
+  .wrap{max-width:900px;margin:0 auto}
+
+  /* ---------- header ---------- */
+  .hd{
+    background:linear-gradient(135deg,var(--p800),var(--p600));
+    color:#fff; border-radius:18px; padding:28px 30px; margin-bottom:26px;
+    box-shadow:0 10px 30px rgba(21,94,117,.18);
+  }
+  .hd .kicker{font-size:12px;letter-spacing:.16em;text-transform:uppercase;opacity:.72;font-weight:600}
+  .hd h1{margin:8px 0 6px;font-size:26px;letter-spacing:-.01em}
+  .hd p{margin:0;opacity:.86;font-size:14px}
+  .hd .meta{margin-top:16px;padding-top:14px;border-top:1px solid rgba(255,255,255,.2);
+    display:flex;gap:22px;flex-wrap:wrap;font-size:12.5px;opacity:.82}
+
+  /* ---------- generic ---------- */
+  h2{
+    font-size:17px;margin:34px 0 12px;padding-left:12px;
+    border-left:4px solid var(--a500);line-height:1.3;
+  }
+  h2 .no{color:var(--n400);font-weight:600;margin-right:6px;font-variant-numeric:tabular-nums}
+  .card{background:#fff;border:1px solid var(--n200);border-radius:14px;padding:20px 22px;
+    box-shadow:0 1px 3px rgba(15,23,42,.04)}
+  .muted{color:var(--n500)}
+  code{background:var(--n100);padding:1px 6px;border-radius:5px;font-size:12.5px}
+
+  /* ---------- callout ---------- */
+  .callout{background:#fff;border:1px solid var(--p100);border-left:4px solid var(--p600);
+    border-radius:12px;padding:18px 20px}
+  .callout strong{color:var(--p700)}
+
+  /* ---------- table ---------- */
+  table{width:100%;border-collapse:separate;border-spacing:0;font-size:13.5px;
+    background:#fff;border:1px solid var(--n200);border-radius:12px;overflow:hidden}
+  th{background:var(--p50);color:var(--p800);text-align:left;font-weight:700;
+    padding:11px 14px;border-bottom:1px solid var(--n200);white-space:nowrap}
+  td{padding:11px 14px;border-bottom:1px solid var(--n100);vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  td.name{font-weight:600;white-space:nowrap}
+  .hl{background:var(--a100);font-weight:600;padding:1px 5px;border-radius:4px}
+
+  /* ---------- rule groups ---------- */
+  .group{background:#fff;border:1px solid var(--n200);border-radius:14px;
+    padding:6px 20px 16px;margin-bottom:14px;box-shadow:0 1px 3px rgba(15,23,42,.04)}
+  .ghead{display:flex;align-items:center;gap:10px;padding:14px 0 10px;
+    border-bottom:1px dashed var(--n200);margin-bottom:12px;flex-wrap:wrap}
+  .ghead .gid{font-weight:800;color:var(--p700);font-size:15px}
+  .ghead .gtitle{font-weight:700;font-size:14.5px}
+  .ghead .gnote{font-size:12.5px;color:var(--n500);margin-left:auto}
+  .rule{display:flex;gap:11px;padding:7px 0;align-items:flex-start}
+  .rid{flex:0 0 34px;font-size:12.5px;font-weight:700;color:var(--n400);
+    font-variant-numeric:tabular-nums;padding-top:2px}
+  .rtxt{flex:1;min-width:0;font-size:14px}
+  .rtxt .sub{display:block;font-size:12.5px;color:var(--n500);margin-top:2px}
+  .blank{display:inline-block;min-width:64px;border-bottom:1.5px dashed var(--n400);
+    margin:0 3px;font-weight:700;color:var(--p700);text-align:center}
+
+  /* ---------- chips ---------- */
+  .chip{display:inline-block;font-size:11px;font-weight:700;border-radius:20px;
+    padding:1.5px 9px;white-space:nowrap;vertical-align:2px}
+  .c-keep{background:var(--ok50);color:var(--ok);border:1px solid #A7F3D0}
+  .c-opt{background:var(--n100);color:var(--n500);border:1px solid var(--n200)}
+  .c-tbd{background:var(--a100);color:var(--a600);border:1px solid #FDE68A}
+  .c-key{background:#FEF2F2;color:#DC2626;border:1px solid #FECACA}
+
+  /* ---------- checklist ---------- */
+  ol.ask{margin:0;padding-left:0;list-style:none;counter-reset:q}
+  ol.ask li{counter-increment:q;position:relative;padding:8px 0 8px 34px;
+    border-bottom:1px dashed var(--n100);font-size:14px}
+  ol.ask li:last-child{border-bottom:none}
+  ol.ask li::before{
+    content:"Q" counter(q);position:absolute;left:0;top:8px;
+    font-size:11px;font-weight:800;color:#fff;background:var(--a500);
+    border-radius:6px;padding:2px 6px;line-height:1.4}
+
+  /* ---------- steps ---------- */
+  .steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-top:4px}
+  .step{background:var(--p50);border:1px solid var(--p100);border-radius:12px;padding:14px 16px}
+  .step .sn{font-size:11px;font-weight:800;color:var(--p600);letter-spacing:.1em}
+  .step h4{margin:5px 0 4px;font-size:14px}
+  .step p{margin:0;font-size:12.5px;color:var(--n500);line-height:1.6}
+
+  footer{margin-top:34px;padding-top:16px;border-top:1px solid var(--n200);
+    font-size:12.5px;color:var(--n400)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="hd">
+    <div class="kicker">Hook Happyness · 乐钓鱼塘</div>
+    <h1>渔获带回家 · 规则草案 v1</h1>
+    <p>基于泰国同类鱼塘（BO SANG / Bungsamran / Leks / EFG）与日、中钓堀的公开规则整理，供你逐条增减。</p>
+    <div class="meta">
+      <span>2026-09-24</span>
+      <span>状态：待你批注</span>
+      <span>未改任何站点代码</span>
+    </div>
+  </div>
+
+  <!-- 1 -->
+  <h2><span class="no">01</span>先说结论</h2>
+  <div class="callout">
+    <p style="margin:0 0 10px">
+      你系统里<b>已经在跑</b>的规则是：<code>渔获前 1 公斤免费，超出部分 60฿/公斤</code>，
+      离场前由员工逐次称重计入订单，每笔可备注鱼种。
+    </p>
+    <p style="margin:0 0 10px">
+      我的判断：<strong>这个骨架是对的</strong>——它和 BO SANG（称重后可带走）、
+      日本钓堀（免费额度 + 超出每 100g）、深圳青青世界（场地费 + 按斤买走）是同一个模型。
+    </p>
+    <p style="margin:0">
+      所以缺的<strong>不是算法，是一本顾客看得懂的规则书</strong>。难点也不在价格，
+      而在「<b>哪些鱼能带走、哪些必须放回</b>」——这一条几乎每家泰国鱼塘都会单独写出来。
+    </p>
+  </div>
+
+  <!-- 2 -->
+  <h2><span class="no">02</span>同类是怎么定规则的</h2>
+  <table>
+    <thead>
+      <tr><th>场地</th><th>入场费</th><th>渔获怎么算</th><th>能不能带走</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="name">BO SANG<br><span class="muted" style="font-weight:400;font-size:12px">清迈，最像你</span></td>
+        <td>租竿另计</td>
+        <td>称重</td>
+        <td><span class="hl">有鳞鱼称重后可带走</span>，官网把它当「奖励」写在首屏；
+          <b>另开一页专列「不能带走的鱼」</b></td>
+      </tr>
+      <tr>
+        <td class="name">Bungsamran<br><span class="muted" style="font-weight:400;font-size:12px">曼谷顶级</span></td>
+        <td>700–1,500฿/天<br>含竿与基础饵</td>
+        <td>不含渔获</td>
+        <td>巨鲶、暹罗巨鲤等<b>标本鱼强制放回</b>（拍照后由员工放）；
+          另设「钓到的鱼<b>可按公斤买回</b>」</td>
+      </tr>
+      <tr>
+        <td class="name">IT Lake Monsters<br>Gillhams / Leks / EFT</td>
+        <td>1,500–3,500฿</td>
+        <td>—</td>
+        <td><b>全品类强制放回，鱼不许离场</b>；丢竿赔 6,000–8,000฿、断竿 4,000฿；禁止外带餐饮</td>
+      </tr>
+      <tr>
+        <td class="name">日本 五濑钓堀</td>
+        <td>1,500 円<br>含竿·饵·鱼护</td>
+        <td>—</td>
+        <td><b>500g 内免费带走</b>；超出 250 円/100g；现场代杀免费</td>
+      </tr>
+      <tr>
+        <td class="name">深圳青青世界</td>
+        <td>场地费 58 元/2h<br>或 98 元/天</td>
+        <td>—</td>
+        <td>带走 <b>15 元/斤</b>；<b>「购鱼不享受折扣」</b>；只限鲜鱼（龟、鳖等不算）</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="card" style="margin-top:14px">
+    <b>三条规律</b>
+    <p style="margin:8px 0 0">
+      ① <b>大鱼塘一律禁止带走，家庭休闲塘才开放带走</b>——你属于后者，所以「可带走」是卖点，不该藏起来。<br>
+      ② <b>凡开放带走的，一定有「不能带走」清单</b>（保住种鱼与设备投资）。清单是规则书的核心，不是附注。<br>
+      ③ <b>渔获价贴着市价走</b>：曼谷罗非鱼 80–90฿/kg、鲶鱼 65฿/kg —
+      你的 60฿/kg 是<b>略低于市价</b>，当「带走奖励」讲得通，也有涨价余地。
+    </p>
+  </div>
+
+  <!-- 3 -->
+  <h2><span class="no">03</span>建议规则（逐条增减）</h2>
+
+  <div class="group">
+    <div class="ghead">
+      <span class="gid">A</span><span class="gtitle">基本规则</span>
+      <span class="gnote"><span class="chip c-keep">建议保留</span></span>
+    </div>
+    <div class="rule"><span class="rid">A1</span><span class="rtxt">入场费包含钓位、<span class="blank">1</span> 根竿与基础饵料，时段内不限竿数<span class="sub">（按你实际：是否限竿、含不含饵）</span></span></div>
+    <div class="rule"><span class="rid">A2</span><span class="rtxt"><b>渔获前 1 公斤免费带走</b><span class="sub">现规则。同类里这是很划算的额度（日本只给 500g），值得显眼地讲</span></span></div>
+    <div class="rule"><span class="rid">A3</span><span class="rtxt">超出部分 <b>60฿/公斤</b>，离场前统一称重<span class="sub">价格可否上调 / 分档，待你定</span></span></div>
+    <div class="rule"><span class="rid">A4</span><span class="rtxt">渔获费与餐费<b>同单结算</b>，前台一次付清<span class="sub">系统已支持</span></span></div>
+  </div>
+
+  <div class="group">
+    <div class="ghead">
+      <span class="gid">B</span><span class="gtitle">能带 / 不能带</span>
+      <span class="gnote"><span class="chip c-key">核心条款</span> <span class="chip c-tbd">内容待你确认</span></span>
+    </div>
+    <div class="rule"><span class="rid">B1</span><span class="rtxt"><b>可带走</b>：有鳞鱼（ปลาเกล็ด）—— 罗非鱼（尼罗/红）、鲮鱼、鳙/鲢、草鱼…<span class="sub">请补全塘里实际有的鱼种</span></span></div>
+    <div class="rule"><span class="rid">B2</span><span class="rtxt"><b>不可带走（必须放回）</b>：超过 <span class="blank">?</span> kg 的大鱼 / 种鱼亲鱼 / 名贵观赏鱼<span class="sub">建议照 BO SANG：官网单列一页，配图 + 三语名</span></span></div>
+    <div class="rule"><span class="rid">B3</span><span class="rtxt">不可带走的鱼，<b>由员工现场放回</b>，客人可先拍照<span class="sub">明确「谁放回」，避免客人把鱼抱走</span></span></div>
+    <div class="rule"><span class="rid">B4</span><span class="rtxt">客人可<b>自愿放回任何鱼</b>，放回的不称重、不计费<span class="sub">给「纯钓鱼」的客人一条路</span></span></div>
+  </div>
+
+  <div class="group">
+    <div class="ghead">
+      <span class="gid">C</span><span class="gtitle">称重与结算</span>
+      <span class="gnote"><span class="chip c-keep">建议保留</span></span>
+    </div>
+    <div class="rule"><span class="rid">C1</span><span class="rtxt">只称<b>要带走的鱼</b>；放回的不称<span class="sub">能大幅减少称重次数与客诉</span></span></div>
+    <div class="rule"><span class="rid">C2</span><span class="rtxt">称重点设在塘边固定位置，<b>员工当着客人面称，客人可看秤</b><span class="sub">这一条能省掉绝大多数「称重不信任」的争执</span></span></div>
+    <div class="rule"><span class="rid">C3</span><span class="rtxt">可分次称重，累计到同一张单<span class="sub">系统已有「称重记录」+ 逐笔备注鱼种</span></span></div>
+    <div class="rule"><span class="rid">C4</span><span class="rtxt"><b>渔获费不参与任何折扣</b><span class="sub">学深圳青青世界。否则员工可用折扣额度把鱼「送」出去</span></span></div>
+    <div class="rule"><span class="rid">C5</span><span class="rtxt">称重单上写明鱼种与重量，客人离场前签字确认<span class="sub">可选；留下凭证</span></span></div>
+  </div>
+
+  <div class="group">
+    <div class="ghead">
+      <span class="gid">D</span><span class="gtitle">竞赛塘怎么算（500฿/人/天，10 人起）</span>
+      <span class="gnote"><span class="chip c-tbd">三选一，待你定</span></span>
+    </div>
+    <div class="rule"><span class="rid">D1</span><span class="rtxt"><b>严格竞赛</b>：渔获<b>全部放回</b>，只称总重排名，渔获不计费
+      <span class="sub">最接近 BO SANG 与泰国竞赛塘的通行做法。推荐——竞赛塘的鱼是「比赛道具」，反复使用才摊得平成本</span></span></div>
+    <div class="rule"><span class="rid">D2</span><span class="rtxt"><b>宽松</b>：按总重排名，同时允许带走（前 1kg 免费 / 超出 60฿/kg）<span class="sub">客人体验好，但竞赛塘消耗快</span></span></div>
+    <div class="rule"><span class="rid">D3</span><span class="rtxt"><b>团队打包价</b>：整场按团队包干，渔获全部带走<span class="sub">适合企业团建、比赛后聚餐</span></span></div>
+  </div>
+
+  <div class="group">
+    <div class="ghead">
+      <span class="gid">E</span><span class="gtitle">附加服务（可增收）</span>
+      <span class="gnote"><span class="chip c-opt">可选，建议先挑 1–2 条</span></span>
+    </div>
+    <div class="rule"><span class="rid">E1</span><span class="rtxt">代客杀鱼、去鳞、去内脏：<span class="blank">?</span> ฿/条 或 ฿/公斤<span class="sub">日本钓堀多作为免费服务；泰国现场加工常见 100–200฿/公斤</span></span></div>
+    <div class="rule"><span class="rid">E2</span><span class="rtxt">提供冰块 / 泡沫箱打包：<span class="blank">?</span> ฿<span class="sub">泰国天热，不冰的鱼带回家会腥——这条容易收费也容易得好评</span></span></div>
+    <div class="rule"><span class="rid">E3</span><span class="rtxt">现场餐厅代加工（清蒸 / 油炸 / 烤）：菜品价 + 加工费<span class="sub">你有菜单，这条能把渔获直接变成餐厅营收</span></span></div>
+    <div class="rule"><span class="rid">E4</span><span class="rtxt">竿租用 150฿ / 自带竿 100฿<code>已上线</code></span></div>
+  </div>
+
+  <div class="group">
+    <div class="ghead">
+      <span class="gid">F</span><span class="gtitle">护鱼与设施规则</span>
+      <span class="gnote"><span class="chip c-opt">可选，建议至少采纳 F1</span></span>
+    </div>
+    <div class="rule"><span class="rid">F1</span><span class="rtxt">拍照不超过 3 分钟；<b>不许抠鳃</b>；<b>不许把鱼抛入水</b>，要轻放进水<span class="sub">照抄 BO SANG 的 Fish Care Guide，是同类里写得最清楚的</span></span></div>
+    <div class="rule"><span class="rid">F2</span><span class="rtxt">必须使用无倒刺钩<span class="sub">Leks 等高端场强制；休闲塘可只做「建议」</span></span></div>
+    <div class="rule"><span class="rid">F3</span><span class="rtxt">竿损坏 / 遗失赔偿：<span class="blank">?</span> ฿<span class="sub">Leks 丢竿 8,000฿、断竿 4,000฿；EFT 丢竿 6,000฿</span></span></div>
+    <div class="rule"><span class="rid">F4</span><span class="rtxt">禁止外带食物饮料<span class="sub">Leks 明确禁止；你有餐饮与钓具，这条保护营收</span></span></div>
+  </div>
+
+  <!-- 4 -->
+  <h2><span class="no">04</span>需要你补充的信息</h2>
+  <div class="card">
+    <ol class="ask">
+      <li>塘里<b>主要有哪些鱼</b>？各归「可带走 / 不可带走」哪一类？<span class="muted">（截图或手写都行，我照着做成三语鱼种卡）</span></li>
+      <li>除了有鳞鱼，还有哪些鱼？</li>
+      <li>「大鱼」的界重量是多少 kg？（超过就必须放回）</li>
+      <li>竞赛塘三个选项（D1 / D2 / D3）你选哪个？</li>
+      <li>有代杀鱼 / 冰块打包 / 餐厅代加工吗？各收多少？</li>
+      <li>竿损坏或遗失，要不要写赔偿条款？多少฿？</li>
+      <li>允许客人自带食物饮料吗？</li>
+      <li>儿童怎么收费？（几岁免票 / 半价）</li>
+    </ol>
+  </div>
+
+  <!-- 5 -->
+  <h2><span class="no">05</span>规则定了之后，落在这三处</h2>
+  <div class="steps">
+    <div class="step">
+      <div class="sn">首页</div>
+      <h4>渔获规则区块</h4>
+      <p>把「可带走的鱼 + 三步走」做成一个区块，把「可带鱼回家」真正变成卖点。</p>
+    </div>
+    <div class="step">
+      <div class="sn">独立页</div>
+      <h4>钓场规则（三语）</h4>
+      <p>完整规则 + 不可带走的鱼种图，从首页和底部导航进。</p>
+    </div>
+    <div class="step">
+      <div class="sn">结算页</div>
+      <h4>渔获提示文案</h4>
+      <p>现有「渔获前 1 公斤免费，超出 60฿/公斤」的文案按最终规则改写，三语同步。</p>
+    </div>
+  </div>
+
+  <footer>
+    规则出处：BO SANG Fishing Park 官网 · Bungsamran 官网与服务页 · ThaiAngler 泰国鱼塘收费与放流规则指南 ·
+    Leks Fishing Park（乌隆）与 Exotic Fishing Thailand 钓场规则 · 日本五濑溪流钓堀 · 深圳青青世界。
+    价格为公开资料整理，实际以各场现价为准。
+  </footer>
+
+</div>
+</body>
+</html>

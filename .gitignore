@@ -57,3 +57,16 @@ __pycache__/
 *.pyc
 # 每台收银机各自的打印桥配置，不入库
 tools/print-bridge/config.json
+
+# 影像素材：只入库「网页真正用到的成品」
+# 中间产物 / 过程帧一律排除（都能由 _media-derive.py 重新生成）
+public/media/vid[0-9][0-9].jpg
+public/media/vidt[0-9][0-9].jpg
+public/media/_endcard-*.jpg
+public/media/_video-plan.json
+public/media/_clips/
+
+# 方案板（docs/media-preview.html）现在直接引用 ../public/media/，
+# 这条只作为兜底：防止旧的 docs/media 副本被误提交
+docs/media/
+docs/face-options.png

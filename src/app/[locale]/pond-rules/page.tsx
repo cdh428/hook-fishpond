@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Link } from '@/i18n/routing';
+import { CATCH_ILLUSTRATIONS, photoUrl } from '@/lib/media';
 
 type Tab = 'leisure' | 'competition' | 'rewards';
 
@@ -166,6 +167,26 @@ export default function PondRulesPage() {
             <div className="mt-0.5 text-sm font-semibold text-accent-700">
               {t('catch.overPrice')}
             </div>
+          </div>
+
+          {/* 配图：钓到 → 称重。手上没有逐鱼种的实拍，先用两张流程照交代「能带走」 */}
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            {CATCH_ILLUSTRATIONS.map((photo) => (
+              <div key={photo.base} className="overflow-hidden rounded-xl">
+                <picture>
+                  <source srcSet={photoUrl(photo, 'webp')} type="image/webp" />
+                  <img
+                    src={photoUrl(photo)}
+                    alt=""
+                    width={photo.w}
+                    height={photo.h}
+                    loading="lazy"
+                    decoding="async"
+                    className="aspect-square w-full object-cover"
+                  />
+                </picture>
+              </div>
+            ))}
           </div>
 
           <ul className="mt-3 space-y-2">

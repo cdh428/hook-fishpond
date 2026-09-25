@@ -4,6 +4,10 @@ import { useTranslations, useLocale } from 'next-intl';
 import { useState } from 'react';
 import { Link, useRouter } from '@/i18n/routing';
 import { adminLogin } from '@/lib/api-client';
+import HeroCarousel from '@/components/home/HeroCarousel';
+import VideoPromo from '@/components/home/VideoPromo';
+import PhotoWall from '@/components/home/PhotoWall';
+import { CATCH_PHOTO, FOOD_WALL, PLACE_WALL, photoUrl } from '@/lib/media';
 
 const ponds = [
   {
@@ -161,31 +165,16 @@ export default function HomePage() {
   };
 
   return (
-    <div className="mx-auto max-w-lg">
-      {/* Hero Section */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-primary-800 via-primary-700 to-primary-900 px-6 pb-14 pt-10 text-white">
-        <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-primary-600/30" />
-        <div className="absolute -left-12 top-16 h-24 w-24 rounded-full bg-primary-500/20" />
-        <div className="absolute right-1/4 top-20 h-16 w-16 rounded-full bg-accent-500/15" />
+    <>
+      {/* 首屏 · 实拍照片轮播（全宽出血，故意不套 max-w-lg） */}
+      <HeroCarousel />
 
-        <div className="relative z-10">
-          <h2 className="text-3xl font-bold leading-tight tracking-tight">
-            {t('home.welcome')}
-          </h2>
-          <p className="mt-2 text-primary-100">{t('home.subtitle')}</p>
-        </div>
+      <div className="mx-auto max-w-lg">
+        {/* 宣传小影片（竖版在手机上播） */}
+        <VideoPromo />
 
-        <svg
-          className="absolute bottom-0 left-0 right-0 text-bg-page"
-          viewBox="0 0 1440 60"
-          fill="currentColor"
-        >
-          <path d="M0,30 C360,60 720,0 1080,30 C1260,45 1380,40 1440,35 L1440,60 L0,60 Z" />
-        </svg>
-      </section>
-
-      {/* Pond Cards */}
-      <section className="-mt-4 px-4">
+        {/* Pond Cards */}
+        <section className="px-4 pt-5">
         <h3 className="mb-3 text-lg font-bold text-neutral-900">
           {t('pond.selectPond')}
         </h3>
@@ -244,9 +233,22 @@ export default function HomePage() {
       {/* Take Your Catch Home — the single biggest selling point on the Thai
           market, so it gets its own block right under the pond cards. */}
       <section className="px-4 pt-5">
-        <div className="relative overflow-hidden rounded-2xl border border-accent-200 bg-gradient-to-br from-accent-50 to-accent-100 p-5 shadow-md">
+        <div className="relative overflow-hidden rounded-2xl border border-accent-200 bg-gradient-to-br from-accent-50 to-accent-100 shadow-md">
+          {/* 举鱼实拍：整条鱼在画面里，同时避开了人物头部（原片无面部） */}
+          <picture>
+            <source srcSet={photoUrl(CATCH_PHOTO, 'webp')} type="image/webp" />
+            <img
+              src={photoUrl(CATCH_PHOTO)}
+              alt={t('home.keepFishPhotoAlt')}
+              width={CATCH_PHOTO.w}
+              height={CATCH_PHOTO.h}
+              loading="lazy"
+              decoding="async"
+              className="aspect-[5/4] w-full object-cover"
+            />
+          </picture>
           <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-accent-500/10" />
-          <div className="relative z-10">
+          <div className="relative z-10 p-5">
             <div className="flex items-center gap-2">
               <span className="text-lg leading-none">🐟</span>
               <h3 className="text-base font-bold text-neutral-900">
@@ -273,6 +275,44 @@ export default function HomePage() {
               className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-accent-500 py-3 text-sm font-semibold text-white shadow-cta transition hover:bg-accent-600"
             >
               {t('home.keepFishCta')}
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+              </svg>
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* 美食照片墙 */}
+      <PhotoWall
+        title={t('home.foodWall.title')}
+        subtitle={t('home.foodWall.subtitle')}
+        photos={FOOD_WALL}
+        href="/menu"
+        cta={t('home.foodWall.cta')}
+      />
+
+      {/* 环境与设施照片墙 */}
+      <PhotoWall
+        title={t('home.placeWall.title')}
+        subtitle={t('home.placeWall.subtitle')}
+        photos={PLACE_WALL}
+        href="/pond-rules"
+        cta={t('home.placeWall.cta')}
+      />
+
+      {/* 开塘故事入口（完整 12 步在 /about） */}
+      <section className="px-4 pt-6">
+        <div className="relative overflow-hidden rounded-2xl bg-primary-900 p-5 text-white">
+          <div className="absolute -bottom-8 -right-8 h-28 w-28 rounded-full bg-primary-700/40" />
+          <div className="relative z-10">
+            <h3 className="text-base font-bold">{t('home.story.title')}</h3>
+            <p className="mt-1.5 text-sm text-primary-100/85">{t('home.story.text')}</p>
+            <Link
+              href="/about"
+              className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-semibold text-white ring-1 ring-inset ring-white/25 transition hover:bg-white/20"
+            >
+              {t('home.story.cta')}
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
               </svg>
@@ -396,6 +436,7 @@ export default function HomePage() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }

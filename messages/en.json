@@ -40,7 +40,8 @@
     "retry": "Retry",
     "saving": "Saving…",
     "refresh": "Refresh",
-    "rules": "Rules"
+    "rules": "Rules",
+    "about": "Our Story"
   },
   "home": {
     "welcome": "Welcome to Happy Fishing Pond",
@@ -68,7 +69,41 @@
     "keepFishBig": "First 1 kg free",
     "keepFishSub": "Then 60฿ per kg · weighed at the counter in front of you",
     "keepFishBek": "One exception: Pla Buek (Mekong Giant Catfish) must go back, whatever its size",
-    "keepFishCta": "Pond rules & rewards"
+    "keepFishCta": "Pond rules & rewards",
+    "keepFishPhotoAlt": "A customer's big catch",
+    "hero": {
+      "hours": "09:00–18:00 · closed every Monday",
+      "s1Title": "Take your catch home",
+      "s1Sub": "Leisure pond 100฿ all day · Competition pond 500฿ per angler · first 1 kg free",
+      "s2Title": "Dusk — the pond at its best",
+      "s2Sub": "The pavilions light up and the walkway loops right around the water",
+      "s3Title": "What you catch today is yours",
+      "s3Sub": "Weighed at the counter in front of you · first 1 kg free · then 60฿ per kg",
+      "s4Title": "Still water, moonlight, one float moving",
+      "s4Sub": "Full lighting after dark — safe and quiet"
+    },
+    "video": {
+      "title": "18 seconds inside the pond",
+      "subtitle": "18.6s · silent · looping",
+      "note": "Assembled from photos taken on site — no AI-generated footage.",
+      "posterAlt": "Promo video cover",
+      "playLabel": "Play or pause the promo video"
+    },
+    "foodWall": {
+      "title": "From the pond to the table",
+      "subtitle": "Whole grilled fish, skewers, drinks · cooking service 100฿ per fish",
+      "cta": "See full menu"
+    },
+    "placeWall": {
+      "title": "Around the pond",
+      "subtitle": "Thatched pavilions, fishing walkways, dining area, night lights",
+      "cta": "See pond rules"
+    },
+    "story": {
+      "title": "Six months from empty land",
+      "text": "Bare ground in February 2026, ponds dug in March, roof raised in April, first lights in June, kitchen open in August — 12 photos along the way.",
+      "cta": "Read the story"
+    }
   },
   "pond": {
     "leisure": "Leisure Pond",
@@ -995,5 +1030,45 @@
       "m5Desc": "Daily: the biggest fish of the day goes on the board. Monthly: the biggest fish of the month wins a free session, a place on the board and a post on Facebook and LINE.",
       "note": "These five are live now. More rewards are on the way."
     }
+  },
+  "footer": {
+    "tagline": "A leisure fishing pond in Thailand — take your catch home",
+    "hoursLabel": "Open",
+    "hours": "Daily 09:00 – 18:00",
+    "closedLabel": "Closed",
+    "closed": "Every Monday",
+    "followLabel": "Follow",
+    "rights": "© {year} Hook Happyness. All rights reserved."
+  },
+  "about": {
+    "title": "Our Story",
+    "subtitle": "From bare ground on 2026-02-25 to today",
+    "intro": "This used to be an overgrown empty lot. We photographed all six months of construction — not for show, but so you know that every fishing spot, every light and every stone here was really built.",
+    "step1": "Day one — bare ground",
+    "step1Text": "We had just taken over the land. The weeds stood taller than a person.",
+    "step2": "The excavator moves in",
+    "step2Text": "Three days of digging to cut out the outline of both ponds.",
+    "step3": "Pond bed and gabions",
+    "step3Text": "Stone gabions laid and levelled so the water settles and the banks hold.",
+    "step4": "Stone embankment done",
+    "step4Text": "Laid stone by stone — the edge of the pond finally appears.",
+    "step5": "Roof beams go up",
+    "step5Text": "The steel frame goes up; this is where the kitchen and pavilions would stand.",
+    "step6": "The structure takes shape",
+    "step6Text": "Roof on. Seen from across the water, it starts to look like a fishing pond.",
+    "step7": "Building finished",
+    "step7Text": "Walls, floors, doors and windows done — water and power next.",
+    "step8": "First light at night",
+    "step8Text": "The first night we ran the lights all night, we realised the pond looks better after dark.",
+    "step9": "The lights come on",
+    "step9Text": "Walkway lighting switched on; pavilions and dining room lit.",
+    "step10": "First fish on the scale",
+    "step10Text": "The scale moved to the counter — the first fish weighed and taken home.",
+    "step11": "The kitchen opens",
+    "step11Text": "First whole grilled fish goes out.",
+    "step12": "Today: rod wall and bar",
+    "step12Text": "Rod wall, bar and tables are all in place. All that's missing is you.",
+    "ctaTitle": "Come and see it",
+    "ctaText": "The photos cover six months; the pond is alive. Pick an evening and fish a session."
   }
 }

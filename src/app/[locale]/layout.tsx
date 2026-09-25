@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { locales, type Locale } from '@/i18n/config';
 import Header from '@/components/layout/Header';
 import BottomNav from '@/components/layout/BottomNav';
+import Footer from '@/components/layout/Footer';
 import HtmlShell from '@/components/layout/HtmlShell';
 import { AppProvider } from '@/contexts/AppContext';
 
@@ -33,6 +34,7 @@ export default async function LocaleLayout({
           <div className="flex min-h-screen flex-col">
             <Header />
             <main className="flex-1 pb-20">{children}</main>
+            <Footer />
             <BottomNav />
           </div>
         </AppProvider>
