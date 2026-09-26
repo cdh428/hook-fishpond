@@ -107,7 +107,7 @@ export async function GET(
   } catch (error: any) {
     console.error("Load item options error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to load options" },
+      { error: "Failed to load options" },
       { status: 500 },
     );
   }
@@ -204,7 +204,7 @@ export async function PUT(
   } catch (error: any) {
     console.error("Save item options error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to save options" },
+      { error: "Failed to save options" },
       { status: 500 },
     );
   }

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { runTx } from "@/lib/tx";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin, getUserFromRequest } from "@/lib/auth";
+import { maskPhone } from "@/lib/pii";
 import { reserveStock, releaseOrderStock, InsufficientStockError } from "@/lib/stock";
 import { settleOrder } from "@/lib/orders";
 
@@ -30,11 +31,21 @@ export async function GET(
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
-    return NextResponse.json(order);
+    // 这是「能力 URL」模式（凭 cuid 读单），顾客下单成功页要靠它，所以不能直接要求登录。
+    // 但**手机号**没必要暴露给任何持有链接的人：只有管理员或订单本人能拿到完整值。
+    const admin = await requireAdmin(request);
+    const me = admin ? null : await getUserFromRequest(request);
+    const privileged = !!admin || (!!me && me.id === order.userId);
+
+    return NextResponse.json(
+      privileged
+        ? order
+        : { ...order, customerPhone: maskPhone(order.customerPhone) },
+    );
   } catch (error: any) {
     console.error("Get order error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to get order" },
+      { error: "Failed to get order" },
       { status: 500 },
     );
   }
@@ -153,7 +164,7 @@ export async function PUT(
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
     return NextResponse.json(
-      { error: error.message || "Failed to update order" },
+      { error: "Failed to update order" },
       { status: 500 },
     );
   }

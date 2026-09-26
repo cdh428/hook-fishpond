@@ -32,7 +32,7 @@ export async function POST(
     }
     console.error("Toggle sold-out error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to toggle sold-out" },
+      { error: "Failed to toggle sold-out" },
       { status: 500 },
     );
   }

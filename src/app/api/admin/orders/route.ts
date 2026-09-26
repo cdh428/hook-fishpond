@@ -84,7 +84,7 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     console.error("Admin list orders error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to list orders" },
+      { error: "Failed to list orders" },
       { status: 500 },
     );
   }

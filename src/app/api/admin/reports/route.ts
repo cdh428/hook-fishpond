@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     console.error("Report error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to build report" },
+      { error: "Failed to build report" },
       { status: 500 },
     );
   }

@@ -93,7 +93,7 @@ export async function GET(
   } catch (error: any) {
     console.error("Get payment error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to get payment" },
+      { error: "Failed to get payment" },
       { status: 500 },
     );
   }
@@ -184,7 +184,7 @@ export async function PUT(
   } catch (error: any) {
     console.error("Update payment error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to update payment" },
+      { error: "Failed to update payment" },
       { status: 500 },
     );
   }

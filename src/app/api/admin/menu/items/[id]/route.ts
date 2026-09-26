@@ -117,7 +117,7 @@ export async function PUT(
     }
     console.error("Update menu item error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to update menu item" },
+      { error: "Failed to update menu item" },
       { status: 500 },
     );
   }
@@ -170,7 +170,7 @@ export async function DELETE(
   } catch (error: any) {
     console.error("Delete menu item error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to delete menu item" },
+      { error: "Failed to delete menu item" },
       { status: 500 },
     );
   }

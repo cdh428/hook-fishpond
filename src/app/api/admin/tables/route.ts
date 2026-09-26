@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     console.error("List admin tables error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to list tables" },
+      { error: "Failed to list tables" },
       { status: 500 },
     );
   }
@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error("Create table error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to create table" },
+      { error: "Failed to create table" },
       { status: 500 },
     );
   }

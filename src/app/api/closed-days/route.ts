@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     console.error("List closed days error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to list closed days" },
+      { error: "Failed to list closed days" },
       { status: 500 },
     );
   }

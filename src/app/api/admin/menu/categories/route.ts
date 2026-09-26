@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     console.error("List categories error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to list categories" },
+      { error: "Failed to list categories" },
       { status: 500 },
     );
   }
@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error("Create category error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to create category" },
+      { error: "Failed to create category" },
       { status: 500 },
     );
   }

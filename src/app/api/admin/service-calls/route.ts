@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     console.error("Admin list service calls error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to list service calls" },
+      { error: "Failed to list service calls" },
       { status: 500 },
     );
   }
@@ -82,7 +82,7 @@ export async function PATCH(request: NextRequest) {
   } catch (error: any) {
     console.error("Admin update service call error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to update service call" },
+      { error: "Failed to update service call" },
       { status: 500 },
     );
   }

@@ -92,7 +92,7 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     console.error("Admin stats error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to get stats" },
+      { error: "Failed to get stats" },
       { status: 500 },
     );
   }

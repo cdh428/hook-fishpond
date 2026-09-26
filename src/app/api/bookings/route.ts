@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isClosedDate } from "@/lib/closed-days";
 import { isTodayCutoff, SAME_DAY_CUTOFF_HOUR } from "@/lib/date-utils";
+import { requireAdmin, getUserFromRequest } from "@/lib/auth";
 
 export async function POST(request: NextRequest) {
   try {
@@ -145,29 +146,54 @@ export async function POST(request: NextRequest) {
       );
     }
     return NextResponse.json(
-      { error: error.message || "Failed to create booking" },
+      { error: "Failed to create booking" },
       { status: 500 },
     );
   }
 }
 
+/**
+ * GET /api/bookings —— 查预约列表
+ *
+ * ⚠️ 安全口径（2026-09-26 收紧）：
+ *  - **已移除 `?phone=` 查询**。原因：手机号是可枚举的，任何人都能拿一串号码把
+ *    别人的姓名 / 日期 / 人数 / 历史刷出来；而前端从来没用过这个参数。
+ *  - 顾客端身份**只认 `x-user-id` 请求头**，查询串里的 `userId` 必须与之一致；
+ *    不允许「只凭 URL 上的 userId 就取别人的数据」。
+ *  - 管理端（带 `admin-session`）可按任意 userId 查。
+ *  - 这仍是**缓解**不是修复：x-user-id 可伪造。真正的修法是给顾客上 OTP。
+ */
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const userId = searchParams.get("userId");
-    const phone = searchParams.get("phone");
+    const requestedUserId = searchParams.get("userId");
 
-    if (!userId && !phone) {
-      return NextResponse.json(
-        { error: "Provide userId or phone query parameter" },
-        { status: 400 },
-      );
+    const admin = await requireAdmin(request);
+    if (admin) {
+      if (!requestedUserId) {
+        return NextResponse.json(
+          { error: "Provide userId query parameter" },
+          { status: 400 },
+        );
+      }
+      const bookings = await prisma.booking.findMany({
+        where: { userId: requestedUserId },
+        include: { pond: true, spot: true, order: true },
+        orderBy: { createdAt: "desc" },
+      });
+      return NextResponse.json(bookings);
     }
 
-    const where = userId ? { userId } : { customerPhone: phone! };
+    const me = await getUserFromRequest(request);
+    if (!me) {
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    }
+    if (requestedUserId && requestedUserId !== me.id) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
     const bookings = await prisma.booking.findMany({
-      where,
+      where: { userId: me.id },
       include: { pond: true, spot: true, order: true },
       orderBy: { createdAt: "desc" },
     });
@@ -176,7 +202,7 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     console.error("List bookings error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to list bookings" },
+      { error: "Failed to list bookings" },
       { status: 500 },
     );
   }

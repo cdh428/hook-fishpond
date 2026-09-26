@@ -1,5 +1,5 @@
 {
-  "count": 64,
+  "count": 53,
   "items": [
     {
       "id": "P210",
@@ -90,72 +90,6 @@
       "webpBytes": 89870
     },
     {
-      "id": "P210",
-      "file": "wide-sunset",
-      "recipe": "wide",
-      "zh": "日落通栏",
-      "source": "IMG_20260725_184602.jpg",
-      "w": 2400,
-      "h": 1029,
-      "jpgBytes": 266954,
-      "webpBytes": 158148
-    },
-    {
-      "id": "P190",
-      "file": "bg-wide-evening",
-      "recipe": "bg-wide",
-      "zh": "晚霞页脚底纹",
-      "source": "IMG_20260709_213752.jpg",
-      "w": 2400,
-      "h": 1029,
-      "jpgBytes": 35088,
-      "webpBytes": 11334
-    },
-    {
-      "id": "P211",
-      "file": "catch-01-holdfish",
-      "recipe": "card-tall",
-      "zh": "双手举鱼 · 塘边",
-      "source": "IMG_20260730_190228.jpg",
-      "w": 1000,
-      "h": 1250,
-      "jpgBytes": 97064,
-      "webpBytes": 42818
-    },
-    {
-      "id": "P212",
-      "file": "catch-02-holdfish",
-      "recipe": "card-tall",
-      "zh": "双手举鱼 · 另一角度",
-      "source": "IMG_20260730_190232.jpg",
-      "w": 1000,
-      "h": 1250,
-      "jpgBytes": 84994,
-      "webpBytes": 40904
-    },
-    {
-      "id": "P229",
-      "file": "catch-03-scale",
-      "recipe": "card-tall",
-      "zh": "电子秤称鱼",
-      "source": "IMG_20260821_194012.jpg",
-      "w": 1000,
-      "h": 1250,
-      "jpgBytes": 188265,
-      "webpBytes": 117164
-    },
-    {
-      "id": "P180",
-      "file": "catch-04-anger",
-      "recipe": "card-tall",
-      "zh": "客人抱大鱼 · 塘边",
-      "source": "IMG_20260629_184238.jpg",
-      "w": 1000,
-      "h": 1250,
-      "jpgBytes": 246138,
-      "webpBytes": 190936
-    },
-    {
       "id": "P211",
       "file": "catch-sq-holdfish",
       "recipe": "square",
@@ -244,17 +178,6 @@
       "webpBytes": 186130
     },
     {
-      "id": "P239",
-      "file": "place-03-dining",
-      "recipe": "card",
-      "zh": "餐饮区内景 · 看塘",
-      "source": "IMG_20260829_121716.jpg",
-      "w": 1400,
-      "h": 933,
-      "jpgBytes": 195911,
-      "webpBytes": 123746
-    },
-    {
       "id": "P240",
       "file": "place-04-rodwall",
       "recipe": "card",
@@ -288,17 +211,6 @@
       "webpBytes": 80182
     },
     {
-      "id": "P169",
-      "file": "place-07-nightarch",
-      "recipe": "card-tall",
-      "zh": "夜间建筑入口",
-      "source": "IMG_20260624_220340.jpg",
-      "w": 1000,
-      "h": 1250,
-      "jpgBytes": 156822,
-      "webpBytes": 86054
-    },
-    {
       "id": "P191",
       "file": "place-08-bluehour",
       "recipe": "card",
@@ -330,39 +242,6 @@
       "h": 1080,
       "jpgBytes": 179559,
       "webpBytes": 112402
-    },
-    {
-      "id": "P098",
-      "file": "bg-quiet",
-      "recipe": "bg",
-      "zh": "月夜水面（柔和底纹）",
-      "source": "IMG_20260327_171046.jpg",
-      "w": 1920,
-      "h": 1080,
-      "jpgBytes": 30725,
-      "webpBytes": 9902
-    },
-    {
-      "id": "P210",
-      "file": "bg-warm",
-      "recipe": "bg",
-      "zh": "日落暖色底纹",
-      "source": "IMG_20260725_184602.jpg",
-      "w": 1920,
-      "h": 1080,
-      "jpgBytes": 38003,
-      "webpBytes": 13044
-    },
-    {
-      "id": "P231",
-      "file": "bg-place",
-      "recipe": "bg",
-      "zh": "钓位步道底纹",
-      "source": "IMG_20260828_112231.jpg",
-      "w": 1920,
-      "h": 1080,
-      "jpgBytes": 43410,
-      "webpBytes": 13748
     },
     {
       "id": "P001",
@@ -704,9 +583,7 @@
       "h": 640,
       "png": [
         "brand-logo-640.png",
-        "brand-logo-256.png",
-        "brand-logo-128.png",
-        "brand-logo-flat.jpg"
+        "brand-logo-256.png"
       ]
     }
   ],
@@ -732,5 +609,5 @@
       "bytes": 99361
     }
   ],
-  "totalBytes": 35752567
+  "totalBytes": 33460572
 }

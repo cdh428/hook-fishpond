@@ -238,8 +238,25 @@ async function main() {
   console.log(`  ✅ ${tables.length} dining tables (10 huts + 4 cafe)`);
 
   // ===== 6. Admin User =====
+  //
+  // ⚠️ 口令来源（2026-09-26 改）：**不再把生产口令写死在源码里**。
+  // 本仓库是 public，写死等于把后台口令公开。现在优先读环境变量：
+  //   SEED_ADMIN_PASSWORD  → 未设置时用本地开发口令，并且**只在非生产环境**允许。
+  // 这样 clone 下来就能跑 seed，而生产/CI 必须显式给一个真口令。
   console.log("Creating admin user...");
-  const hashedPassword = await bcrypt.hash("Admin@2026", 10);
+  const seedPassword = process.env.SEED_ADMIN_PASSWORD;
+  if (!seedPassword && process.env.NODE_ENV === "production") {
+    throw new Error(
+      "SEED_ADMIN_PASSWORD is required when seeding in production — refusing to create an admin with a known default password.",
+    );
+  }
+  const adminPassword = seedPassword || "Admin@Dev2026";
+  if (!seedPassword) {
+    console.log(
+      "  ⚠️ SEED_ADMIN_PASSWORD 未设置 → 使用本地开发口令（仅限非生产环境）",
+    );
+  }
+  const hashedPassword = await bcrypt.hash(adminPassword, 10);
   await prisma.adminUser.upsert({
     where: { username: "admin" },
     update: {},

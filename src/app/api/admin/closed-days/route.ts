@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error("Create closed day error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to create closed day" },
+      { error: "Failed to create closed day" },
       { status: 500 },
     );
   }

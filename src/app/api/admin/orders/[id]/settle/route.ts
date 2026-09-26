@@ -166,7 +166,7 @@ export async function POST(
   } catch (error: any) {
     console.error("Settle order error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to settle order" },
+      { error: "Failed to settle order" },
       { status: 500 },
     );
   }

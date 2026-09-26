@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error("Move menu items error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to move menu items" },
+      { error: "Failed to move menu items" },
       { status: 500 },
     );
   }

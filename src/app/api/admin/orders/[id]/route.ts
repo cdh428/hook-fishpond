@@ -64,7 +64,7 @@ export async function GET(
   } catch (error: any) {
     console.error("Admin get order error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to load order" },
+      { error: "Failed to load order" },
       { status: 500 },
     );
   }
@@ -373,7 +373,7 @@ export async function PATCH(
   } catch (error: any) {
     console.error("Admin update order error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to update order" },
+      { error: "Failed to update order" },
       { status: 500 },
     );
   }

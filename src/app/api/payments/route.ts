@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error("Create payment error:", error);
     return NextResponse.json(
-      { error: error.message || "Payment creation failed" },
+      { error: "Payment creation failed" },
       { status: 500 },
     );
   }

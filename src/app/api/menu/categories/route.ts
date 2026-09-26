@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     console.error("List menu categories error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to list menu categories" },
+      { error: "Failed to list menu categories" },
       { status: 500 },
     );
   }

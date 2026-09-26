@@ -270,7 +270,7 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     console.error("Report export error:", error);
     return NextResponse.json(
-      { error: error.message || "Export failed" },
+      { error: "Export failed" },
       { status: 500 },
     );
   }

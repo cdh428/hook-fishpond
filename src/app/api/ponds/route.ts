@@ -29,7 +29,7 @@ export async function GET() {
   } catch (error: any) {
     console.error("List ponds error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to list ponds" },
+      { error: "Failed to list ponds" },
       { status: 500 },
     );
   }

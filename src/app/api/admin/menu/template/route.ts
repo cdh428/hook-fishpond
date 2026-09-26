@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     console.error("Export menu template error:", error);
     return NextResponse.json(
-      { error: error.message || "导出模板失败" },
+      { error: "导出模板失败" },
       { status: 500 },
     );
   }

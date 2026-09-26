@@ -91,7 +91,7 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     console.error("Admin transactions error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to get transactions" },
+      { error: "Failed to get transactions" },
       { status: 500 },
     );
   }

@@ -7,6 +7,7 @@ import { isClosedDate } from "@/lib/closed-days";
 import { reserveStock, InsufficientStockError } from "@/lib/stock";
 import { generateOrderNumber } from "@/lib/orders";
 import { resolveOrderLines, OptionError } from "@/lib/menu-options-server";
+import { requireAdmin, getUserFromRequest } from "@/lib/auth";
 
 // Neon(us-east-2) ← 泰国：往返延迟较高，放宽函数执行上限
 export const maxDuration = 60;
@@ -189,29 +190,51 @@ export async function POST(request: NextRequest) {
     }
     console.error("Create order error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to create order" },
+      { error: "Failed to create order" },
       { status: 500 },
     );
   }
 }
 
+/**
+ * GET /api/orders —— 查订单列表
+ *
+ * ⚠️ 安全口径（2026-09-26 收紧）：与 `/api/bookings` 完全一致 ——
+ * **已移除 `?phone=` 查询**（手机号可枚举，前端也从没用过），
+ * 顾客端只认 `x-user-id` 请求头且必须与查询串里的 `userId` 一致；管理端可查任意 userId。
+ */
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const userId = searchParams.get("userId");
-    const phone = searchParams.get("phone");
+    const requestedUserId = searchParams.get("userId");
 
-    if (!userId && !phone) {
-      return NextResponse.json(
-        { error: "Provide userId or phone query parameter" },
-        { status: 400 },
-      );
+    const admin = await requireAdmin(request);
+    let targetUserId: string | null = null;
+
+    if (admin) {
+      if (!requestedUserId) {
+        return NextResponse.json(
+          { error: "Provide userId query parameter" },
+          { status: 400 },
+        );
+      }
+      targetUserId = requestedUserId;
+    } else {
+      const me = await getUserFromRequest(request);
+      if (!me) {
+        return NextResponse.json(
+          { error: "Not authenticated" },
+          { status: 401 },
+        );
+      }
+      if (requestedUserId && requestedUserId !== me.id) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+      targetUserId = me.id;
     }
 
-    const where = userId ? { userId } : { customerPhone: phone! };
-
     const orders = await prisma.order.findMany({
-      where,
+      where: { userId: targetUserId },
       include: {
         items: { include: { menuItem: true } },
         payment: true,
@@ -226,7 +249,7 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     console.error("List orders error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to list orders" },
+      { error: "Failed to list orders" },
       { status: 500 },
     );
   }

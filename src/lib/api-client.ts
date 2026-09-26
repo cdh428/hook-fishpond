@@ -264,13 +264,15 @@ export async function createBooking(input: CreateBookingInput): Promise<any> {
   });
 }
 
-export async function fetchBookings(params: {
-  userId?: string;
-  phone?: string;
-}): Promise<any[]> {
+/**
+ * 查我的预约。
+ *
+ * ⚠️ 2026-09-26：服务端已移除 `?phone=` 查询（手机号可枚举，是越权入口）。
+ * 这里同步删掉 phone 参数，只按 userId 查；身份由 `x-user-id` 头携带且必须与 userId 一致。
+ */
+export async function fetchBookings(params: { userId: string }): Promise<any[]> {
   const qs = new URLSearchParams();
-  if (params.userId) qs.set('userId', params.userId);
-  if (params.phone) qs.set('phone', params.phone);
+  qs.set('userId', params.userId);
   return request<any[]>(`/api/bookings?${qs.toString()}`);
 }
 
@@ -309,13 +311,10 @@ export async function createOrder(input: CreateOrderInput): Promise<any> {
   });
 }
 
-export async function fetchOrders(params: {
-  userId?: string;
-  phone?: string;
-}): Promise<any[]> {
+/** 查我的订单。同上：只按 userId 查，phone 查询已在服务端移除。 */
+export async function fetchOrders(params: { userId: string }): Promise<any[]> {
   const qs = new URLSearchParams();
-  if (params.userId) qs.set('userId', params.userId);
-  if (params.phone) qs.set('phone', params.phone);
+  qs.set('userId', params.userId);
   return request<any[]>(`/api/orders?${qs.toString()}`);
 }
 

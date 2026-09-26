@@ -69,7 +69,7 @@ export async function POST(
   } catch (error: any) {
     console.error("Add weighing error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to add weighing" },
+      { error: "Failed to add weighing" },
       { status: 500 },
     );
   }
@@ -113,7 +113,7 @@ export async function DELETE(
   } catch (error: any) {
     console.error("Delete weighing error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to delete weighing" },
+      { error: "Failed to delete weighing" },
       { status: 500 },
     );
   }

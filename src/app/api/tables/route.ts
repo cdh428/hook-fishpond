@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     console.error("List tables error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to list tables" },
+      { error: "Failed to list tables" },
       { status: 500 },
     );
   }

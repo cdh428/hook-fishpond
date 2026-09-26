@@ -31,7 +31,7 @@ export async function GET(
   } catch (error: any) {
     console.error("Get booking error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to get booking" },
+      { error: "Failed to get booking" },
       { status: 500 },
     );
   }
@@ -65,7 +65,7 @@ export async function PUT(
       return NextResponse.json({ error: "Booking not found" }, { status: 404 });
     }
     return NextResponse.json(
-      { error: error.message || "Failed to update booking" },
+      { error: "Failed to update booking" },
       { status: 500 },
     );
   }

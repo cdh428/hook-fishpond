@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     console.error("Admin list bookings error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to list bookings" },
+      { error: "Failed to list bookings" },
       { status: 500 },
     );
   }

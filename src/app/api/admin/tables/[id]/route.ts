@@ -58,7 +58,7 @@ export async function PUT(
   } catch (error: any) {
     console.error("Update table error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to update table" },
+      { error: "Failed to update table" },
       { status: 500 },
     );
   }
@@ -95,7 +95,7 @@ export async function DELETE(
   } catch (error: any) {
     console.error("Delete table error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to delete table" },
+      { error: "Failed to delete table" },
       { status: 500 },
     );
   }

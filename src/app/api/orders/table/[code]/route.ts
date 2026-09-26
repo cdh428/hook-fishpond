@@ -106,7 +106,7 @@ export async function GET(
   } catch (error: any) {
     console.error("Table bill error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to load table bill" },
+      { error: "Failed to load table bill" },
       { status: 500 },
     );
   }

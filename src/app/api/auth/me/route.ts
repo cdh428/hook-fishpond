@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     console.error("Get profile error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to get profile" },
+      { error: "Failed to get profile" },
       { status: 500 },
     );
   }
@@ -48,7 +48,7 @@ export async function PUT(request: NextRequest) {
   } catch (error: any) {
     console.error("Update profile error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to update profile" },
+      { error: "Failed to update profile" },
       { status: 500 },
     );
   }

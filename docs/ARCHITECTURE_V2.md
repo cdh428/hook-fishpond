@@ -357,7 +357,10 @@ DELETE /api/admin/menu/categories/[id] → delete category
 POST /api/admin/menu/items → create item
 PUT  /api/admin/menu/items/[id] → update item
 DELETE /api/admin/menu/items/[id] → delete item
-POST /api/admin/upload      → image upload (menu/pond images)
+# 菜品图片：**没有**上传接口 —— 前端用 Canvas 压成 base64 data URL 直接写进
+# MenuItem.imageUrl / imageThumbUrl（Vercel 文件系统只读，服务端存不了文件）。
+# 2026-09-26 删掉了失效的 POST /api/admin/upload（写 public/uploads，线上必 500，
+# 且零引用、文件名后缀可被构造）。
 
 GET  /api/admin/transactions → revenue report (date range, payment method breakdown)
 ```

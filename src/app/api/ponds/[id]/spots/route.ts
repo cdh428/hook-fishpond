@@ -91,7 +91,7 @@ export async function GET(
   } catch (error: any) {
     console.error("List spots error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to list spots" },
+      { error: "Failed to list spots" },
       { status: 500 },
     );
   }

@@ -23,7 +23,7 @@ export async function DELETE(
   } catch (error: any) {
     console.error("Delete closed day error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to delete closed day" },
+      { error: "Failed to delete closed day" },
       { status: 500 },
     );
   }

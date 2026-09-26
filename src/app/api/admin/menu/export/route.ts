@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     console.error("Export menu error:", error);
     return NextResponse.json(
-      { error: error.message || "导出失败" },
+      { error: "导出失败" },
       { status: 500 },
     );
   }
