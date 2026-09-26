@@ -70,3 +70,10 @@ public/media/_clips/
 # 这条只作为兜底：防止旧的 docs/media 副本被误提交
 docs/media/
 docs/face-options.png
+
+# SSH / 私钥（推送用的部署密钥在 ~/.ssh，这里兜底防误拷进仓库）
+id_rsa*
+id_ed25519*
+hook_fishpond_deploy*
+*.ppk
+*.key
