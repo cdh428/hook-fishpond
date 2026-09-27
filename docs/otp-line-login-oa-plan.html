@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OTP 方案 ②+④ 实施计划（全 LINE 通道 · 零短信成本）</title>
+<style>
+  :root{--lake:#155E75;--lake-d:#0E4257;--lake-l:#E8F3F6;--amber:#F59E0B;--amber-l:#FEF3E2;
+        --ice:#EAF6F5;--ink:#12303A;--gray:#5B7480;--line:#DCE7EA;--red:#C2410C;--red-l:#FEF0E9;
+        --green:#0F766E;--green-l:#E6F5F2}
+  *{box-sizing:border-box}
+  body{margin:0;background:#F4F8F9;color:var(--ink);line-height:1.7;
+       font-family:"Inter","Noto Sans SC",-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:940px;margin:0 auto;padding:36px 22px 80px}
+  header.top{background:linear-gradient(135deg,var(--lake-d),var(--lake) 62%,#1C7A94);color:#fff;
+             border-radius:20px;padding:30px 28px;margin-bottom:30px}
+  header.top .kicker{font-size:12px;letter-spacing:.16em;text-transform:uppercase;opacity:.72;margin:0 0 10px}
+  header.top h1{margin:0 0 10px;font-size:25px;line-height:1.32}
+  header.top p{margin:0;opacity:.9;font-size:14px;max-width:64ch}
+  h2{font-size:18.5px;margin:40px 0 6px;padding-left:13px;border-left:4px solid var(--amber);line-height:1.35}
+  h2:first-of-type{margin-top:6px}
+  h2 .num{color:var(--gray);font-weight:500;margin-right:6px}
+  h3{font-size:15px;margin:22px 0 6px;color:var(--lake-d)}
+  p{margin:9px 0;font-size:14.2px}
+  .lead{color:var(--gray);font-size:13.5px;margin:6px 0 18px}
+  ul{margin:8px 0;padding-left:20px} li{font-size:14px;margin:5px 0}
+  .pro li::marker{color:var(--green)} .con li::marker{color:var(--red)}
+  .card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:20px 22px;margin:14px 0}
+  .card.key{border-color:#A7D7CE;box-shadow:0 2px 0 #D8EDE8}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.3px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:var(--ice);font-weight:650;color:var(--lake-d);font-size:12.6px;white-space:nowrap}
+  tr:last-child td{border-bottom:none}
+  .warn{background:var(--red-l);border:1px solid #F3C9B4;border-left:4px solid var(--red);
+        border-radius:10px;padding:14px 17px;margin:16px 0;font-size:13.7px}
+  .warn b{color:var(--red)}
+  .note{background:var(--amber-l);border:1px solid #F3DFB8;border-left:4px solid var(--amber);
+        border-radius:10px;padding:14px 17px;margin:16px 0;font-size:13.7px}
+  .ok{background:var(--green-l);border:1px solid #B6E0D8;border-left:4px solid var(--green);
+      border-radius:10px;padding:14px 17px;margin:16px 0;font-size:13.7px}
+  code{background:var(--lake-l);color:var(--lake-d);padding:1.5px 5px;border-radius:5px;font-size:12.5px;
+       font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  .flow{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0;align-items:center}
+  .flow .step{background:var(--ice);border:1px solid var(--line);border-radius:8px;padding:6px 11px;
+              font-size:12.5px;color:var(--lake-d)}
+  .flow .arw{color:var(--gray)}
+  .pill{display:inline-block;font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:999px;margin-left:8px;vertical-align:2px}
+  .pill.do{background:var(--red-l);color:var(--red)}
+  .pill.me{background:var(--green-l);color:var(--green)}
+  footer{margin-top:46px;padding-top:20px;border-top:1px solid var(--line);color:var(--gray);font-size:12.5px}
+  @media(max-width:640px){.wrap{padding:20px 15px 64px}header.top{padding:22px 19px;border-radius:16px}
+    header.top h1{font-size:20px}.card{padding:17px 16px}th,td{padding:7px 8px;font-size:12.4px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <p class="kicker">Hook Happyness · 实施计划</p>
+  <h1>OTP 方案 ②+④ —— 全 LINE 通道，零短信成本</h1>
+  <p>只用你手上已有的资产（LINE 官方账号 <code>@300bsham</code> + 现成的 Messaging API），
+  把顾客身份从「客户端自称」换成「LINE 签发的身份」。不接短信、不产生按条费用。</p>
+</header>
+
+<div class="ok">
+  <p style="margin:0"><b>先说一个能省掉一半工作量的发现：</b>
+  ② 和 ④ 不需要做成两套并行系统。LINE Login 的授权链接支持一个参数
+  <code>bot_prompt=aggressive</code> —— 用户点「用 LINE 继续」时，LINE 的授权页会
+  <b>顺便问他要不要加你的官方账号为好友</b>。也就是说
+  <b>「登录成功」和「成为官方账号好友」在同一步里完成</b>，
+  而后者正是 ④ 最大的附加价值。</p>
+</div>
+
+<!-- ══════════ 1 ══════════ -->
+<h2><span class="num">壹</span>为什么 ④ 还值得单独留一条兜底</h2>
+<p class="lead">既然登录顺带就加了好友，④ 还剩什么用？两个真实场景：</p>
+<div class="card">
+  <ul>
+    <li><b>客人已经在 LINE 里跟你说话了。</b>他正在官方账号里问「今天有位置吗」，
+      这时让他跳出去网页再点一次授权，是多余的。④ 允许他<b>直接在聊天窗口里完成识别</b> ——
+      他发一句几个字符的短码，网页那边就认出来了。</li>
+    <li><b>浏览器侧走不通时。</b>LINE 内的应用内浏览器对第三方授权跳转偶有拦截；
+      ④ 不依赖浏览器跳转，只要他能在 LINE 里发一条消息。</li>
+  </ul>
+  <p style="margin-bottom:0">而且 ④ 用的 <code>replyLineText</code> 是 <b>回复消息 —— 免费且不占官方账号的推送配额</b>
+  （你项目里已经实现了）。所以这条兜底的边际成本是 0。</p>
+</div>
+
+<!-- ══════════ 2 ══════════ -->
+<h2><span class="num">贰</span>② 主通道：LINE Login 完整流程</h2>
+<div class="card key">
+  <div class="flow">
+    <span class="step">点「用 LINE 继续」</span><span class="arw">→</span>
+    <span class="step">授权页（此处显示"加官方账号为好友"）</span><span class="arw">→</span>
+    <span class="step">回跳带 code</span><span class="arw">→</span>
+    <span class="step">服务端换 access token</span><span class="arw">→</span>
+    <span class="step">取 userId + 昵称 + 头像</span><span class="arw">→</span>
+    <span class="step">建/找 User，发签名会话</span>
+  </div>
+  <p>关键点：<b>userId 由 LINE 签发、不可伪造、不可枚举</b>。
+  这一个值取代今天那个「客户端自己填的 <code>x-user-id</code>」，越权问题从根上消失。</p>
+  <p style="margin-bottom:0">顺带还能查一件事：<code>GET /api.line.me/friendship/v1/status</code>
+  （带上登录拿到的 token）能告诉你<b>他到底加没加官方账号好友</b>。没加的话可以温和提示
+  「加了才能收到订单进度通知」，而不是硬拦。</p>
+</div>
+
+<!-- ══════════ 3 ══════════ -->
+<h2><span class="num">叁</span>④ 兜底：在聊天窗口里完成识别</h2>
+<div class="card">
+  <div class="flow">
+    <span class="step">网页生成 6 位一次性短码</span><span class="arw">→</span>
+    <span class="step">深链跳到 LINE 聊天窗</span><span class="arw">→</span>
+    <span class="step">客人发送该短码</span><span class="arw">→</span>
+    <span class="step">webhook 收到 userId + 短码</span><span class="arw">→</span>
+    <span class="step">回复确认（免费）</span><span class="arw">→</span>
+    <span class="step">网页轮询到结果，发会话</span>
+  </div>
+  <p><b>深链格式：</b><code>https://line.me/R/oaMessage/@300bsham/?&lt;短码&gt;</code>
+  —— 点开就自动跳到与官方账号的对话并预填内容，客人只需按发送。</p>
+  <div class="note">
+    <b>安全上要注意什么（我按这个设计）：</b>短码 6 位、<b>5 分钟失效、一次用完即废</b>，
+    并且与<b>发起那个浏览器</b>的一次性票据绑定。这样即使短码被别人看到并抢先发送，
+    结果也只是「他自己的 LINE 被绑到你的浏览器会话上」，<b>不会导致你的账号被夺走</b> ——
+    因为最终发会话的对象是持有票据的那个浏览器。
+  </div>
+</div>
+
+<!-- ══════════ 4 ══════════ -->
+<h2><span class="num">肆</span>只有你能办的三件事 <span class="pill do">需你操作</span></h2>
+<div class="warn">
+  <p style="margin-top:0"><b>这三件我替代不了，也是整件事的唯一卡点。</b>代码我可以先写好，但没有它们跑不起来。</p>
+  <p><b>1. 在 LINE Developers 新建一个 LINE Login channel</b></p>
+  <ul style="margin-top:0">
+    <li>⚠️ <b>必须放在「现有的那同一个 Provider」下面</b> —— 就是承载消息推送的那一个。
+      LINE 的 userId 是按 Provider 维度签发的，跨 Provider 就对不上号；
+      而且 <b>channel 建好之后不能迁移到别的 Provider</b>。这一条最容易被忽略，也最难补救。</li>
+    <li>Callback URL 填两个：<br>
+      <code>https://hook-fishpond-xi15.vercel.app/api/auth/line/callback</code><br>
+      <code>http://127.0.0.1:3100/api/auth/line/callback</code>（本地调试用）</li>
+    <li>把 <b>OpenID Connect</b> 打开（需要它才能拿 ID token）</li>
+    <li>把 <b>Linked LINE Official Account</b> 指到 <code>@300bsham</code> 那个 Messaging API channel
+      —— <b>这一步不做，<code>bot_prompt</code> 就不生效</b>，「登录顺便加好友」就没了</li>
+    <li>Privacy Policy URL 通常要填才能正常上线</li>
+  </ul>
+  <p style="margin-bottom:0"><b>2. 把两把新钥匙放到 Vercel 环境变量</b>：<code>LINE_LOGIN_CHANNEL_ID</code>、
+  <code>LINE_LOGIN_CHANNEL_SECRET</code>（<code>LINE_CHANNEL_ACCESS_TOKEN</code> 你已经有，直接复用）<br>
+  <b>3. 等 channel 生效</b>（约 2 小时）后告诉我一声，我这边就能端到端跑通并上线。</p>
+</div>
+
+<!-- ══════════ 5 ══════════ -->
+<h2><span class="num">伍</span>我要写的东西 <span class="pill me">不动你</span></h2>
+<table>
+  <thead><tr><th>层</th><th>改动</th><th>说明</th></tr></thead>
+  <tbody>
+    <tr><td>数据层</td><td><code>User.phone</code> 改为可空；新增 <code>lineUserId</code>（唯一、可空）；新增短码表</td>
+        <td>LINE 登录拿不到手机号，所以手机号不能再当必填身份。它降级成「联系方式」，由客人自愿填</td></tr>
+    <tr><td>会话</td><td>顾客会话改用 <b>HMAC 签名 cookie</b>；下线 <code>x-user-id</code> 请求头</td>
+        <td>复用 <code>src/lib/auth.ts</code> 里已经给管理员写的签名逻辑，抽成通用函数即可，不新造轮子</td></tr>
+    <tr><td>接口</td><td><code>/api/auth/line/start</code>、<code>/callback</code>、<code>/friendship</code>、
+        <code>/code</code>（生成短码）、<code>/code/poll</code>（轮询）</td>
+        <td>webhook <code>/api/webhooks/line</code> 从「只给管理员推日报」扩展为「也处理顾客短码」</td></tr>
+    <tr><td>前端</td><td>登录/注册页加「用 LINE 继续」主按钮 + 「在 LINE 里登录」次要入口</td>
+        <td>同时把 <code>AppContext</code> 里往请求头塞 userId 的那段拿掉</td></tr>
+    <tr><td>文案</td><td>三语新增约 15 个键，跑 <code>npm run check:i18n</code> 核验</td>
+        <td>这是固定检查项，不通过不推</td></tr>
+  </tbody>
+</table>
+
+<!-- ══════════ 6 ══════════ -->
+<h2><span class="num">陆</span>必须说清的三条限制</h2>
+<div class="warn">
+  <ul style="margin:0">
+    <li><b>拿不到手机号。</b>LINE Login 默认只给 userId / 昵称 / 头像。想要手机号需要
+      <code>OC_PHONE_NUMBER</code> 权限，前置是 LINE <b>Certified Provider</b>
+      （据 LINE 规范只开放给公司/商行/商号）+ 官方账号<b>蓝盾或绿盾</b>。
+      这是一条要走审核、可能还要花认证费的路，<b>这次不做</b>。
+      所以「顾客手机号」以后只是他自愿填的联系方式，不再是身份凭证。</li>
+    <li><b>没有 LINE 的客人进不来。</b>泰国覆盖率极高，但外国客人存在。
+      这正是当初「混合方案」要留短信的原因 ——
+      <b>短信可以以后随时补上</b>，接口是独立的，不会推翻这次的结构。</li>
+    <li><b>先有 channel 才能验证。</b>在那之前我写出的登录代码无法端到端测试，
+      所以顺序是：你先建 channel → 我写 + 本地跑通 → 上线。</li>
+  </ul>
+</div>
+
+<!-- ══════════ 7 ══════════ -->
+<h2><span class="num">柒</span>验收标准（我上线前会逐条跑）</h2>
+<div class="card">
+  <ul>
+    <li>本地 3100：走通一次「用 LINE 继续」，拿到会话；数据库里出现带 <code>lineUserId</code> 的 User</li>
+    <li><b>反例</b>：伪造会话 cookie → 401；不带会话访问 <code>/api/orders</code> → 401；
+      用 A 的会话查 B 的订单 → 403（取代今天「改个头就能读」的状态）</li>
+    <li>短码路径：生成短码 → 在测试账号里发送 → 网页轮询拿到会话；<b>同一短码第二次使用应失败</b>；
+      5 分钟后使用应失败</li>
+    <li>三语核验通过（<code>check-i18n</code> 本地 + 线上）</li>
+    <li>生产环境：<code>/zh/admin</code> 等既有后台功能不受影响</li>
+  </ul>
+</div>
+
+<footer>
+  乐钓鱼塘 · Hook Happyness —— OTP 方案 ②+④ 实施计划 · 2026-09-27<br>
+  文中关于 <code>bot_prompt</code>、好友状态接口、账号绑定与 Provider 归属的说明，
+  来自 LINE 官方文档与 LINE Login 集成实例（2026-09 检索）。
+</footer>
+
+</div>
+</body>
+</html>
