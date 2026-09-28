@@ -7,16 +7,33 @@
  *   → 把一个 FOOD 菜品移进去 → 断言它的 type 变成 TOOL
  *   → 移回原分类 → 删掉临时分类 → 断言库回到基线
  *
- * 用法：node scripts/e2e-menu-move.mjs [base]     默认 http://127.0.0.1:3100
+ * 用法：E2E_ADMIN_PASSWORD=... node scripts/e2e-menu-move.mjs [base]
+ *       base 默认 http://127.0.0.1:3100
  *
  * 会临时在生产库建 1 个 TOOL 分类并在末尾删除，全程自动回滚。
  * 跑法（先起本地生产服务）：
  *   npx next build && npx next start -p 3100
- *   node scripts/e2e-menu-move.mjs
+ *   E2E_ADMIN_PASSWORD='<口令>' node scripts/e2e-menu-move.mjs
+ *
+ * ⚠️ 管理员口令不写进本文件（仓库是 public）—— 从环境变量读，值见 docs/CREDENTIALS.md。
  */
 
 const BASE = process.argv[2] || 'http://127.0.0.1:3100';
-const ADMIN = { username: 'admin', password: 'Admin@2026' };
+
+const ADMIN = {
+  username: process.env.E2E_ADMIN_USERNAME || 'admin',
+  password: process.env.E2E_ADMIN_PASSWORD || '',
+};
+if (!ADMIN.password) {
+  console.error(
+    [
+      '❌ 缺少管理员口令。',
+      '   跑法：E2E_ADMIN_PASSWORD=\'<口令>\' node scripts/e2e-menu-move.mjs',
+      '   口令从 docs/CREDENTIALS.md 查，不要写进本文件。',
+    ].join('\n'),
+  );
+  process.exit(2);
+}
 
 let pass = 0;
 let fail = 0;

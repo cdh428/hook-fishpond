@@ -135,7 +135,7 @@
       LINE 的 userId 是按 Provider 维度签发的，跨 Provider 就对不上号；
       而且 <b>channel 建好之后不能迁移到别的 Provider</b>。这一条最容易被忽略，也最难补救。</li>
     <li>Callback URL 填两个：<br>
-      <code>https://hook-fishpond-xi15.vercel.app/api/auth/line/callback</code><br>
+      <code>https://hookfishpond.com/api/auth/line/callback</code><br>
       <code>http://127.0.0.1:3100/api/auth/line/callback</code>（本地调试用）</li>
     <li>把 <b>OpenID Connect</b> 打开（需要它才能拿 ID token）</li>
     <li>把 <b>Linked LINE Official Account</b> 指到 <code>@300bsham</code> 那个 Messaging API channel

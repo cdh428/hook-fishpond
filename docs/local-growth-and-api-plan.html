@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>四条线落地计划 · Google 商家 / LINE Messaging / OTP / Meta</title>
+<style>
+  :root{--lake:#155E75;--lake-d:#0E4257;--lake-l:#E8F3F6;--amber:#F59E0B;--amber-l:#FEF3E2;
+        --ice:#EAF6F5;--ink:#12303A;--gray:#5B7480;--line:#DCE7EA;--red:#C2410C;--red-l:#FEF0E9;
+        --green:#0F766E;--green-l:#E6F5F2;--purple:#6D28D9;--purple-l:#F3EEFF}
+  *{box-sizing:border-box}
+  body{margin:0;background:#F4F8F9;color:var(--ink);line-height:1.72;
+       font-family:"Inter","Noto Sans SC",-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1000px;margin:0 auto;padding:36px 22px 80px}
+  header.top{background:linear-gradient(135deg,var(--lake-d),var(--lake) 62%,#1C7A94);color:#fff;
+             border-radius:20px;padding:30px 28px;margin-bottom:26px}
+  header.top .kicker{font-size:12px;letter-spacing:.16em;text-transform:uppercase;opacity:.72;margin:0 0 10px}
+  header.top h1{margin:0 0 10px;font-size:25px;line-height:1.32}
+  header.top p{margin:0;opacity:.92;font-size:14px;max-width:70ch}
+  h2{font-size:19px;margin:44px 0 6px;padding-left:13px;border-left:4px solid var(--amber);line-height:1.35}
+  h2:first-of-type{margin-top:6px}
+  h2 .num{color:var(--gray);font-weight:500;margin-right:6px}
+  h2 .tag{font-size:12px;font-weight:600;color:var(--gray);margin-left:10px;letter-spacing:.02em}
+  h3{font-size:15px;margin:22px 0 6px;color:var(--lake-d)}
+  h4{font-size:13.6px;margin:16px 0 4px;color:var(--lake-d)}
+  p{margin:9px 0;font-size:14.2px}
+  .lead{color:var(--gray);font-size:13.5px;margin:6px 0 16px}
+  ul{margin:8px 0;padding-left:20px} li{font-size:14px;margin:5px 0}
+  .pro li::marker{color:var(--green)} .con li::marker{color:var(--red)}
+  .card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:20px 22px;margin:14px 0}
+  .card.key{border-color:#A7D7CE;box-shadow:0 2px 0 #D8EDE8}
+  .card.slim{padding:15px 18px}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.2px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:var(--ice);font-weight:650;color:var(--lake-d);font-size:12.5px;white-space:nowrap}
+  tr:last-child td{border-bottom:none}
+  .warn{background:var(--red-l);border:1px solid #F3C9B4;border-left:4px solid var(--red);
+        border-radius:10px;padding:14px 17px;margin:16px 0;font-size:13.7px}
+  .warn b{color:var(--red)}
+  .note{background:var(--amber-l);border:1px solid #F3DFB8;border-left:4px solid var(--amber);
+        border-radius:10px;padding:14px 17px;margin:16px 0;font-size:13.7px}
+  .ok{background:var(--green-l);border:1px solid #B6E0D8;border-left:4px solid var(--green);
+      border-radius:10px;padding:14px 17px;margin:16px 0;font-size:13.7px}
+  .idea{background:var(--purple-l);border:1px solid #DDD2F5;border-left:4px solid var(--purple);
+        border-radius:10px;padding:14px 17px;margin:16px 0;font-size:13.7px}
+  code{background:var(--lake-l);color:var(--lake-d);padding:1.5px 5px;border-radius:5px;font-size:12.5px;
+       font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;word-break:break-all}
+  pre{background:#0E4257;color:#DCEAEE;border-radius:12px;padding:14px 16px;overflow-x:auto;
+      font-size:12.4px;line-height:1.65;margin:12px 0;
+      font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  .flow{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0;align-items:center}
+  .flow .step{background:var(--ice);border:1px solid var(--line);border-radius:8px;padding:6px 11px;
+              font-size:12.5px;color:var(--lake-d)}
+  .flow .arw{color:var(--gray)}
+  .pill{display:inline-block;font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:999px;
+        margin-left:8px;vertical-align:2px;white-space:nowrap}
+  .pill.do{background:var(--red-l);color:var(--red)}
+  .pill.me{background:var(--green-l);color:var(--green)}
+  .pill.wait{background:var(--amber-l);color:#A16207}
+  .pill.free{background:var(--ice);color:var(--lake-d)}
+  ol.steps{list-style:none;counter-reset:s;padding:0;margin:14px 0}
+  ol.steps>li{counter-increment:s;position:relative;padding:0 0 0 40px;margin:0 0 15px;font-size:14px}
+  ol.steps>li::before{content:counter(s);position:absolute;left:0;top:1px;width:26px;height:26px;
+    border-radius:50%;background:var(--lake);color:#fff;font-size:12.5px;font-weight:600;
+    display:flex;align-items:center;justify-content:center}
+  ol.steps>li b{color:var(--lake-d)}
+  .chk{list-style:none;padding:0;margin:10px 0}
+  .chk li{position:relative;padding-left:26px;font-size:13.8px;margin:6px 0}
+  .chk li::before{content:"";position:absolute;left:0;top:5px;width:14px;height:14px;
+    border:1.6px solid var(--lake);border-radius:4px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .swatch{font-size:12.4px;color:var(--gray)}
+  footer{margin-top:46px;padding-top:20px;border-top:1px solid var(--line);color:var(--gray);font-size:12.5px}
+  @media(max-width:700px){.wrap{padding:20px 15px 64px}header.top{padding:22px 19px;border-radius:16px}
+    header.top h1{font-size:20px}.card{padding:17px 16px}th,td{padding:7px 8px;font-size:12.3px}
+    .grid2{grid-template-columns:1fr}}
+  @media print{body{background:#fff}.wrap{max-width:none;padding:0}
+    h2{page-break-after:avoid}.card,.warn,.note,.ok,.idea{page-break-inside:avoid}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <p class="kicker">Hook Happyness · 落地计划</p>
+  <h1>四条线一步步做：Google 商家 / LINE Messaging / OTP / Meta</h1>
+  <p>四条线不是四件并列的事，它们是一条链：<b>Google 让人找到你 → LINE 把人留住 → OTP 让你认识他 → Meta 把内容传出去</b>。
+  下面每条线都拆成「你点哪里、填什么」＋「我写什么代码」两栏，你只要照着把<b>红色标签</b>的步骤做完，
+  剩下的交给我。</p>
+</header>
+
+<div class="ok">
+  <p style="margin:0 0 8px"><b>先说三个能帮你省时间的结论（都是这次核实平台规则时发现的）：</b></p>
+  <ul style="margin:0">
+    <li><b>LINE Messaging API 的代码我们已经写完了。</b>webhook、验签、自动绑定接收人、日报推送 —— 全在仓库里。
+    你缺的只是「在 LINE 侧把渠道打开 + 填 3 个环境变量」，<b>今天就能跑通</b>，不用等我开发。</li>
+    <li><b>Google 商家资料的 API 有个 60 天硬门槛</b>：必须「已验证且活跃满 60 天」才能申请。
+    所以<b>认领验证这件事越早做越好</b>，而且它完全不依赖我和其他人 —— 今天就能开始。</li>
+    <li><b>Meta 那条线对你这门生意性价比最低。</b>发一条 FB/IG 帖文，手机上手点 30 秒；为了自动化它去走
+    App Review ＋企业认证，可能要等 2–6 周。建议<b>排最后、而且第一期只做一个接口</b>（详见第柒节）。</li>
+  </ul>
+</div>
+
+<!-- ══════════════════ 总览 ══════════════════ -->
+<h2><span class="num">序</span>总览：先做什么、等什么、什么时候见效</h2>
+
+<table>
+  <thead><tr><th>线</th><th>现在什么状态</th><th>卡在谁</th><th>做完要多久</th><th>什么时候见效</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><b>① Google 商家资料</b><br><span class="swatch">认领 + 验证 + 填满</span></td>
+      <td>未知（待你确认是否已认领）</td>
+      <td><b>只有你</b></td>
+      <td>填资料 1–2 小时<br>验证 5 分钟～14 天</td>
+      <td><b>验证通过当天</b>就出现在地图上</td>
+    </tr>
+    <tr>
+      <td><b>② LINE Messaging API</b><br><span class="swatch">打开渠道 + 填 env</span></td>
+      <td><b>代码已完成</b>，只差渠道配置</td>
+      <td><b>只有你</b></td>
+      <td>30–40 分钟</td>
+      <td><b>当天</b></td>
+    </tr>
+    <tr>
+      <td><b>③ OTP（LINE Login）</b><br><span class="swatch">给顾客上真身份</span></td>
+      <td>计划已定稿（<code>otp-line-login-oa-plan.html</code>），代码未写</td>
+      <td><b>你先</b>建渠道 → <b>我</b>写代码</td>
+      <td>你 40 分钟<br>我 1–2 天<br>等生效 ~2 小时</td>
+      <td>上线当天</td>
+    </tr>
+    <tr>
+      <td><b>④ Meta（FB / IG）</b><br><span class="swatch">自动发帖</span></td>
+      <td>未开始</td>
+      <td><b>你先</b>建 App → <b>我</b>写接口</td>
+      <td>你 1 小时<br>我 1 天<br>审核 0～14 工作日</td>
+      <td>审核通过后</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="note">
+  <b>建议顺序（按「你能立刻动手」排，不按重要性排）：</b>
+  <ol style="margin:8px 0 0">
+    <li><b>今天</b>：做 ① 的「认领 + 验证 + 填满」—— 因为它的 60 天计时越早开始越好，且不需要任何人配合。</li>
+    <li><b>今天</b>：做 ② 的渠道配置 —— 30 分钟，当天就能看到日报自动发到 LINE。</li>
+    <li><b>本周</b>：做 ③ 的第一步（建 LINE Login 渠道）—— 它和 ② 共用同一个 Provider，趁热一起建；建好告诉我，我开工写代码。</li>
+    <li><b>下周或更晚</b>：④ 只做「建 App + 拿长期 token」，接口我写好了再谈审核。</li>
+  </ol>
+</div>
+
+<!-- ══════════════════ ① GBP ══════════════════ -->
+<h2><span class="num">壹</span>Google 商家资料 <span class="tag">让人在 Google 地图上找到你</span></h2>
+<p class="lead">这是四条线里<b>唯一「做完当天就带客人」</b>的一条，也是唯一完全不需要我和 API 的一条。</p>
+
+<div class="card key">
+  <h3 style="margin-top:0">先分清你是三种情形里的哪一种</h3>
+  <table>
+    <thead><tr><th>情形</th><th>怎么判断</th><th>你要走的路</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><b>A. 还没有资料</b></td>
+        <td>在 Google 地图搜店名，搜不到</td>
+        <td>去 <code>business.google.com/add</code> 新建</td>
+      </tr>
+      <tr>
+        <td><b>B. 有资料但没人认领</b><br><span class="swatch">最常见</span></td>
+        <td>搜得到，但页面上有「认领此商家 / Own this business?」</td>
+        <td>点「认领」→ 走验证</td>
+      </tr>
+      <tr>
+        <td><b>C. 已被别人认领</b></td>
+        <td>搜得到，但没有认领入口；进去能看到别人在管</td>
+        <td>走<b>所有权转让申请</b>（发给现任管理者），不是新建一个</td>
+      </tr>
+      <tr style="background:#FFF8F4">
+        <td><b>D. 搜到了两个资料</b><br><span class="swatch">← 你现在是这个</span></td>
+        <td>用不同关键词搜出<b>不同地址</b>：英文名一个地址、泰文名另一个地址</td>
+        <td><b>先别动手</b>，按下面的「情形 D 专章」走 —— <b>顺序错了会永久丢评论</b></td>
+      </tr>
+    </tbody>
+  </table>
+  <p><b>⚠️ 情形 C / D 都千万别自己再新建一个</b> —— 同址多个资料会被判重复，几个都可能被冻结。</p>
+  <p style="margin-bottom:0"><b>⚠️ 但也不要急着报重复。</b>Google 的自动系统只处理「明显重复」，而「明显」的前提是
+  <b>名称、地址、电话三项一致</b>。两个资料连地址都不一样就直接提交，大概率被搁置、
+  白等两三周。正确顺序是<b>先对齐 NAP，再报重复</b>（专章第 2 步）。</p>
+</div>
+
+<!-- ── 情形 D 专章 ── -->
+<div class="card key" style="border-color:#F3C9B4;box-shadow:0 2px 0 #F7DCCB">
+  <h3 style="margin-top:0;color:var(--red)">情形 D 专章：同一个塘，Google 上有两个资料</h3>
+
+  <p><b>先搞清 Google 的机制，这决定了你每一步该做什么：</b></p>
+  <ul>
+    <li>Google <b>不会</b>把两个资料「合成一个」。它只会判定其中一个不该存在，
+      <b>把那个从搜索和地图上撤掉</b>，把信息与评论并到留下的那个上。</li>
+    <li>官方说法：评论会合并，<b>但「对评论的回复」可能丢失</b>。
+      实测统计约 <b>95%</b> 的已批准合并会迁移评论。</li>
+    <li>❗<b>被撤掉那个上「你自己发的内容」会永久消失</b> —— 动态、你上传的照片/视频、你对评论的回复。
+      顾客写的评论会留下。<b>这一条决定「该保留哪一个」。</b></li>
+  </ul>
+
+  <h4>第 0 步：先取证，别急着点任何东西 <span class="pill do">需你操作</span> <span class="pill wait">10 分钟</span></h4>
+  <p>两个资料分别打开，抄下这几项。这份清单你填完发我，我来判断该保留哪个、走哪条路：</p>
+  <table>
+    <thead><tr><th>要记的</th><th>资料甲<br><span class="swatch">英文名搜出来的（地址错的）</span></th><th>资料乙<br><span class="swatch">泰文名搜出来的（地址对的）</span></th></tr></thead>
+    <tbody>
+      <tr><td><b>资料名称</b>（逐字）</td><td></td><td></td></tr>
+      <tr><td><b>完整地址</b></td><td></td><td></td></tr>
+      <tr><td><b>电话</b></td><td></td><td></td></tr>
+      <tr><td><b>网站</b></td><td></td><td></td></tr>
+      <tr><td><b>主分类</b></td><td></td><td></td></tr>
+      <tr><td><b>评分 / 评论数</b></td><td></td><td></td></tr>
+      <tr><td><b>照片数</b></td><td></td><td></td></tr>
+      <tr><td><b>有没有「认领此商家」入口</b></td><td></td><td></td></tr>
+      <tr><td><b>Place ID</b></td><td></td><td></td></tr>
+    </tbody>
+  </table>
+  <div class="note">
+    <b>怎么拿 Place ID（最省事的判重方法）：</b>打开 Google 官方的
+    <b>Place ID Finder</b>（搜「Google Place ID Finder」即可，或
+    <code>developers.google.com/maps/documentation/places/web-service/place-id</code>），
+    把两个名称分别搜一遍。<b>如果出现两个不同的 Place ID，就确认是两个独立资料。</b>
+    只有一个 ID 的话，说明是同一个资料 —— 那问题就变成「名称/地址字段被改错了」，处理方式完全不同。
+  </div>
+  <p class="swatch">另外顺手看一眼：登录商家资料后台 → <b>更新 → 建议的修改 → 可能的重复项</b>。
+  Google 有时会自己把可疑重复列在这里，等于给你答案。</p>
+
+  <h4>第 1 步：判断这到底是哪种关系</h4>
+  <table>
+    <thead><tr><th>情况</th><th>判断依据</th><th>结论</th></tr></thead>
+    <tbody>
+      <tr><td>同一个商家的重复资料</td><td>名称近似、是同一个塘、只是地址信息不同</td><td><b>报重复，撤掉一个</b>（主路径）</td></tr>
+      <tr><td>搬家后留下的旧地址</td><td>旧地址是你以前用过的地方</td><td>Google 明确把「搬家后旧地址还在」也<b>算作重复</b> → 同样报重复</td></tr>
+      <tr><td>真的是两个不同地点</td><td>塘有两个入口 / 两个营业点，招牌都不同</td><td><b>不要合并</b>。这种 Google 是允许的，但每个都要有<b>自己的招牌和入口</b>，处理方式完全不同</td></tr>
+    </tbody>
+  </table>
+
+  <h4>第 2 步：先把 NAP 对齐（这步不能跳）</h4>
+  <p>NAP ＝ 名称 / 地址 / 电话。Google 的自动系统只认三项一致的「明显重复」。
+  所以顺序是：</p>
+  <ol class="steps">
+    <li>先确定<b>要保留哪一个</b>。判断标准按优先级：
+      ① <b>谁是你真的在做生意的地方</b>（地址对的优先）；
+      ② <b>谁上面有你自己发过的内容</b>（动辄几十条动态、几百张照片的话，保留它更省事）；
+      ③ 谁的评论多。（评论能迁移，所以这条优先级最低。）</li>
+    <li>把<b>要淘汰的那个</b>的信息改成和保留的那个一致 —— 在它页面上点
+      <b>「建议修改」→「更改名称或其他详细信息」</b>，把名称/地址/电话改成正确的，等审核通过。<br>
+      <span class="swatch">⚠️ 如果它已被别人认领，你改不动 → 直接跳到第 3 步的「已被别人认领」那一行。</span></li>
+    <li>三项一致之后，才进入第 3 步报重复。</li>
+  </ol>
+
+  <h4>第 3 步：按「谁在管被淘汰的那个」分三条路</h4>
+  <table>
+    <thead><tr><th>被淘汰那个的状态</th><th>怎么做</th><th>耗时</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><b>无人认领</b><br><span class="swatch">最常见，也最好办</span></td>
+        <td>在 Google 地图打开它 → <b>「建议修改」→「已关闭或不存在」→「与其他地点重复」</b>
+          → 指定要保留的那个（明确列出来就选它，没列就选「以上都不是」）</td>
+        <td>1–3 周</td>
+      </tr>
+      <tr>
+        <td><b>两个都在你名下</b></td>
+        <td>不用报重复，<b>直接删掉弱的那个</b>：进那个资料 → 更多 → 商家资料设置 →
+          <b>移除商家资料</b> → 移除资料内容和管理员。<br>
+          ⚠️ 这样会永久删掉<b>你自己</b>发的动态/照片/评论回复，但<b>顾客的评论会留下</b>。
+          只有主所有者能操作，新加的所有者/管理员要等 7 天</td>
+        <td>立即</td>
+      </tr>
+      <tr>
+        <td><b>已被别人认领</b></td>
+        <td>先<b>请求所有权</b>（Google 会给现任管理者发邮件；对方 7 天不回应，你就可以提交<b>冲突申诉</b>）。
+          申诉要备：<b>营业执照 / 公司注册文件、显示地址的水电账单或银行对账单、
+          带店名的招牌照片</b>，有税单更好</td>
+        <td>2–4 周</td>
+      </tr>
+      <tr>
+        <td><b>页面上压根没有「重复」这个选项</b></td>
+        <td>服务区域类商家常见。走<b>商家资料联系表单</b>，选「编辑和更新我的商家资料」，
+          把两个资料的 <b>Place ID</b> 都写进去，说明哪个是错的、要并进哪个</td>
+        <td>以工单为准</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="warn">
+    <b>四件绝对不能做的事：</b>
+    <ol style="margin:8px 0 0">
+      <li><b>不要把要淘汰的那个「标记为永久关闭」。</b>这条路只是把图钉拿掉，<b>不会迁移评论</b> ——
+        那些评论就<b>永久没了</b>。除非它真的是你已经停业的地方，否则一律走「与其他地点重复」。</li>
+      <li><b>不要新建第三个资料。</b>想「用正确的名字重开一个」是本能的反应，也是唯一会让你变得更糟的做法。</li>
+      <li><b>合并审核期间不要改「要保留那个」的名称 / 地址 / 分类。</b>一改就重置审核，还可能触发重新验证。</li>
+      <li><b>不要重复提交。</b>第二次提交会取消第一次排队。</li>
+    </ol>
+  </div>
+
+  <h4>第 4 步：留底，然后等</h4>
+  <p>提交前<b>两个资料的评论数、照片数都截图存好</b>。合并一般 <b>3 天～6 周</b>（多数两周左右）。
+  万一评论真的丢了，<b>那张截图是你申诉时唯一的依据</b>。</p>
+
+  <h4>第 5 步：根因是「名字有三个版本」，这个必须一起收口</h4>
+  <div class="warn">
+    <b>现在三个地方的名字不一致：</b>
+    Google 上是 <code>Hook the Happyness</code>（多一个 the）、
+    Facebook 主页是 <code>Hookhappyness</code>、
+    网站品牌是 <code>Hook Happyness</code>。
+    <b>名字不一致本身就是重复资料的成因之一</b>（Google 从多个数据源抓信息，抓出两个不同名字就会当成两个商家）。
+    所以合并完必须顺手统一，否则过一阵还会再长出第三个。
+  </div>
+  <p><b>我的建议：</b>官方名统一成 <b>Hook Happyness</b>（与网站、FB 主页一致）；
+  泰文名 <code>ฮุค เดอะ แฮปปี้เนส</code> 作为<b>泰文搜索的别名</b>处理 ——
+  写在商家描述里、并让网站泰文版和地图定位链接都用它。
+  <b>前提是：这个名字在实体的招牌/门头上也是这么写的</b>（Google 的命名规则要求与现实一致，
+  不一致会改名失败甚至被判违规）。这件事我需要你确认实体招牌上写的是什么。</p>
+  <div class="note">
+    <b>另外提醒一句：</b>不管最后保留哪个名字，
+    <b>「认领 + 验证」应该做在地址正确的那个上</b>（也就是你现在搜泰文名找到的那个）。
+    别先花力气去认领那个地址错的 —— 验证要现场录视频，地址不对会直接卡住。
+  </div>
+</div>
+
+<h3>第 1 步：认领 / 新建 <span class="pill do">需你操作</span></h3>
+<ol class="steps">
+  <li><b>用哪个 Google 账号？</b>用<b>钓场以后长期持有的那个</b>，不要用个人小号。
+  这个账号会被记为该商家的所有者，以后所有验证、转账、API 申请都要用它。</li>
+  <li>Google 地图搜店名 → 找到就点<b>「认领此商家」</b> → 「立即管理」；找不到就去
+  <code>business.google.com/add</code>。店名建议填 <b>Hook Happyness</b>（和 FB 主页一致），
+  中文「乐钓鱼塘」可作为别名 —— 但<b>不要</b>在店名里堆关键词（会被判违规改名）。</li>
+  <li>填地址时：<b>如果客人真的会开车到这里吃鱼、钓鱼</b>，就填真实门牌，让地址公开显示；
+  如果你<b>不想公布门牌</b>（比如塘在自家院内），就选「服务区域商家」并画服务范围 ——
+  这个选择在验证前定好，中途改会触发重新验证。这一步你先判断，我按你的选择调网站上的文案。</li>
+</ol>
+
+<h3>第 2 步：验证 <span class="pill do">需你操作</span></h3>
+<div class="warn">
+  <b>最重要的一条规则：验证方式不是你选的。</b>Google 根据商家类型、公开信息、所在地区、营业时间
+  <b>自动决定</b>给你哪几种，而且不能切换。所以下面的表是「可能给你什么」，不是「你可以挑什么」。
+</div>
+<table>
+  <thead><tr><th>方式</th><th>你要准备什么</th><th>耗时</th><th>注意</th></tr></thead>
+  <tbody>
+    <tr><td><b>电话 / 短信</b></td><td>营业电话能接到（不要是 IVR 语音菜单）</td><td>几分钟</td><td>最快，但不是每家都有</td></tr>
+    <tr><td><b>邮件</b></td><td>用<b>与你网站域名一致</b>的邮箱</td><td>几分钟</td><td>Gmail 之类的免费邮箱通常不给</td></tr>
+    <tr><td><b>录视频</b><br><span class="swatch">现在最常见</span></td>
+      <td>手机在营业时间内、在塘边现场录</td><td>提交后 ≤5 个工作日</td>
+      <td>详见下面的视频要求</td></tr>
+    <tr><td><b>实时视频通话</b></td><td>在营业时间内、在店内和 Google 客服连线</td><td>当场</td><td>不是每家都有</td></tr>
+    <tr><td><b>明信片</b></td><td>能收信的地址</td><td>最多 14 天</td><td>码 30 天内有效</td></tr>
+    <tr><td><b>自动验证</b></td><td>网站已经用 Google Search Console 验证过</td><td>立即</td><td>少见的捷径，值得先试试</td></tr>
+  </tbody>
+</table>
+
+<div class="card">
+  <h4>如果让你录视频，这样拍才能过</h4>
+  <p>硬要求：<b>必须通过商家资料页面当场录、当场传</b>（不能传手机里已有的视频），
+  <b>≥30 秒</b>、<b>一镜到底不剪辑</b>、不加文字、不拼片段。<b>不要拍到别人脸</b>，
+  不要拍到银行账号、税号、身份证号。</p>
+  <p>视频里要同时证明三件事 —— 建议按这个路线走一遍（先空走一次再录）：</p>
+  <ul class="pro">
+    <li><b>这是哪儿</b>：先拍路口/路牌/邻近地标 → 摇到你家入口招牌</li>
+    <li><b>这生意真实存在</b>：拍招牌上的店名（要和资料上一致）→ 拍鱼塘、钓位、煮鱼的地方、菜单牌</li>
+    <li><b>你是管事的</b>：打开员工才能进的门/仓库/收银抽屉，或操作只有员工能用的东西</li>
+  </ul>
+  <p style="margin-bottom:0"><b>最常见的被拒原因</b>：招牌上看不到店名、没拍周边环境、看不出你有管理权。</p>
+</div>
+
+<div class="note">
+  <b>两个小捷径，建议先试：</b>
+  ① 如果你的网站已经做过 Google Search Console 验证，可能直接「自动验证」，省掉全部等待；
+  ② 明信片一旦下单，<b>在收到之前不要改店名、地址、分类</b> —— 一改就作废；
+  也<b>不要重复申请</b>，第二次会取消第一次。
+</div>
+
+<h3>第 3 步：把资料填满 <span class="pill do">需你操作</span> <span class="pill free">填完当天就有排名帮助</span></h3>
+<p>验证只是拿到钥匙；<b>能不能被搜到靠的是「填得全不全」</b>。这些字段我建议一次填完：</p>
+<ul class="chk">
+  <li><b>主分类</b>：选「钓鱼场 / Fishing pond」类的类目；<b>附加分类</b>再加「餐厅」「咖啡厅」——附加分类会显著扩大你能出现的搜索词</li>
+  <li><b>营业时间</b>：09:00–18:00；<b>周一整天设为休息</b>（要和网站一致，不一致会被判信息不准）</li>
+  <li><b>电话</b>：一个能接的号（也是你以后可能收到验证码的号）</li>
+  <li><b>网站</b>：填 <code>https://hookfishpond.com</code>（自有域名已上线，2026-09-28 实测；旧 <code>vercel.app</code> 地址不要再对外给）</li>
+  <li><b>商家描述</b>（下面的三语文案可以直接抄）</li>
+  <li><b>属性</b>：按实际情况勾「可用餐」「适合家庭」「有停车场」「接受现金 / PromptPay」等</li>
+  <li><b>照片</b>：至少 10 张 —— 门面、钓位、鱼塘全景、上菜、菜单、客人钓到大鱼。你网站 <code>public/media/</code> 里的实拍直接复用</li>
+</ul>
+
+<div class="card">
+  <h4>商家描述：可以直接抄（三语）</h4>
+  <p class="swatch">Google 描述上限 750 字符。下面这版是从你网站上已确认的规则里抽的，没有编造任何事实。</p>
+  <h4>中文</h4>
+  <p style="font-size:13.5px">乐钓鱼塘（Hook Happyness）是位于泰国的一处休闲垂钓场，设有休闲塘与竞赛塘两种玩法。
+  休闲塘 100 泰铢每位全天，可自带钓竿或租用；竞赛塘 500 泰铢每人每天，10 人起、最多 40 人。
+  每日营业 09:00–18:00，周一休息。钓上来的鱼可以带走：所有鱼种每公斤以内免费，超出部分 60 泰铢每公斤
+  （湄公巨鲶不可带走）。也提供代加工服务，清蒸、油炸、烤制同价 100 泰铢每条。
+  塘边有茅草屋与咖啡厅座位，可点餐饮。欢迎自带竿，禁止自带饵料与餐饮，禁止下水。</p>
+  <h4>English</h4>
+  <p style="font-size:13.5px">Hook Happyness is a fishing park in Thailand with two ponds. The Leisure Pond is
+  THB 100 per person for the full day (bring your own rod or rent one). The Competition Pond is THB 500 per
+  person per day, minimum 10 and maximum 40 anglers. Open daily 09:00–18:00, closed Mondays.
+  Fish you catch are yours to take home: the first 1 kg of any species is free, then THB 60 per kg
+  (Mekong giant catfish may not be taken). Cooking service is THB 100 per fish, steamed, fried or grilled.
+  Thatched huts and café seating available with food and drinks. Bring your own rod; outside bait, outside
+  food and swimming are not permitted.</p>
+  <h4>ไทย</h4>
+  <p style="font-size:13.5px">ฮุก แฮปปี้เนส เป็นบ่อตกปลาในประเทศไทย มีสองบ่อ บ่อพักผ่อน 100 บาทต่อคนต่อวัน
+  (นำคันเบ็ดมาเองหรือเช่า) บ่อแข่งขัน 500 บาทต่อคนต่อวัน เริ่ม 10 คน สูงสุด 40 คน เปิดทุกวัน 09:00–18:00
+  หยุดทุกวันจันทร์ ปลาที่ตกได้นำกลับบ้านได้ ทุกชนิดน้ำหนักไม่เกิน 1 กิโลกรัมแรกฟรี ส่วนที่เกินคิด 60 บาทต่อกิโลกรัม
+  (ปลาบึกนำกลับไม่ได้) มีบริการปรุงอาหาร 100 บาทต่อตัว นึ่ง ทอด หรือย่าง ราคาเดียวกัน
+  มีศาลาและที่นั่งคาเฟ่ พร้อมอาหารและเครื่องดื่ม นำคันเบ็ดมาเองได้ ห้ามนำเหยื่อและอาหารจากภายนอกเข้ามา ห้ามลงน้ำ</p>
+  <p style="margin-bottom:0" class="swatch">⚠️ 泰文这段我按已确认的规则写好了，但<b>建议你或店里泰籍同事过一眼用词</b>再贴 —— 它是直接给泰国客人看的。</p>
+</div>
+
+<h3>第 4 步：验证通过之后，日常要做的三件事</h3>
+<div class="grid2">
+  <div class="card slim">
+    <h4 style="margin-top:0">每周：发 1 条「最新动态」</h4>
+    <p style="margin-bottom:0;font-size:13.4px">今日放鱼、今日渔获、节日营业调整 —— 这类内容在 Google 搜索里
+    能直接展示，是免费的曝光位。以后可以让网站后台一键发（见下面的 API 部分）。</p>
+  </div>
+  <div class="card slim">
+    <h4 style="margin-top:0">每条评论都回</h4>
+    <p style="margin-bottom:0;font-size:13.4px">回复率影响排名。泰文好评回泰文，中文回中文。
+    差评优先回「具体怎么补救」而不是解释。</p>
+  </div>
+  <div class="card slim">
+    <h4 style="margin-top:0">让满意的客人留评</h4>
+    <p style="margin-bottom:0;font-size:13.4px">结账时给二维码，或在小票上印「给好评」短链。
+    你已有 80mm 打印，这个可以直接加一行。</p>
+  </div>
+  <div class="card slim">
+    <h4 style="margin-top:0">照片每月更新</h4>
+    <p style="margin-bottom:0;font-size:13.4px">新照片 = 活跃信号。同一条鱼塘、不同季节的光，也算新内容。</p>
+  </div>
+</div>
+
+<h3>第 5 步：API —— 60 天后再谈，而且别指望评论自动回复</h3>
+<div class="warn">
+  <b>门槛（Google 官方规则）：</b>必须①<b>已验证且活跃满 60 天</b>、②<b>有代表该商家的网站</b>、
+  ③资料填写完整。三条都满足才能申请，<b>新资料申请一律被拒</b>。
+</div>
+<table>
+  <thead><tr><th>项目</th><th>内容</th></tr></thead>
+  <tbody>
+    <tr><td>申请入口</td><td>Google 商家资料 API 联系表单 → 下拉选 <b>「Application for Basic API Access」</b></td></tr>
+    <tr><td>要准备</td><td>Google Cloud <b>项目编号</b>（是「编号 / number」，不是「ID」）、公司名、联系人邮箱、用途说明</td></tr>
+    <tr><td>邮箱要求</td><td>必须是<b>该商家资料上的所有者或管理者邮箱</b>，且<b>邮箱域名和网站域名要一致</b></td></tr>
+    <tr><td>怎么写用途</td><td>写具体：「每天自动把今日营业状态与渔获简报发到本店的商家资料动态」。别写「for automation」这种空话</td></tr>
+    <tr><td>怎么知道批了</td><td>去 Cloud Console 看配额：<b>0 QPM = 没批；300 QPM = 批了</b>（不批的话每次调用都 403）</td></tr>
+    <tr><td>审核时长</td><td>数天到数周</td></tr>
+  </tbody>
+</table>
+<div class="warn">
+  <b>一个必须提前知道的坑：评论的接口是「另一个 API」，而且它被 Google 单独锁着。</b>
+  即使你拿到了 Basic API Access、配额显示 300 QPM、权限也全给，
+  <b>评论接口仍可能返回 403</b> —— 它属于 Google 白名单控制的服务，自己开不了。
+  <b>所以不要把「自动回复评论」写进计划</b>，回评论就人工做（每条 30 秒）。
+  第一期 API 只做一件事：<b>自动发「最新动态」</b>。
+</div>
+<div class="ok">
+  <b>我的活（等 60 天 + 批下来之后）：</b>
+  写一个 <code>/api/admin/gbp/post</code>，从后台一键把「今日渔获 / 今日休塘」发到商家资料动态。
+  在那之前，<b>这件事完全不需要我</b> —— 你自己在后台点着发就行。
+</div>
+
+<!-- ══════════════════ ② LINE Messaging ══════════════════ -->
+<h2><span class="num">贰</span>LINE Messaging API <span class="tag">代码已就绪，只差打开开关</span></h2>
+
+<div class="ok">
+  <p style="margin:0"><b>已经写好的部分（你不用管）：</b>
+  新订单 / 日报的推送客户端 <code>src/lib/line.ts</code>（含签名验签、文本截断）、
+  自动把发消息的人登记成接收人的 webhook <code>/api/webhooks/line</code>、
+  后台「LINE 日报」管理页 <code>/api/admin/line</code>、
+  每天 21:00（泰国时间）自动跑的 <code>/api/cron/daily-report</code>。
+  <b>你缺的只有在 LINE 那边打开渠道 + 填 3 个环境变量。</b></p>
+</div>
+
+<h3>第 1 步：把现有官方账号接上 Messaging API <span class="pill do">需你操作</span></h3>
+<ol class="steps">
+  <li>打开 <b>LINE Official Account Manager</b>（<code>manager.line.biz</code>）→ 选你的官方账号
+  <code>@300bsham</code> → <b>设置 → Messaging API</b> → 点「启用 Messaging API」。</li>
+  <li>它会让你<b>选一个 Provider</b>（服务提供方）。<b>⚠️ 这一步是整个四条线里最不能出错的一步</b> ——
+  选你已有的那个 Provider，<b>不要新建</b>。原因：以后做 OTP 时，LINE Login 渠道
+  <b>必须放在同一个 Provider 下</b>，而「用户 ID」是按 Provider 签发的，渠道建好后<b>不能迁移</b>。
+  现在选错，以后要么重建、要么用户全部重新认识一遍。</li>
+  <li>启用后，官方账号的「自动回复消息」和「加好友时的欢迎消息」会默认开着，
+  <b>请去 LINE Official Account Manager 里把它们关掉</b> —— 否则你的客人和你自己都会收到两套消息，
+  而且我们的 webhook 已经会回「✅ 绑定成功」这类有意义的回复。</li>
+  <li>去 <b>LINE Developers Console</b>（<code>developers.line.biz</code>）→ 找到这个 Messaging API 渠道 →
+  <b>Basic settings</b> 页签，记下两个值（先别贴到聊天里，见第 3 步）：<br>
+  <code>Channel secret</code>、<code>Channel access token (long-lived)</code>（点 Issue 生成）。</li>
+  <li>同一个页面往下找到 <b>Webhook settings</b>：
+  把 <b>Webhook URL</b> 填成
+  <code>https://hookfishpond.com/api/webhooks/line</code>
+  → 点 <b>Verify</b> → 看到 <b>Success</b>。<br>
+  <span class="swatch">（这一步现在还验不过 —— 因为环境变量还没填。先填完第 3 步再回来 Verify。）</span></li>
+  <li>把 <b>Use webhook</b> 打开；并把 <b>「允许加入群组聊天」</b>按需打开
+  （打开后可以把店员拉一个群，日报直接发到群里，比发给个人更好）。</li>
+</ol>
+
+<h3>第 2 步：本机先跑一次，确认代码没问题</h3>
+<p>这一步我来做。我会在本机起服务、用一个假的签名请求打 webhook，确认「验签通过 / 验签失败」两条路都对。</p>
+
+<h3>第 3 步：填 3 个环境变量 <span class="pill do">需你操作</span></h3>
+<div class="warn">
+  <b>怎么填最安全：</b>不要去聊天里粘贴 token。用我写的脚本，<b>值走管道、不经过聊天记录和命令行历史</b>：
+  <pre>cat line.txt | bash scripts/setup-line-env.sh</pre>
+  <span class="swatch">（这个脚本我还没写，你说一声我就补上；它会引导你把
+  <code>LINE_CHANNEL_ACCESS_TOKEN</code> / <code>LINE_CHANNEL_SECRET</code> / <code>CRON_SECRET</code>
+  写进 Vercel，本地只留一份 gitignore 的文件。）</span>
+</div>
+<table>
+  <thead><tr><th>变量</th><th>从哪来</th><th>作用</th></tr></thead>
+  <tbody>
+    <tr><td><code>LINE_CHANNEL_ACCESS_TOKEN</code></td><td>LINE Developers → Messaging API 渠道 → Issue</td><td>调推送接口的凭据</td></tr>
+    <tr><td><code>LINE_CHANNEL_SECRET</code></td><td>同上 → Basic settings</td><td>验证 webhook 请求确实来自 LINE</td></tr>
+    <tr><td><code>CRON_SECRET</code></td><td><b>你自己生成</b>：<code>openssl rand -base64 32</code></td><td>让 Vercel 的定时任务能免登录调日报接口</td></tr>
+  </tbody>
+</table>
+
+<h3>第 4 步：验收 <span class="pill free">做完当天可验</span></h3>
+<ul class="chk">
+  <li>LINE Developers → Webhook URL 点 <b>Verify</b> → <b>Success</b></li>
+  <li>你用自己的 LINE 加 <code>@300bsham</code> 为好友 → 发一句「绑定」→ 立刻收到 <b>「✅ 绑定成功…」</b></li>
+  <li>后台「报表 → LINE 日报」页能看到你刚绑定进来的这条记录（带显示名）</li>
+  <li>后台点「发送测试日报」→ 你手机上收到一条假数据日报</li>
+  <li>把店员拉进一个 LINE 群、把官方账号也拉进去、在群里任发一句 → 该群被登记为接收人 → 日报发到群里</li>
+</ul>
+
+<h3>第 5 步：下一步能加什么（我建议的优先级）</h3>
+<table>
+  <thead><tr><th>功能</th><th>价值</th><th>成本</th><th>建议</th></tr></thead>
+  <tbody>
+    <tr><td><b>新订单实时推给店员群</b></td><td>高（现在要靠后厨单打印机）</td><td>小</td><td><b>可以马上做</b></td></tr>
+    <tr><td><b>预约确认自动回</b></td><td>高（减少人工回消息）</td><td>小</td><td><b>可以马上做</b></td></tr>
+    <tr><td>「今日渔获 / 今日休塘」推给全部好友</td><td>中（要主动推送，消耗配额）</td><td>小</td><td>等有足够好友数再做</td></tr>
+    <tr><td>图文菜单（Rich menu）</td><td>中（点餐入口）</td><td>中</td><td>和 OTP 一起做更划算</td></tr>
+    <tr><td>优惠券 / 集点</td><td>中</td><td>中</td><td>以后</td></tr>
+  </tbody>
+</table>
+<div class="note">
+  <b>成本要点：</b>你项目里已经在用的 <code>replyLineText</code> 是<b>「回复消息」—— 免费，而且不占用官方账号的推送配额</b>。
+  所以客人跟你互动（问位置、问价、报短码）这类场景，一律用回复，成本是 0。
+  只有「主动推送」（日报、促销）才消耗配额 —— 具体额度以 LINE 官方后台「使用状況」页显示为准，别按旧文章的数字算。
+</div>
+
+<!-- ══════════════════ ③ OTP ══════════════════ -->
+<h2><span class="num">叁</span>OTP 落地 <span class="tag">把顾客身份从「自称」换成「LINE 签发」</span></h2>
+
+<div class="warn">
+  <b>先说清这件事在修什么。</b>今天顾客在网站上的身份，是靠请求头里一个客户端自己填的 <code>x-user-id</code>。
+  这意味着<b>任何人只要改一下这个值，就能看到别人的订单</b>。上一轮审计我把能封的口都封了
+  （必须带上匹配的 <code>?userId=</code>、返回的手机号打码），但那都是<b>缓解</b>。
+  真正修掉它只有一条路：<b>让身份由第三方签发，顾客伪造不了</b>。
+  选定的方案是 LINE Login —— <b>零短信成本</b>，因为 LINE 是泰国人本来就装在手机里的东西。
+</div>
+
+<p><b>完整方案</b>（流程图、短码的安全设计、为什么 ②+④ 不是两套系统）在另一份文档里：
+<code>docs/otp-line-login-oa-plan.html</code>。这里只给<b>可以照着做的步骤</b>。</p>
+
+<h3>第 1 步：建 LINE Login 渠道 <span class="pill do">需你操作</span> <span class="pill wait">约 40 分钟</span></h3>
+<ol class="steps">
+  <li>去 <code>developers.line.biz</code> → Console → <b>选中你做 Messaging API 时用的那个 Provider</b>
+  （就是第贰节第 1 步里强调过的那个）→ 点 <b>Create a new channel</b> → 类型选 <b>LINE Login</b>。</li>
+  <li>填基本信息：渠道名（建议 <code>Hook Happyness 顾客登录</code>）、渠道描述、App 类型选
+  <b>Web app</b>、邮箱。</li>
+  <li>在 <b>LINE Login</b> 页签填 <b>Callback URL</b>（可填多个，这两个都要）：
+    <ul>
+      <li><code>https://hookfishpond.com/api/auth/line/callback</code>（生产）</li>
+      <li><code>http://127.0.0.1:3100/api/auth/line/callback</code>（我本地调试用）</li>
+    </ul>
+    ⚠️ 回调地址必须<b>逐字符</b>匹配，多一个斜杠都会报 <code>redirect_uri does not match</code>。
+  </li>
+  <li>把 <b>OpenID Connect</b> 打开（这样能拿到 ID token，服务端可以直接验证、不用多一次请求）。</li>
+  <li>找到 <b>Linked LINE Official Account</b>，指到 <code>@300bsham</code>。
+  <b>这一步不指，登录时就不会出现「顺便加官方账号为好友」那个勾选项</b> —— 而那个勾选项正是整个方案的性价比所在。</li>
+  <li>记下 <b>Channel ID</b> 和 <b>Channel secret</b>（同样别贴聊天里）。</li>
+</ol>
+
+<h3>第 2 步：填 2 个环境变量 <span class="pill do">需你操作</span></h3>
+<table>
+  <thead><tr><th>变量</th><th>来源</th></tr></thead>
+  <tbody>
+    <tr><td><code>LINE_LOGIN_CHANNEL_ID</code></td><td>LINE Login 渠道 → Basic settings</td></tr>
+    <tr><td><code>LINE_LOGIN_CHANNEL_SECRET</code></td><td>同上</td></tr>
+  </tbody>
+</table>
+<p class="swatch">填法和第贰节一样：走脚本管道，不进聊天记录。另外这两个值要同时加到 Vercel 和我本地的
+<code>.env.local</code>。</p>
+
+<h3>第 3 步：等约 2 小时生效</h3>
+<p>LINE 的渠道配置不是实时的，一般 2 小时内生效。生效前点授权链接会报错，这不是你的问题。</p>
+
+<h3>第 4 步：我写代码 <span class="pill me">我来做</span> <span class="pill wait">1–2 天</span></h3>
+<table>
+  <thead><tr><th>层次</th><th>要做的改动</th></tr></thead>
+  <tbody>
+    <tr><td>数据层</td><td><code>User</code> 加 <code>lineUserId</code>（唯一索引）。老顾客不受影响，只是没绑</td></tr>
+    <tr><td>会话</td><td>登录成功后签发<b>和后台同一套 HMAC 签名会话</b>（复用 <code>src/lib/auth.ts</code>，不另造一套）</td></tr>
+    <tr><td>接口</td><td>
+      <code>GET /api/auth/line/start</code>（跳转授权，带 <code>bot_prompt=aggressive</code>）<br>
+      <code>GET /api/auth/line/callback</code>（换 token、取 userId、建/找用户、发会话）<br>
+      <code>POST /api/auth/line/code</code>（④ 兜底：网页生成短码）<br>
+      <code>/api/webhooks/line</code> 扩展：识别「客人发来短码」的分支
+    </td></tr>
+    <tr><td>前端</td><td>登录/注册页加「用 LINE 继续」；结账、预约、我的订单三处用到会话的地方统一取新会话</td></tr>
+    <tr><td>安全收口</td><td>有了真身份后，<b>把 <code>x-user-id</code> 这条老路彻底删掉</b>（这是本次改动的真正目的）</td></tr>
+    <tr><td>文案</td><td>三语新增约 20 个键；<b>上线前跑三语核验</b>（你的硬性要求）</td></tr>
+  </tbody>
+</table>
+
+<h3>第 5 步：验收</h3>
+<ul class="chk">
+  <li>手机上点「用 LINE 继续」→ 授权页出现「加官方账号为好友」勾选 → 同意 → 回到网站且已登录</li>
+  <li>故意改请求头里的 <code>x-user-id</code> → 仍然拿不到别人的订单（<b>这条是本次改动的核心验收项</b>）</li>
+  <li>已登录用户刷新页面、换设备重新登录 → 会话正常，且能找回自己的历史订单与预约</li>
+  <li>④ 兜底：网页出短码 → 在 LINE 里发出 → 5 分钟内网页自动变成已登录；同一短码再用一次必须失效</li>
+  <li>三语核验零串味</li>
+</ul>
+
+<!-- ══════════════════ ④ Meta ══════════════════ -->
+<h2><span class="num">肆</span>Meta（Facebook / Instagram）<span class="tag">建议排最后，第一期只做一个接口</span></h2>
+
+<div class="idea">
+  <b>先给一个坦率的判断。</b>你的生意是「客人开车来、坐一下午」的本地生意。
+  FB/IG 的价值在于<b>作为一个内容资产被人看到</b>（这件事<b>人工发就够，而且效果一样</b>），
+  而<b>不是</b>「自动化发帖」这个技术能力本身。
+  为了自动化去走 App Review ＋企业认证，可能要等 2–6 周、提交资料、还可能被拒一次 ——
+  这段时间的投入产出比，比把 Google 商家资料填满、把 LINE 日报跑起来都低得多。
+  <br><br>
+  所以我的建议是：<b>前置动作（转专业账号、绑主页）现在就做掉</b>（20 分钟，顺便也让 IG 主页更像样），
+  <b>接口只做一个</b>：把「今日渔获 / 促销」一键发到 FB 主页 + IG。其余的等真有需求再说。
+</div>
+
+<h3>第 1 步：账号前置 <span class="pill do">需你操作</span> <span class="pill wait">20 分钟</span></h3>
+<ol class="steps">
+  <li><b>IG 必须是「专业账号」。</b>IG 设置 → 账号类型和工具 → 切换为<b>商家</b>或<b>创作者</b>账号。
+  <b>个人账号在 API 上是完全被封死的</b>，不管代码怎么写都发不出去。</li>
+  <li><b>IG 必须绑定一个 Facebook 主页。</b>这是最常被漏掉的一步 —— 因为 Meta 的权限体系是
+  <b>绕着脸书主页走的</b>，哪怕你根本不打算发 FB 也要绑。没有主页就先去建一个（两分钟，不需要发内容）。</li>
+  <li>把 IG 和 FB 主页的名称、简介、营业时间、电话、网站都改成和 Google 商家资料<b>一致</b>。
+  三个地方信息不一致，客人会怀疑，Google 也会降低信任度。</li>
+</ol>
+
+<h3>第 2 步：建 Meta App 并拿长期令牌 <span class="pill do">需你操作</span></h3>
+<ol class="steps">
+  <li><code>developers.facebook.com</code> → 新建 App → 类型必须选 <b>Business</b> →
+  添加 <b>Instagram Graph API</b> 产品。</li>
+  <li>需要的权限（一次全勾上，事后补权限要重新走一遍授权）：
+  <table style="margin-top:8px">
+    <thead><tr><th>权限</th><th>用途</th></tr></thead>
+    <tbody>
+      <tr><td><code>instagram_business_basic</code></td><td>读 IG 资料（发帖必需）</td></tr>
+      <tr><td><code>instagram_business_content_publish</code></td><td><b>发 IG 帖</b></td></tr>
+      <tr><td><code>pages_manage_posts</code></td><td><b>发 FB 主页帖</b></td></tr>
+      <tr><td><code>pages_read_engagement</code></td><td>读主页信息</td></tr>
+      <tr><td><code>instagram_manage_comments</code></td><td>发首条评论（想用话题标签就加）</td></tr>
+    </tbody>
+  </table>
+  </li>
+  <li><b>拿长期令牌。</b>先用 Graph API Explorer 拿短期 token，再换成长期：
+  <pre>GET https://graph.facebook.com/v23.0/oauth/access_token
+    ?grant_type=fb_exchange_token
+    &amp;client_id=&lt;APP_ID&gt;
+    &amp;client_secret=&lt;APP_SECRET&gt;
+    &amp;fb_exchange_token=&lt;短期令牌&gt;</pre>
+  长期令牌<b>有效期约 60 天</b>。</li>
+</ol>
+
+<div class="warn">
+  <b>这条线最容易翻车的地方就在这里：长期令牌 60 天会过期。</b>
+  如果不管它，表现不是报错，而是<b>「某一天开始悄悄不发帖了」</b> —— 你根本不会发现。
+  所以<b>必须</b>配一个自动刷新：
+  <pre>GET https://graph.facebook.com/v23.0/oauth/access_token
+    ?grant_type=fb_exchange_token
+    &amp;client_secret=&lt;APP_SECRET&gt;
+    &amp;fb_exchange_token=&lt;当前的长期令牌&gt;</pre>
+  我会把它挂到你已有的 Vercel Cron 上（你已经有 <code>daily-report</code> 和 <code>stock-sweep</code> 两个定时任务），
+  <b>每 45 天刷新一次并写回数据库</b>，同时在刷新失败时给管理员推一条 LINE 提醒。
+  这件事不做，整个自动化就是「一个月后无声失效」。
+</div>
+
+<h3>第 3 步：我写代码 <span class="pill me">我来做</span> <span class="pill wait">1 天</span></h3>
+<table>
+  <thead><tr><th>接口</th><th>做什么</th></tr></thead>
+  <tbody>
+    <tr><td><code>POST /api/admin/social/post</code></td><td>后台选一张图 + 一句文案 → 同时发 FB 主页与 IG</td></tr>
+    <tr><td><code>GET /api/cron/refresh-meta-token</code></td><td>每 45 天刷新长期令牌，失败推 LINE 告警</td></tr>
+    <tr><td>后台页面</td><td>「📣 发帖」页：从 <code>public/media/</code> 选图、填文案、勾选发到哪、发送历史</td></tr>
+  </tbody>
+</table>
+<p><b>发布流程（Meta 的两步容器模型，我会照这个实现）：</b></p>
+<div class="card">
+  <div class="flow">
+    <span class="step">① POST /media 建容器</span><span class="arw">→</span>
+    <span class="step">② 轮询 status_code 直到 FINISHED</span><span class="arw">→</span>
+    <span class="step">③ POST /media_publish 正式发布</span>
+  </div>
+  <p style="margin-bottom:0" class="swatch">
+  ⚠️ 建容器返回 200 <b>不等于</b>发出去了 —— 必须等到 <code>FINISHED</code> 再 publish，
+  否则偶发失败。容器 <b>24 小时内没 publish 会过期</b>。</p>
+</div>
+<table>
+  <thead><tr><th>规格限制（照这个准备素材）</th><th>值</th></tr></thead>
+  <tbody>
+    <tr><td>图片格式</td><td><b>只支持 JPEG</b>（PNG / WebP / GIF 一律被拒 —— 你 <code>public/media/</code> 里如果是别的格式，我会在发帖时自动转）</td></tr>
+    <tr><td>图片尺寸</td><td>1:1 (1080×1080) / 4:5 (1080×1350) / 1.91:1，单图 ≤8MB</td></tr>
+    <tr><td>图片地址</td><td>必须是<b>公网可访问的 URL</b>（Meta 自己来抓），不能是本地路径</td></tr>
+    <tr><td>文案</td><td>≤2200 字符，话题标签 ≤30 个，前 125 字是「展开」前可见的部分</td></tr>
+    <tr><td>频率上限</td><td>IG：<b>每 24 小时 100 条</b>；FB 主页：每天约 25 条</td></tr>
+    <tr><td>调用上限</td><td>IG：<b>每小时 200 次</b>调用（这个额度 2025 年被大幅下调过，很多应用在没预警的情况下被打挂）</td></tr>
+    <tr><td>轮播</td><td>最多 10 张，且<b>所有图会被裁成第一张的宽高比</b></td></tr>
+  </tbody>
+</table>
+
+<h3>第 4 步：审核 —— 什么时候真的需要 <span class="pill wait">0～14 个工作日</span></h3>
+<div class="note">
+  <b>不要猜，按 Meta 后台的状态判断。</b>去 <b>App Review → Permissions and Features</b>，
+  看每个权限标的是 <b>Standard Access</b> 还是 <b>Advanced Access</b>：
+  <ul style="margin:8px 0 0">
+    <li><b>只操作你自己名下的资产</b>（你自己的主页、你自己的 IG）→ 通常是 <b>Standard Access</b>，
+    往往<b>不需要 App Review</b> 就能跑。这可能是你的情况，值得先直接试一次。</li>
+    <li><b>要操作别人名下的资产</b>（比如帮朋友的门店发帖）→ 必须 <b>Advanced Access</b>
+    ＝ App Review ＋ <b>企业认证</b>，周期以周计，且要提交演示录屏，通常要准备被拒一轮。</li>
+  </ul>
+  如果确实要走，<b>企业认证</b>需要（Meta 会逐字符比对）：
+  营业执照 / 公司注册文件、近期水电账单或银行对账单（证明地址）、法人身份证件。<b>公司名和地址必须与文件完全一致</b>，
+  连空格和括号写法都要对；提交后<b>不要改</b> Business Info，一改就撤销认证、从头再来。
+</div>
+
+<!-- ══════════════════ 风险 ══════════════════ -->
+<h2><span class="num">伍</span>四个「踩了就很难回头」的点</h2>
+<div class="card">
+  <table>
+    <thead><tr><th>坑</th><th>后果</th><th>怎么避</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><b>LINE 渠道建在了新 Provider 下</b></td>
+        <td>用户 ID 按 Provider 签发，渠道<b>不能迁移</b> → 以后做 OTP 要么重建、要么老用户全部重认一遍</td>
+        <td>第贰节第 1 步：<b>选已有的那个 Provider</b>，绝对不要新建</td>
+      </tr>
+      <tr>
+        <td><b>自己给同址新建了一个 Google 商家资料</b></td>
+        <td>重复资料 → 两个都可能被冻结</td>
+        <td>先搜有没有；已有且被他人认领 → 走<b>所有权转让申请</b></td>
+      </tr>
+      <tr>
+        <td><b>明信片在途时改了店名 / 地址 / 分类</b></td>
+        <td>验证码作废，重新排队</td>
+        <td>下单后<b>什么都别改</b>，也别重复申请（第二次会取消第一次）</td>
+      </tr>
+      <tr>
+        <td><b>Meta 长期令牌到期没人管</b></td>
+        <td>不报错，只是某天开始<b>静默不发帖</b></td>
+        <td>第肆节的 45 天自动刷新 cron ＋失败告警，<b>这个必须做</b></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ══════════════════ 确认清单 ══════════════════ -->
+<h2><span class="num">陆</span>开工前我需要你回答的 6 件事</h2>
+<p class="lead">有几件事会改变我写代码的方式。你回答完，我立刻开工对应那一块。</p>
+<div class="card key">
+  <table>
+    <thead><tr><th>#</th><th>问题</th><th>为什么问</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td><b>已确认：Google 上有两个资料</b>（英文名 → 地址错的；泰文名 → 地址对的）。
+        现在要补的是四件事：<br>
+        ① 两个资料的 <b>Place ID</b>；② 各自<b>有没有「认领此商家」入口</b>；
+        ③ <b>实体招牌 / 门头上写的是哪个名字</b>；④ 两个资料各自的评分、评论数、照片数</td>
+        <td>决定走「报重复 / 直接删 / 冲突申诉」哪条路，以及官方名统一成哪个写法</td></tr>
+      <tr><td>2</td><td>钓场有没有<b>自己的域名</b>？还是就用 <code>hookfishpond.com</code>？</td><td>Google 申请 API 要求「邮箱域名与网站域名匹配」；Meta 企业认证也看域名。如果你想申请 GBP API，<b>建议现在就把域名定下来</b></td></tr>
+      <tr><td>3</td><td>钓场是<b>公司（有营业执照）</b>还是<b>个人经营</b>？</td><td>决定 Meta 企业认证走「注册企业」还是「个体经营」两条完全不同的材料清单。选错会被直接拒</td></tr>
+      <tr><td>4</td><td>你希望商家资料上<b>公开显示门牌地址</b>，还是隐藏地址只显示服务范围？</td><td>这个选择要在验证前定，中途改会触发重新验证；同时影响网站上「地址」栏怎么填（现在故意留空）</td></tr>
+      <tr><td>5</td><td>IG 账号现在是什么类型？有没有绑过 FB 主页？</td><td>决定第肆节能省掉哪几步</td></tr>
+      <tr><td>6</td><td>要不要我做<b>「新订单实时推给店员 LINE 群」</b>？</td><td>这是 Messaging API 里性价比最高的一件事，但它需要你先建一个店员群并把官方账号拉进去</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ══════════════════ 时间线 ══════════════════ -->
+<h2><span class="num">柒</span>建议时间线</h2>
+<table>
+  <thead><tr><th>时间</th><th>你做的</th><th>我做的</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><b>今天</b></td>
+      <td>① Google <b>只取证、先别改</b>：两个资料的 Place ID、评分/评论数/照片数、有没有认领入口、
+      实体招牌上写的名字（情形 D 第 0 步）<br>② LINE 建 Messaging API 渠道 + 填 3 个 env</td>
+      <td>② 本机验签测试；写好 <code>setup-line-env.sh</code><br>① 等你数据回来，判断该保留哪个、走哪条路</td>
+    </tr>
+    <tr>
+      <td><b>今天～本周</b></td>
+      <td>① 对齐 NAP → 在<b>地址正确</b>的那个上认领 + 验证 → 报重复（或删掉弱的那个）</td>
+      <td>① 合并完成后统一三处名称与 NAP；网站页脚补上已确认的地址与电话</td>
+    </tr>
+    <tr>
+      <td><b>本周</b></td>
+      <td>① 提交验证（该录视频就录）<br>③ 建 LINE Login 渠道（<b>同一个 Provider</b>）+ 填 2 个 env</td>
+      <td>③ OTP 全套代码 + 三语核验 + 上线</td>
+    </tr>
+    <tr>
+      <td><b>下周</b></td>
+      <td>④ IG 转专业号 + 绑 FB 主页 + 建 Meta App 拿长期令牌</td>
+      <td>④ 发帖接口 + 令牌刷新 cron</td>
+    </tr>
+    <tr>
+      <td><b>60 天后</b></td>
+      <td>① 申请 Google 商家资料 API（前提是已通过验证）</td>
+      <td>① 自动发「最新动态」的接口</td>
+    </tr>
+    <tr>
+      <td><b>持续</b></td>
+      <td>每周发 1 条动态、回所有评论、每月换照片</td>
+      <td>需要时加功能</td>
+    </tr>
+  </tbody>
+</table>
+
+<footer>
+  <p style="margin:0 0 6px"><b>Hook Happyness · 四条线落地计划</b> — 生成于 2026-09-27。
+  平台规则部分来自当日核实的官方文档与实测记录（Google Business Profile API 配额与申请门槛、
+  GBP 验证方式与视频要求、Meta 内容发布接口规格与令牌有效期、企业认证材料清单）。</p>
+  <p style="margin:0">配套文档：<code>docs/otp-line-login-oa-plan.html</code>（OTP 完整方案）·
+  <code>docs/SETUP_GUIDE.md</code>（LINE 配置附录）·
+  <code>docs/DESIGN_SYSTEM.md</code>（后台页面视觉规范）。</p>
+</footer>
+
+</div>
+</body>
+</html>

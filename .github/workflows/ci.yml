@@ -1,0 +1,77 @@
+name: CI
+
+# 每次推 main 和每个 PR 都跑三道闸门：类型 → 三语 → 密文。
+# 目的：把「本机手动记得跑」变成「不跑就不让进」。
+#
+# 注意：这里**不**跑 next build（页面会读数据库，CI 里没有库）。
+# 构建仍然在本地跑，见 docs/SETUP_GUIDE.md 第 9 步。
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+# 同一分支的新推送取消上一次，省额度
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NEXT_TELEMETRY_DISABLED: "1"
+  # 只是为了让 prisma generate / tsc 能解析 datasource 与 NEXT_PUBLIC_BASE_URL，
+  # 全是假值，CI 不会连任何数据库。
+  DATABASE_URL: "postgresql://ci:ci@127.0.0.1:5432/ci?sslmode=disable"
+  DIRECT_URL: "postgresql://ci:ci@127.0.0.1:5432/ci?sslmode=disable"
+  NEXT_PUBLIC_BASE_URL: "https://hookfishpond.com"
+
+jobs:
+  verify:
+    name: 类型 / 三语 / 密文
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # 密文扫描要比对基线提交
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: 安装依赖（postinstall 会跑 prisma generate）
+        run: npm ci
+
+      # next-env.d.ts 在 .gitignore 里，全新 checkout 没有它 → tsc 会因
+      # "./globals.css" 之类的导入报错。这里补一份标准内容。
+      - name: 补 next-env.d.ts
+        run: |
+          cat > next-env.d.ts <<'EOF'
+          /// <reference types="next" />
+          /// <reference types="next/image-types/global" />
+          EOF
+
+      - name: TypeScript 类型检查
+        run: npx tsc --noEmit
+
+      - name: 三语 i18n 核验（键对齐 + 语言字符范围）
+        run: node scripts/check-i18n.mjs
+
+      - name: 密文扫描
+        run: |
+          set -uo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+          else
+            BASE="${{ github.event.before }}"
+          fi
+          if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
+            echo "无法确定基线提交（新分支 / 首次推送），改为扫描全部已跟踪文件"
+            bash scripts/check-secrets.sh --all
+          else
+            bash scripts/check-secrets.sh --range "$BASE..${{ github.sha }}"
+          fi

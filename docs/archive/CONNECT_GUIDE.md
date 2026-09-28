@@ -113,15 +113,13 @@ vercel whoami --token <VERCEL_TOKEN>
 cd D:/Github/hook-fishpond
 vercel deploy --prod --token <VERCEL_TOKEN> --yes
 
-# 设置环境变量
+# 设置环境变量（⚠️ 具体的值从 docs/CREDENTIALS.md 查，绝不写进本文件）
 vercel env add DATABASE_URL production --token <VERCEL_TOKEN>
-# 然后输入值：postgresql://postgres:Fishpond%402026@db.ehsmsjmmccliysxnkgpv.supabase.co:6543/postgres
 
 vercel env add DIRECT_URL production --token <VERCEL_TOKEN>
-# 输入值：postgresql://postgres:Fishpond%402026@db.ehsmsjmmccliysxnkgpv.supabase.co:5432/postgres
 
 vercel env add NEXT_PUBLIC_BASE_URL production --token <VERCEL_TOKEN>
-# 输入值：https://hook-fishpond-xi15.vercel.app
+# 输入值：https://hookfishpond.com
 
 # 重新部署（使环境变量生效）
 vercel deploy --prod --token <VERCEL_TOKEN> --yes

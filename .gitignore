@@ -43,6 +43,8 @@ next-env.d.ts
 *token*.txt
 .workbuddy/
 .env*
+# 模板必须入库（它只含占位符，不含任何真实值）—— 放在 .env* 之后才生效
+!.env.example
 cookies.txt
 cookies*.txt
 

@@ -33,7 +33,7 @@ const ROOT = path.join(__dirname, '..');
 const MESSAGES_DIR = path.join(ROOT, 'messages');
 
 const LOCALES = ['zh', 'en', 'th'];
-const DEFAULT_BASE = 'https://hook-fishpond-xi15.vercel.app';
+const DEFAULT_BASE = 'https://hookfishpond.com';
 
 /* ------------------------------------------------------------------ *
  * 语言识别
