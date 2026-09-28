@@ -2,42 +2,102 @@ name: Database Backup (Neon → Supabase)
 
 # -------------------------------------------------------------
 # Daily cold-standby backup for hook-fishpond.
-# Neon  = PRIMARY database (always-on, free tier, no 7-day pause)
-# Supabase = COLD STANDBY (free tier). The daily write keeps it
-#            active so it never hits Supabase's 7-day pause.
+#   Neon     = PRIMARY database (always-on, free tier)
+#   Supabase = COLD STANDBY (free tier). The daily write keeps it
+#              active so it never hits Supabase's 7-day pause.
 #
-# Schedule: 17:00 UTC = 00:00 Bangkok (GMT+7). Adjust if needed.
-# First run auto-migrates Supabase -> Neon if Neon is empty.
+# Schedule: 17:00 UTC = 00:00 Bangkok (GMT+7).
+#
+# ⚠️⚠️ 2026-09-28 修复记录 —— 这条工作流自 2026-09-17 建立以来
+#      11 次运行【全部失败】，而且没人发现，等于「冷备」根本不存在。
+#      下面三处缺陷是逐个查出来并修掉的，别再改回去：
+#
+#   缺陷 ①  仓库里一个 Actions Secret 都没有（实测 total_count: 0），
+#           所以脚本一上来就 "❌ Missing NEON_DATABASE_URL / SUPABASE_DATABASE_URL"。
+#           → 修法在 GitHub 网页上：Settings → Secrets and variables → Actions
+#             添加 NEON_DATABASE_URL / SUPABASE_DATABASE_URL（见 docs/CREDENTIALS.md §3）。
+#           → 本文件里新增了一步「Verify secrets are present」，把这条错误
+#             显式播报出来，不再靠猜。
+#
+#   缺陷 ②  apt 默认的 postgresql-client 在 ubuntu-24.04 上是 16.x，
+#           而 Neon 主库是 PG 18.x —— pg_dump 会拒绝从「比自己新的」服务端导出
+#           （server version mismatch，直接 abort）。
+#           → 改为从 PGDG 仓库装 postgresql-client-18，并把它的 bin 放到 PATH 最前，
+#             然后断言 `pg_dump --version` 的主版本 ≥ 18。
+#
+#   缺陷 ③  原来这里有一个「One-time migrate Supabase → Neon」步骤
+#           （scripts/check-and-migrate.js）。两个问题：
+#             - 一次性迁移早在 2026-07-28 就做完了，之后每天只是白跑；
+#             - 更危险：它若误判「Neon 是空的」，会用 --clean --if-exists 把
+#               **过期的 Supabase 冷备灌回生产库** —— 等于用旧数据覆盖线上。
+#           → 已从本工作流删除。脚本仍留在 scripts/ 里，需要时手动跑。
 # -------------------------------------------------------------
 on:
   schedule:
     - cron: "0 17 * * *"
-  workflow_dispatch: {}   # allows manual "Run workflow" from the Actions tab
+  workflow_dispatch: {}   # 允许在 Actions 页手动 Run workflow（修完请立刻跑一次验证）
+
+# 同一个分支同时只留一次，避免手动触发与定时撞车
+concurrency:
+  group: db-backup
+  cancel-in-progress: false
 
 jobs:
   backup:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # 缺陷 ①：把「Secret 没配」这条错误说清楚（否则报错只有一行 ❌，很难定位）。
+      # 刻意放在最前面 —— 缺 Secret 时几秒内就报错，不必先白等装完 postgres。
+      - name: Verify secrets are present
+        env:
+          NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+          SUPABASE_DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
+        run: |
+          missing=""
+          [ -n "$NEON_DATABASE_URL" ]     || missing="$missing NEON_DATABASE_URL"
+          [ -n "$SUPABASE_DATABASE_URL" ] || missing="$missing SUPABASE_DATABASE_URL"
+          if [ -n "$missing" ]; then
+            echo "::error::仓库 Secrets 缺失:$missing"
+            echo "去 Settings → Secrets and variables → Actions → New repository secret 添加；"
+            echo "用途与轮换方式见 docs/CREDENTIALS.md §3。"
+            exit 1
+          fi
+          echo "✓ 两个 Secret 都已注入"
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: "22"
 
-      - name: Install postgresql-client (pg_dump / psql)
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      # 缺陷 ②：必须是 18.x —— 见文件头注释
+      - name: Install postgresql-client 18 (must be >= server major version)
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-18
+
+      - name: Put pg_dump 18 first on PATH
+        run: echo "/usr/lib/postgresql/18/bin" >> "$GITHUB_PATH"
+
+      - name: Assert pg_dump major version >= 18
+        run: |
+          pg_dump --version
+          major=$(pg_dump --version | sed -E 's/.* ([0-9]+)(\.[0-9]+)*.*/\1/')
+          if [ -z "$major" ] || [ "$major" -lt 18 ]; then
+            echo "::error::pg_dump 主版本是 $major，低于 Neon 主库的 18.x —— 导出会被拒绝"
+            exit 1
+          fi
 
       - name: Install pg driver
         run: npm install pg --no-save
-
-      - name: One-time migrate Supabase → Neon (only if Neon empty)
-        env:
-          NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
-          SUPABASE_DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
-        run: node scripts/check-and-migrate.js
 
       - name: Daily backup Neon → Supabase
         env:
