@@ -9,7 +9,8 @@ import { BRAND_NAME, SITE_URL } from '@/lib/site';
  *   这是「让 hookfishpond.com 当正主」的关键一步 —— 没有它，页面 HTML 里不会出现任何绝对 URL。
  * - `title.default`：没有更具体 title 的路由（如 `/t/[code]`）用的兜底标题。
  *   `/[locale]` 会用 `generateMetadata` 覆盖成本地化标题。
- * - `icons`：`public/` 下没有 `favicon.ico`，所以显式指向已入库的品牌徽标。
+ * - `icons`：`favicon.ico`（多尺寸 16/32/48/64）放在最前 —— 浏览器与爬虫默认会先请求
+ *   `/favicon.ico`；后面跟两张已入库的品牌徽标 PNG，供高分屏取用。
  *
  * ⚠️ **不要**在这里再导出 `viewport`：`HtmlShell` 已经手写了 `<meta name="viewport">`，
  *    两处并存会产生重复标签。
@@ -21,6 +22,7 @@ export const metadata: Metadata = {
   description: 'Book fishing spots, order food & drinks',
   icons: {
     icon: [
+      { url: '/favicon.ico', type: 'image/x-icon', sizes: 'any' },
       { url: '/media/brand-logo-256.png', type: 'image/png', sizes: '256x256' },
       { url: '/media/brand-logo-640.png', type: 'image/png', sizes: '640x640' },
     ],

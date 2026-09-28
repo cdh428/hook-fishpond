@@ -34,6 +34,12 @@ npm run check:i18n:live -- --base http://127.0.0.1:3100   # 扫本地
 脚本：`scripts/check-i18n.mjs`（**已入库**，可给 CI 用）。
 退出码 0 = 通过，1 = 有问题。
 
+> **CI 已经在了（2026-09-28 起）**：`.github/workflows/ci.yml` 会在 push / PR 时跑
+> `tsc --noEmit` + `check-i18n` + 密文扫描。但**不要指望它兜底**：
+> ① 它在 **push 之后**才跑，红灯时坏代码已经在 `main` 上了；
+> ② 它**不跑 `next build`**（页面会读数据库，CI 里没有库）—— 构建能不能过只能本地验。
+> 所以下面的清单仍然是**推送前必做**，CI 只是第二道网。
+
 ### 判定规则（脚本内已实现）
 
 | 文件 / 页面 | 不允许出现 |
@@ -159,6 +165,24 @@ SHA=$(git -C "D:/Github/hook-fishpond" rev-parse HEAD)
 curl -s -o /dev/null -w "%{http_code}\n" https://hookfishpond.com/zh   # 200
 node scripts/check-i18n.mjs --live                                                  # 必须 ✅ 才算完
 ```
+
+### 判断「新构建到底上了没」：看 layout chunk 的哈希 🎯
+
+等 Vercel 部署经常要 3~5 分钟，而「页面还是旧的」和「部署还没好」在浏览器里长得一样。
+最可靠的哨兵是**内容哈希文件名变了没有**：
+
+```bash
+# 抓首页引用的 layout chunk 哈希
+curl -s https://hookfishpond.com/zh | grep -oE '/_next/static/chunks/app/layout-[a-f0-9]+\.js' | head -1
+```
+
+把这次的哈希和**推送前记下的**那个比：**变了 = 新构建真的上线了**（比死等或刷新缓存可靠）。
+
+同样的思路适用于任何内容哈希产物：`/_next/static/chunks/app/<route>-<hash>.js`、
+带哈希的 CSS、带哈希的图片。**先记后比**，不要只看 HTTP 200。
+
+> 注意 `hookfishpond.com` 与 `hook-fishpond-xi15.vercel.app` 是**同一个项目的同一个部署**，
+> 拿旧域名对比哈希不会得到「旧版」—— 它不是回滚点。
 
 ### 提交里含静态素材（`public/`）时的额外两步
 
