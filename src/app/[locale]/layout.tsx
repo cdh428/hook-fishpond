@@ -5,6 +5,7 @@ import { locales, type Locale } from '@/i18n/config';
 import Header from '@/components/layout/Header';
 import BottomNav from '@/components/layout/BottomNav';
 import Footer from '@/components/layout/Footer';
+import LineFloat from '@/components/layout/LineFloat';
 import HtmlShell from '@/components/layout/HtmlShell';
 import { AppProvider } from '@/contexts/AppContext';
 import { BRAND_NAME, OG_IMAGE, OG_LOCALE } from '@/lib/site';
@@ -105,6 +106,7 @@ export default async function LocaleLayout({
             <main className="flex-1 pb-20">{children}</main>
             <Footer />
             <BottomNav />
+            <LineFloat />
           </div>
         </AppProvider>
       </NextIntlClientProvider>

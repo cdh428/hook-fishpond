@@ -9,6 +9,7 @@ import {
   updateAdminOrderTable,
 } from '@/lib/api-client';
 import TablePicker from '@/components/TablePicker';
+import LineCard from '@/components/admin/LineCard';
 import { Link } from '@/i18n/routing';
 
 const statusColors: Record<string, string> = {
@@ -193,6 +194,11 @@ export default function AdminDashboard() {
               </span>
             </Link>
           )}
+
+          {/* LINE OA 信息卡 —— 账号身份 / 推送凭据 / 接收人，一屏看清 */}
+          <div className="mb-6">
+            <LineCard />
+          </div>
 
           {/* Recent Bookings */}
           <div className="mb-6 rounded-xl bg-white p-4 shadow-md">

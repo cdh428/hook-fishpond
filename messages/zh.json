@@ -421,7 +421,17 @@
     "collectUnlink": "取消关联",
     "collectNoPending": "暂无待结算订单",
     "collectConfirm": "确认已收款并结清",
-    "collectConfirmed": "已收款并结清"
+    "collectConfirmed": "已收款并结清",
+    "lineCard": {
+      "title": "LINE 官方账号",
+      "addFriend": "加好友链接",
+      "openManager": "打开 LINE 后台",
+      "credentials": "推送凭据",
+      "ready": "已配置",
+      "recipients": "日报接收人",
+      "noRecipientHint": "还没有接收人：用个人 LINE 给官方账号发一句话即可绑定。",
+      "credentialHint": "推送凭据未配齐，日报无法发出 —— 去「报表 → 日报推送」查看。"
+    }
   },
   "adminBulk": {
     "title": "批量管理",
@@ -764,6 +774,14 @@
     "discountTotal": "折扣合计",
     "fishFootnote": "渔获费已计入点餐营收，折扣已从营收中扣除。"
   },
+  "lineCard": {
+    "title": "LINE 官方账号",
+    "desc": "加官方账号为好友，预约、点餐、问路都能直接对话。",
+    "addFriend": "加 LINE 好友",
+    "copyId": "复制 ID",
+    "copied": "已复制",
+    "orSearch": "或在 LINE 里搜索"
+  },
   "tableLanding": {
     "invalidTitle": "二维码无效",
     "invalidBody": "桌号 <mono>{code}</mono> 不存在或已停用。",
@@ -1070,5 +1088,13 @@
     "step12Text": "鱼竿墙、吧台、桌椅都到位了。剩下的，等你来钓。",
     "ctaTitle": "来现场看看",
     "ctaText": "照片是六个月的记录，塘是活的。挑个傍晚来钓一场，比看图实在。"
+  },
+  "lineContact": {
+    "title": "有疑问？直接找我们",
+    "desc": "加 LINE 官方账号，预约、改期、问路、点菜都能即时对话。",
+    "addFriend": "加 LINE 好友",
+    "copyId": "复制 LINE ID",
+    "copied": "已复制",
+    "hoursNote": "一般 09:00–18:00 内回复"
   }
 }

@@ -48,3 +48,23 @@ export const OG_LOCALE: Record<string, string> = {
   en: 'en_US',
   th: 'th_TH',
 };
+
+/**
+ * LINE 官方账号（OA）——**对外客服 + 日报推送的唯一通道**。
+ *
+ * 与 `Footer.tsx` 里那两行 FB / LINE 链接同源：OA 的 Basic ID 是 `@300bsham`，
+ * 加好友短链固定为 `https://line.me/R/ti/p/<id>`。
+ * 三语页面的「加 LINE 好友」按钮与后台的「LINE OA」信息卡都从这里取，
+ * 避免同一个 ID 在 Footer / About / Floating 三处各写一遍。
+ */
+export const LINE_OA = {
+  /** Basic ID，展示用（带 @） */
+  id: '@300bsham',
+  /** 加好友短链 */
+  addFriendUrl: 'https://line.me/R/ti/p/@300bsham',
+  /** 同一个账号在聊天工作台的会话地址 */
+  chatUrl: 'https://chat.line.biz/Ucbb33fbf15a53d9a120042d40ac26fdc',
+  /** 后台管理地址 */
+  managerUrl: 'https://manager.line.biz/account/@300bsham',
+} as const;
+

@@ -3,6 +3,7 @@
 import { useTranslations } from 'next-intl';
 import { Link } from '@/i18n/routing';
 import { STORY, photoUrl } from '@/lib/media';
+import LineContactCard from '@/components/layout/LineContactCard';
 
 /**
  * 「关于我们 · 开塘故事」
@@ -86,6 +87,9 @@ export default function AboutPage() {
           </svg>
         </Link>
       </div>
+
+      {/* 读完故事 = 最想问一句话的时刻，把 LINE 入口放在这里 */}
+      <LineContactCard />
     </div>
   );
 }

@@ -421,7 +421,17 @@
     "collectUnlink": "Unlink",
     "collectNoPending": "No orders awaiting settlement",
     "collectConfirm": "Confirm payment & settle",
-    "collectConfirmed": "Payment collected and settled"
+    "collectConfirmed": "Payment collected and settled",
+    "lineCard": {
+      "title": "LINE Official Account",
+      "addFriend": "Add-friend link",
+      "openManager": "Open LINE Manager",
+      "credentials": "Push credentials",
+      "ready": "Configured",
+      "recipients": "Report recipients",
+      "noRecipientHint": "No recipients yet — send any message to the official account from your personal LINE to bind one.",
+      "credentialHint": "Push credentials incomplete, so the daily report cannot send — check Reports → LINE report."
+    }
   },
   "adminBulk": {
     "title": "Bulk Management",
@@ -764,6 +774,14 @@
     "discountTotal": "Discounts given",
     "fishFootnote": "Catch charges are included in order revenue; discounts are already deducted."
   },
+  "lineCard": {
+    "title": "LINE Official Account",
+    "desc": "Add us on LINE — book, order, or ask for directions in a single chat.",
+    "addFriend": "Add on LINE",
+    "copyId": "Copy ID",
+    "copied": "Copied",
+    "orSearch": "Or search in LINE for"
+  },
   "tableLanding": {
     "invalidTitle": "Invalid QR Code",
     "invalidBody": "Table <mono>{code}</mono> was not found or is inactive.",
@@ -1070,5 +1088,13 @@
     "step12Text": "Rod wall, bar and tables are all in place. All that's missing is you.",
     "ctaTitle": "Come and see it",
     "ctaText": "The photos cover six months; the pond is alive. Pick an evening and fish a session."
+  },
+  "lineContact": {
+    "title": "Questions? Talk to us",
+    "desc": "Add our LINE official account — book, reschedule, ask for directions or order food in one chat.",
+    "addFriend": "Add on LINE",
+    "copyId": "Copy LINE ID",
+    "copied": "Copied",
+    "hoursNote": "We usually reply 09:00–18:00"
   }
 }
