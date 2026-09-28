@@ -7,6 +7,7 @@
 > - 账号与密钥在哪 → [`docs/CREDENTIALS.md`](docs/CREDENTIALS.md)
 > - 改完怎么发上去 → [`docs/playbooks/push-checklist.md`](docs/playbooks/push-checklist.md)
 > - 环境和命令 → [`README.md`](README.md) · [`docs/SETUP_GUIDE.md`](docs/SETUP_GUIDE.md)
+> - AI 运营团队 / 社媒发布 → [`docs/AGENT-TEAM.md`](docs/AGENT-TEAM.md) · [`docs/playbooks/social-publishing.md`](docs/playbooks/social-publishing.md)
 
 ---
 
@@ -131,3 +132,4 @@ docs/playbooks/                 # 流程知识（推送 / 安全 / 素材）
 | 4 | 顾客 OTP：建 LINE Login 渠道（须与现有 Messaging 渠道同一 Provider） | 用户 |
 | 5 | 统一品牌名（现在有 4 个写法） | 需确认**实体招牌**上写的是哪个 |
 | 6 | 断开 Vercel 上 3 个僵尸项目 | 用户后台操作 |
+| 7 | 社媒令牌：IG 切专业账号 + 绑 FB 主页 + Meta 应用拿主页令牌（FB/IG 一键发帖的开关） | 用户（见 `docs/playbooks/social-publishing.md`） |

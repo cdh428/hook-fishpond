@@ -57,6 +57,8 @@
 | `LINE_CHANNEL_ACCESS_TOKEN` | LINE 推送（每日日报） | LINE Developers → Messaging API 渠道 |
 | `LINE_CHANNEL_SECRET` | LINE webhook 验签 | 同上 |
 | `LINE_LOGIN_CHANNEL_ID` / `LINE_LOGIN_CHANNEL_SECRET` | 顾客 OTP（待接入） | LINE Login 渠道，⚠️ **必须与 Messaging 渠道同一 Provider** |
+| `META_PAGE_TOKEN` | Meta Graph API **主页令牌**：FB 主页 + IG 发帖（获取步骤见 `playbooks/social-publishing.md`） | Meta 应用撤销授权后重走「一次性准备」六步 |
+| `FB_PAGE_ID` / `IG_USER_ID` | 发帖目标 ID（非机密） | Graph API `GET /me/accounts` 及主页的 `instagram_business_account` 字段 |
 | `OMISE_PUBLIC_KEY` / `OMISE_SECRET_KEY` | Omise 支付（接口已预留，未接线） | Omise Dashboard |
 | `OMISE_WEBHOOK_SECRET` | Omise 回调鉴权；缺失则接口返回 503 | 自定义随机串 |
 
@@ -73,6 +75,7 @@
 |---|---|
 | `NEON_DATABASE_URL` | 每日 `db-backup.yml` 的**读取源**（Neon 主库连接串） |
 | `SUPABASE_DATABASE_URL` | 每日 `db-backup.yml` 的**写入目标**（Supabase 冷备连接串） |
+| `META_PAGE_TOKEN` | （第二期）社媒定时发布的发帖令牌，见 `playbooks/social-publishing.md`；**暂未配置** |
 
 > ❗ **实测（2026-09-28）：这两个 Secret 目前都不存在** ——
 > `GET /repos/cdh428/hook-fishpond/actions/secrets` 返回 `total_count: 0`。
