@@ -6,6 +6,7 @@ import { Link, useRouter } from '@/i18n/routing';
 import { adminLogin } from '@/lib/api-client';
 import HeroCarousel from '@/components/home/HeroCarousel';
 import VideoPromo from '@/components/home/VideoPromo';
+import FloodPromo from '@/components/home/FloodPromo';
 import PhotoWall from '@/components/home/PhotoWall';
 import { CATCH_PHOTO, FOOD_WALL, PLACE_WALL, photoUrl } from '@/lib/media';
 
@@ -172,6 +173,7 @@ export default function HomePage() {
       <div className="mx-auto max-w-lg">
         {/* 宣传小影片（竖版在手机上播） */}
         <VideoPromo />
+        <FloodPromo />
 
         {/* Pond Cards */}
         <section className="px-4 pt-5">

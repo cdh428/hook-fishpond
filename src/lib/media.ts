@@ -50,6 +50,17 @@ export const HERO_SLIDES: HeroSlide[] = [
   },
 ];
 
+/**
+ * 洪水促销视频：18 秒，泰语配音，鱼 POV 视角，结尾带 logo + 联络信息。
+ * 用于首页「当前活动」区块，以及社媒推广。
+ */
+export const FLOOD_PROMO = {
+  src: '/media/bangkok-fishpond-final.mp4',
+  w: 768,
+  h: 1344,
+  duration: 18,
+} as const;
+
 /** 宣传小影片：18.6 秒、无声、循环。横竖两版各一套镜头的顺序都不同 */
 export const PROMO = {
   wide: {
