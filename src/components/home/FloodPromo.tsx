@@ -108,10 +108,12 @@ export default function FloodPromo() {
             {t('home.floodPromo.cta')} 🎣
           </Link>
           
-          <div className="flex justify-center gap-4 text-xs text-neutral-500">
+          <div className="flex justify-center gap-3 text-xs text-neutral-500">
             <span>{t('home.floodPromo.line')}</span>
             <span>·</span>
             <span>{t('home.floodPromo.facebook')}</span>
+            <span>·</span>
+            <span>{t('home.floodPromo.website')}</span>
           </div>
         </div>
       </div>
