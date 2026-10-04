@@ -21,6 +21,7 @@ const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
  * `http://127.0.0.1:<port>` 的本地打印桥（见 skill `windows-thermal-printer-bridge`），
  * 加了就会把打印打断。
  */
+
 const securityHeaders = [
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'X-Frame-Options', value: 'DENY' },
@@ -28,7 +29,8 @@ const securityHeaders = [
   { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
   {
     key: 'Content-Security-Policy',
-    value: "frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'",
+    value:
+      "frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'",
   },
 ];
 
