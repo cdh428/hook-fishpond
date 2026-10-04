@@ -4,7 +4,7 @@ import { useTranslations } from 'next-intl';
 import { Link, usePathname } from '@/i18n/routing';
 import { LOGO } from '@/lib/media';
 
-const FACEBOOK_URL = 'https://www.facebook.com/Hookhappyness';
+const FACEBOOK_URL = 'https://www.facebook.com/profile.php?id=61591042746753';
 const LINE_URL = 'https://line.me/R/ti/p/@300bsham';
 
 /**

@@ -22,9 +22,13 @@ LINE_VIDEO_PREVIEW_URL="https://hookfishpond.com/media/flood-preview-240.jpg"
 
 ## Facebook / Instagram（Hookhappyness）
 
+> ✅ **已验证（2026-10-04）**：主页 URL = `https://www.facebook.com/profile.php?id=61591042746753`
+> → `FB_PAGE_ID = 61591042746753`（已从 `fb://profile/` 深链接读得，`.env.local` 已填）。
+
 | 项 | 值 | 获取方式 |
 |---|---|---|
-| FB 主页 | `facebook.com/Hookhappyness` | Meta Business Suite |
+| FB 主页 | `https://www.facebook.com/profile.php?id=61591042746753` | Meta Business Suite |
+| FB 主页 ID | `61591042746753` | URL 里的 `?id=`（**已填入 `.env.local`**） |
 | IG 账号 | 需**商家/创作者**且**绑定 FB 主页** | IG 设置 → 账号类型和工具 |
 | Meta App | 类型 Business，添加 **Instagram Graph API** 产品 | developers.facebook.com → Create App |
 | 权限 | `instagram_business_basic` / `instagram_business_content_publish` / `instagram_manage_comments`（可选） | App Dashboard → 权限勾选 |
@@ -32,11 +36,11 @@ LINE_VIDEO_PREVIEW_URL="https://hookfishpond.com/media/flood-preview-240.jpg"
 | 主页 ID | `FB_PAGE_ID` | 同上一步返回里 `id` 字段 |
 | IG 用户 ID | `IG_USER_ID` | 主页字段 `instagram_business_account.id` |
 
-**填入 `.env.local`**：
+**填入 `.env.local`**（`FB_PAGE_ID` 已填好，剩下填 `META_PAGE_TOKEN` 即可）：
 ```
-META_PAGE_TOKEN=""
-FB_PAGE_ID=""
-IG_USER_ID=""
+META_PAGE_TOKEN=""          # ← 待填
+FB_PAGE_ID="61591042746753" # ✅ 已填
+IG_USER_ID=""               # 仅 IG 需要
 ```
 
 ## 一键推送（配完令牌后）
