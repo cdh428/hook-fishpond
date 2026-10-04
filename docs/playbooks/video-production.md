@@ -260,4 +260,6 @@ git push origin main
 - `fishpond-flood-ad/` — 洪水促销视频 Remotion 项目
 - `scripts/social/line-broadcast.mjs` — LINE 广播脚本
 - `scripts/social/fb-ig-post.mjs` — FB/IG 发帖脚本
+- `scripts/publish/push-media.mjs` — **一键推送（Vercel + LINE + FB，带人工确认闸门）**
+- `docs/playbooks/social-tokens-setup.md` — 社媒令牌获取 30 秒速查
 - `docs/playbooks/push-checklist.md` — 推送前检查清单
