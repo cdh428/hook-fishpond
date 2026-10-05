@@ -155,6 +155,10 @@ curl -sI https://<域名>/zh | grep -iE "x-frame|x-content|referrer|permissions|
 - `script-src` / `style-src` —— Next.js 水合脚本是内联的，没 nonce 的严格 CSP 直接白屏
 - `connect-src` —— 收银台要从前端 fetch `http://127.0.0.1:<port>` 的本地打印桥，
   见 `windows-thermal-printer-bridge`。加了打印就断
+  > ⚠️ **2026-10-05 教训**：曾误把 `connect-src 'self' http://127.0.0.1:* ...` 加进 CSP，
+  > 并错写成"保留打印桥"的理由。CSP 的 `connect-src` 控制的是**浏览器 fetch/XHR 的源**，
+  > 一旦限定为白名单，跨源场景下打印桥会被直接拦断——"白名单放行 127.0.0.1"
+  > 非但没保留，反而成了受限的拦截规则。**正确做法是：完全不写 `connect-src`，让打印桥不受限。**
 
 加这些是安全的：`frame-ancestors 'none'`、`base-uri 'self'`、`form-action 'self'`、
 `object-src 'none'`、`nosniff`、`Referrer-Policy`、`Permissions-Policy`，
