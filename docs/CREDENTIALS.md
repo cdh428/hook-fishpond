@@ -75,7 +75,7 @@
 |---|---|
 | `NEON_DATABASE_URL` | 每日 `db-backup.yml` 的**读取源**（Neon 主库连接串） |
 | `SUPABASE_DATABASE_URL` | 每日 `db-backup.yml` 的**写入目标**（Supabase 冷备连接串） |
-| `META_PAGE_TOKEN` | （第二期）社媒定时发布的发帖令牌，见 `playbooks/social-publishing.md`；**暂未配置** |
+| `META_PAGE_TOKEN` | （第二期）社媒定时发布的发帖令牌，见 `playbooks/meta-system-user-setup.md`；**2026-10-07 起改为 Meta 系统用户永不过期令牌** |
 
 > ❗ **实测（2026-09-28）：这两个 Secret 目前都不存在** ——
 > `GET /repos/cdh428/hook-fishpond/actions/secrets` 返回 `total_count: 0`。

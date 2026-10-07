@@ -24,6 +24,9 @@ LINE_VIDEO_PREVIEW_URL="https://hookfishpond.com/media/flood-preview-240.jpg"
 
 > ✅ **已验证（2026-10-04）**：主页 URL = `https://www.facebook.com/profile.php?id=61591042746753`
 > → `FB_PAGE_ID = 61591042746753`（已从 `fb://profile/` 深链接读得，`.env.local` 已填）。
+>
+> ⚠️ **2026-10-07 改**：`META_PAGE_TOKEN` 改用 **Meta 系统用户永不过期令牌**（旧"用户令牌 60 天换主页令牌"方案作废）。
+> 完整网页操作步骤见 **`docs/playbooks/meta-system-user-setup.md`**（约 15 分钟，纯网页操作，无需代码）。
 
 | 项 | 值 | 获取方式 |
 |---|---|---|
@@ -32,13 +35,13 @@ LINE_VIDEO_PREVIEW_URL="https://hookfishpond.com/media/flood-preview-240.jpg"
 | IG 账号 | 需**商家/创作者**且**绑定 FB 主页** | IG 设置 → 账号类型和工具 |
 | Meta App | 类型 Business，添加 **Instagram Graph API** 产品 | developers.facebook.com → Create App |
 | 权限 | `instagram_business_basic` / `instagram_business_content_publish` / `instagram_manage_comments`（可选） | App Dashboard → 权限勾选 |
-| 主页令牌 | `META_PAGE_TOKEN` | Graph API Explorer 短期 → 换长期（60 天）→ `GET /me/accounts` 取 `Hookhappyness` 的 `access_token` |
+| 主页令牌 | `META_PAGE_TOKEN` | **系统用户永不过期令牌**（2026-10-07 改）：Business Manager → 系统用户 → 生成令牌；详见 `playbooks/meta-system-user-setup.md`（旧"用户令牌 60 天换主页令牌"方案已作废） |
 | 主页 ID | `FB_PAGE_ID` | 同上一步返回里 `id` 字段 |
 | IG 用户 ID | `IG_USER_ID` | 主页字段 `instagram_business_account.id` |
 
-**填入 `.env.local`**（`FB_PAGE_ID` 已填好，剩下填 `META_PAGE_TOKEN` 即可）：
+**填入 `.env.local`**（`FB_PAGE_ID` 已填好；`META_PAGE_TOKEN` 按 `meta-system-user-setup.md` §3.4 生成系统用户令牌后填入）：
 ```
-META_PAGE_TOKEN=""          # ← 待填
+META_PAGE_TOKEN=""          # ← 待填（Meta 系统用户永不过期令牌）
 FB_PAGE_ID="61591042746753" # ✅ 已填
 IG_USER_ID=""               # 仅 IG 需要
 ```
