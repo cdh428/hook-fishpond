@@ -13,9 +13,14 @@ function resolveSiteUrl(): string {
   if (process.env.VERCEL_ENV === 'preview' && process.env.VERCEL_URL) {
     return `https://${process.env.VERCEL_URL}`;
   }
-  return (
-    process.env.NEXT_PUBLIC_BASE_URL?.trim() || 'https://hookfishpond.com'
-  );
+  const configured = process.env.NEXT_PUBLIC_BASE_URL?.trim() || '';
+  // 防御：若有人把 *.vercel.app 填进了 NEXT_PUBLIC_BASE_URL，生产的 canonical /
+  // og:url / sitemap / robots 会全部指向 vercel.app（2026-10-10 踩过，域名已绑正式域
+  // 但 SEO 标识仍串味）。遇到这种值就忽略它，走下面的正式域名。
+  if (configured && !/\.vercel\.app($|\/)/i.test(configured)) {
+    return configured;
+  }
+  return 'https://www.hookfishpond.com';
 }
 
 /** 站点绝对地址（已去掉尾斜杠） */
