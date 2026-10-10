@@ -1,6 +1,10 @@
 #!/usr/bin/env node
+import fs from 'node:fs';
+
 /**
  * LINE 官方账号广播：把一条文本发给所有加过 @300bsham 的好友。
+ *
+ * ⚠️ .mjs 是 ESM，里面不能用 require()（会报 ReferenceError）—— 统一用 import。
  *
  * 用法（在仓库根目录）：
  *   node scripts/social/line-broadcast.mjs --text-file broadcast.txt [--dry-run]
@@ -30,7 +34,7 @@ function parseArgs(argv) {
 (async () => {
   const a = parseArgs(process.argv.slice(2));
   let text = a.text || '';
-  if (a.textFile) text = require('fs').readFileSync(a.textFile, 'utf8').trim();
+  if (a.textFile) text = fs.readFileSync(a.textFile, 'utf8').trim();
   if (!text) { console.error('缺文本（--text 或 --text-file）'); process.exit(2); }
   if (text.length > 5000) { console.error(`文本 ${text.length} 字符 > 5000 上限`); process.exit(2); }
 

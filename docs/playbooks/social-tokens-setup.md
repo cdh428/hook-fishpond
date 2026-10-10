@@ -17,8 +17,40 @@
 ```
 LINE_CHANNEL_ACCESS_TOKEN=""
 LINE_CHANNEL_SECRET=""
-LINE_VIDEO_PREVIEW_URL="https://hookfishpond.com/media/flood-preview-240.jpg"
+LINE_VIDEO_PREVIEW_URL="https://www.hookfishpond.com/media/flood-preview-240.jpg"
 ```
+
+### 签发令牌的准确路径（2026-10-10 核对官方文档）
+
+1. 打开 <https://developers.line.biz/console/> 登录 → 点进你的 **Provider**
+2. 点进 **Messaging API 渠道**（就是对应 `@300bsham` 的那个）
+3. 切到 **Messaging API** 标签页 → 滚到页面最下面
+4. **Channel access token** 区块 → 点 **Issue（签发）**
+   - 官方给四种令牌，**选 `Long-lived`（永不过期）**
+   - ❌ 不要选 v2.1（user-specified expiration）—— 那个要用 JWT 现场生成，本项目不支持
+5. 复制整串 → 粘进 `.env.local` 的 `LINE_CHANNEL_ACCESS_TOKEN=""` 里
+6. 切到 **Basic settings** 标签页 → **Channel secret** → 复制 → 粘进 `LINE_CHANNEL_SECRET=""`
+   （这个不是用来发消息的，是 webhook 验签；**没它 `/api/webhooks/line` 会直接拒绝请求**，
+   采集不到顾客/群的 ID，日报就没有推送目标）
+
+### 验证令牌（只读，绝不发消息）
+
+```bash
+node scripts/social/line-token-check.mjs
+```
+
+只调 LINE 的 GET 接口，**不会 push / broadcast / reply**，可以放心反复跑。它会依次报出：
+
+| 步骤 | 看什么 |
+|---|---|
+| ① 账号身份 | 令牌是否有效、显示名称、是不是 `@300bsham`、Bot UserId |
+| ② 推送配额 | 本月套餐上限 + 已用条数 |
+| ③ Webhook 配置 | 已填的 webhook 地址 + 是否启用 |
+| ④ Channel Secret | 是否配置 |
+
+⚠️ **Webhook 地址要用 `https://www.hookfishpond.com/api/webhooks/line`**（带 www）。
+现在 apex `hookfishpond.com` 会 308 跳到 www，而 LINE 的 webhook 是 **POST**，
+重定向可能不被跟随 → 收不到事件、采集不到 userId。改完在控制台点 **Verify** 应显示 Success。
 
 ## Facebook / Instagram（Hookhappyness）
 
