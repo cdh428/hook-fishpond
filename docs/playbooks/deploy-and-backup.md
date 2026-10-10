@@ -133,7 +133,39 @@ curl -s https://hookfishpond.com/zh | grep -oE '/_next/static/chunks/app/layout-
     用 `require`（加密但不校验证书）正是本意。
   - 两步都设 `maxBuffer: 256 MiB`（`pg_dump` 默认只有 1 MiB，数据一涨就 `ENOBUFS`）。
 
-### 3.2 需要哪些 Secrets（在 GitHub 网页上配，agent 做不了）
+### 3.2 ⚠️ 2026-10-10 实测：Supabase 冷备项目已失效（改方案前必读）
+
+**结论：备份目标 `ehsmsjmmccliysxnkgpv` 已经不存在了**，所以这条链路就算 Secret 配齐也跑不通。
+
+定位过程（可复用的排查顺序）：
+
+| 现象 | 含义 |
+|---|---|
+| `getaddrinfo ENOENT db.<ref>.supabase.co` | 直连端点**只有 IPv6（AAAA）没有 IPv4（A）**；本机 IPv6 不可用（`ping -6` 报 transmit failed） |
+| 改用 pooler（`aws-0-<region>.pooler.supabase.com`，有 IPv4）后报 `SELF_SIGNED_CERT_IN_CHAIN` | 网络层已通；但 URL 里带 `sslmode=require` 会被新版 pg 当 `verify-full`，AWS ELB 证书链含自签名 ⇒ 必失败。**修法：不要把 sslmode 写进 URL，只传 `ssl:{rejectUnauthorized:false}`** |
+| 关掉证书校验后报 `XX000 (ENOTFOUND) tenant/user postgres.<ref> not found` | **权威结论：该租户在所有 region 的 pooler 上都查不到** ⇒ 项目已被暂停或删除（免费档 7 天不活跃即暂停） |
+
+**所以现在可行的备份是「导出到文件」，不是「灌进 Supabase」**：
+
+```bash
+# 纯 Node，不依赖 pg_dump/psql —— 本机 Windows 也能跑（本机没有这两个二进制）
+node scripts/backup/export-neon-sql.cjs
+# 产物：backups/neon-<YYYY-MM-DD>.sql  ← 该目录已 gitignore，含真实业务数据
+# 实测：23 表 / 274 行 / ~11 MB
+```
+
+- 导出的是**数据**（`TRUNCATE` + `INSERT`，重放幂等）；**结构不导出** ——
+  schema 由 `prisma/schema.prisma` 管（已进 git），恢复时先 `prisma db push` 建表再灌数据。
+- 方向恒为 **Neon → 文件/冷备**。绝不可反向（历史上 `scripts/check-and-migrate.js`
+  就因为误判把过期冷备灌回生产库，已从 workflow 删除）。
+
+**要让每日冷备真正跑起来，二选一：**
+
+1. **恢复/重建 Supabase 项目** → 把新连接串配进 Actions Secret，原 `db-backup.yml` 继续用；
+2. **换目标**（另一个 Neon 库 / 对象存储）→ 改用 `export-neon-sql.cjs` 导出 + artifact 留存，
+   不再依赖 `pg_dump`（也就没有 PG18 版本限制那堆麻烦）。
+
+### 3.3 需要哪些 Secrets（在 GitHub 网页上配，agent 做不了）
 
 仓库 → **Settings → Secrets and variables → Actions** → 建两个：
 
@@ -145,18 +177,22 @@ curl -s https://hookfishpond.com/zh | grep -oE '/_next/static/chunks/app/layout-
 > ⚠️ 2026-09-28 实测这两个 Secret **一个都不存在**（`total_count: 0`），
 > 是冷备 11 连败的根因。**不建它们，备份永远跑不通。**
 
-### 3.3 本机手动跑一次（可选，CI 之外的应急）
+### 3.4 本机手动跑一次（应急 / 本机无 pg_dump 时的正解）
 
 ```bash
-# 连接串只放环境变量，别写进任何仓库文件（仓库是 public）
+# ✅ 推荐：纯 Node 导出，本机 Windows 可跑（不需要 pg_dump / psql）
+node scripts/backup/export-neon-sql.cjs
+# 产物：backups/neon-<YYYY-MM-DD>.sql（已 gitignore）
+
+# ⚠️ 旧脚本 scripts/backup-neon-to-supabase.js 依赖 pg_dump+psql 二进制，
+#    本机没有这两个工具（且要求 >= PG18），本机跑会直接 fail —— 只在 CI 上用。
 export NEON_DATABASE_URL="postgresql://<user>:<pass>@<neon-host>.aws.neon.tech/neondb?sslmode=require"
 export SUPABASE_DATABASE_URL="postgresql://postgres:<pass>@db.<project-ref>.supabase.co:5432/postgres"
 node scripts/backup-neon-to-supabase.js
-# 成功输出：✓ Dumped Neon (…) → ✓ Restored into Supabase standby → 🎉 Daily backup complete
 ```
 
 > ⚠️ 本机（Windows/WorkBuddy）里 node 起子进程（`pg_dump`/`psql`）常被沙箱拦成 `EBUSY`。
-> 本机跑不动就**靠 CI 跑**，或手动装好 PG 客户端后在能起子进程的环境跑。
+> 所以**本机一律走 `export-neon-sql.cjs`**（不起子进程），`backup-neon-to-supabase.js` 只在 CI 跑。
 
 ### 3.4 触发与验证
 

@@ -79,3 +79,6 @@ id_ed25519*
 hook_fishpond_deploy*
 *.ppk
 *.key
+
+# 数据库冷备导出（含真实业务数据，绝不入库）
+backups/
