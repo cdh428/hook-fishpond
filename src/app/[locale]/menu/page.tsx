@@ -329,7 +329,7 @@ export default function MenuPage() {
   const billPayable = bill?.summary.payable ?? 0;
 
   return (
-    <div className="mx-auto max-w-lg">
+    <div className="mx-auto max-w-lg md:max-w-3xl">
       <div className="px-4 pt-6">
         <h2 className="text-2xl font-bold text-neutral-900">{t('menu.title')}</h2>
 

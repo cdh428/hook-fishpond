@@ -22,7 +22,7 @@ export default function Footer() {
 
   return (
     <footer className="mt-8 bg-primary-900 px-4 pb-24 pt-8 text-primary-100">
-      <div className="mx-auto max-w-lg">
+      <div className="mx-auto max-w-lg md:max-w-3xl">
         <div className="flex items-center gap-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img

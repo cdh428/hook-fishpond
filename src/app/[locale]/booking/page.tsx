@@ -298,7 +298,7 @@ export default function BookingPage() {
   };
 
   return (
-    <div className="mx-auto max-w-lg px-4 py-6">
+    <div className="mx-auto max-w-lg md:max-w-3xl px-4 py-6">
       <h2 className="mb-4 text-2xl font-bold text-neutral-900">
         {t('booking.title')}
       </h2>
@@ -644,7 +644,7 @@ export default function BookingPage() {
       {/* Sticky CTA */}
       {activePond && (isLeisure ? selectedSpot : true) && (
         <div className="fixed bottom-16 left-0 right-0 z-40 border-t border-neutral-200 bg-white/95 px-4 py-3 backdrop-blur-md">
-          <div className="mx-auto flex max-w-lg items-center justify-between gap-4">
+          <div className="mx-auto flex max-w-lg md:max-w-3xl items-center justify-between gap-4">
             <div>
               <p className="text-xs text-neutral-500">
                 {isLeisure

@@ -752,7 +752,7 @@ function Sheet({
       onClick={onClose}
     >
       <div
-        className="relative my-auto max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-t-3xl bg-white p-5 shadow-2xl sm:rounded-3xl"
+        className="relative my-auto max-h-[92dvh] w-full max-w-md md:max-w-2xl overflow-y-auto rounded-t-3xl bg-white p-5 shadow-2xl sm:rounded-3xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">

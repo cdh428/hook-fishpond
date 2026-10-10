@@ -75,7 +75,7 @@ export default function PondRulesPage() {
   const panel = (id: Tab) => `space-y-4 px-4 py-5 ${tab === id ? '' : 'hidden'}`;
 
   return (
-    <div className="mx-auto max-w-lg">
+    <div className="mx-auto max-w-lg md:max-w-3xl">
       {/* Hero */}
       <section className="relative overflow-hidden bg-gradient-to-br from-primary-800 via-primary-700 to-primary-900 px-6 pb-12 pt-8 text-white">
         <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-primary-600/30" />

@@ -111,7 +111,7 @@ export default function AdminLayout({
 
   if (status === 'out') {
     return (
-      <div className="mx-auto max-w-lg px-4 py-6">
+      <div className="mx-auto max-w-lg md:max-w-5xl lg:max-w-6xl px-4 py-6">
         <h2 className="mb-6 text-2xl font-bold text-neutral-900">
           {t('admin.loginTitle')}
         </h2>
@@ -155,7 +155,7 @@ export default function AdminLayout({
   }
 
   return (
-    <div className="mx-auto max-w-lg px-4 py-6">
+    <div className="mx-auto max-w-lg md:max-w-5xl lg:max-w-6xl px-4 py-6">
       {/* Admin top bar — persistent across every sub-page */}
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-2xl font-bold text-neutral-900">

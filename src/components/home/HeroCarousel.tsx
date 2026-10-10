@@ -87,7 +87,7 @@ export default function HeroCarousel() {
       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/45 to-black/15" />
 
       <div className="absolute inset-x-0 bottom-0 px-5 pb-7">
-        <div className="mx-auto max-w-lg">
+        <div className="mx-auto max-w-lg md:max-w-3xl">
           <span className="inline-block rounded-full bg-accent-500 px-3 py-1 text-xs font-bold text-white shadow-cta">
             {t('home.keepFishBig')}
           </span>

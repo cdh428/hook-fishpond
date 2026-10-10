@@ -16,7 +16,7 @@ export default function AboutPage() {
   const cover = STORY[STORY.length - 1].photo;
 
   return (
-    <div className="mx-auto max-w-lg px-4 py-6">
+    <div className="mx-auto max-w-lg md:max-w-3xl px-4 py-6">
       <div className="relative overflow-hidden rounded-2xl">
         <picture>
           <source srcSet={photoUrl(cover, 'webp')} type="image/webp" />

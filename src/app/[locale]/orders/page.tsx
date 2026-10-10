@@ -238,7 +238,7 @@ export default function OrdersPage() {
   };
 
   return (
-    <div className="mx-auto max-w-lg px-4 py-6">
+    <div className="mx-auto max-w-lg md:max-w-3xl px-4 py-6">
       <h2 className="mb-4 text-2xl font-bold text-neutral-900">
         {t('orders.title')}
       </h2>

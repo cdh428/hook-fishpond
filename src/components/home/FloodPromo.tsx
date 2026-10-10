@@ -62,7 +62,7 @@ export default function FloodPromo() {
 
   return (
     <section className="px-4 py-8 bg-gradient-to-b from-orange-50 to-white">
-      <div className="mx-auto max-w-lg">
+      <div className="mx-auto max-w-lg md:max-w-3xl">
         {/* 标题 */}
         <div className="text-center mb-4">
           <h2 className="text-2xl font-bold text-neutral-900">

@@ -81,11 +81,25 @@
 ---
 
 ## 三、布局参数
-- 容器: max-w-lg (512px) 居中
+- 容器: max-w-lg (512px) 居中（**手机优先**）
 - Header: h-14 (56px) sticky
 - BottomNav: h-16 (64px) fixed
 - 水平内边距: px-4 (16px)
 - 底部避让: pb-20
+
+### 响应式容器（2026-10-10 生效）
+手机仍是 512px 单栏，**≥768px(`md:`) 自动放宽**。靠 CSS 断点实现，
+**不另建 Vercel 项目、不按 UA 分流**（跨域名分流会丢 cookie/会话，且被 Google 判 cloaking）。
+
+| 范围 | 类名 |
+|---|---|
+| 顾客端页面 + Header / Footer / BottomNav | `max-w-lg md:max-w-3xl`（512 → 768） |
+| 后台 `/admin/**` | `max-w-lg md:max-w-5xl lg:max-w-6xl`（512 → 1024 / 1152） |
+| 支付页 `/payment/[id]` | `max-w-md md:max-w-lg`（448 → 512，扫码页保持聚焦） |
+| 后台订单详情弹层 | `max-w-md md:max-w-2xl` |
+
+❗**弹层 / bottom sheet（`max-w-sm`、`max-w-md`、`w-full max-w-lg` 那批）一律不跟随放宽** ——
+宽屏上弹窗居中保持窄条才是标准做法。改容器时**别用全局替换**，会误伤它们。
 
 ### 圆角
 - sm: 8px (标签) / md: 12px (按钮) / lg: 16px (卡片) / xl: 24px (弹窗)

@@ -22,7 +22,7 @@ export default function PhotoWall({
 }) {
   return (
     <section className="px-4 pt-6">
-      <div className="mx-auto max-w-lg">
+      <div className="mx-auto max-w-lg md:max-w-3xl">
         <div className="flex items-end justify-between gap-3">
           <div>
             <h3 className="text-lg font-bold text-neutral-900">{title}</h3>

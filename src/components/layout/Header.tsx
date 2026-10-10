@@ -19,7 +19,7 @@ export default function Header() {
 
   return (
     <header className="sticky top-0 z-50 bg-primary-700 text-white backdrop-blur-sm">
-      <div className="mx-auto flex h-14 max-w-lg items-center justify-between px-4">
+      <div className="mx-auto flex h-14 max-w-lg md:max-w-3xl items-center justify-between px-4">
         <h1 className="text-lg font-bold">{t('siteName')}</h1>
 
         {/* Language Switcher */}

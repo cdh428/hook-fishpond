@@ -170,7 +170,7 @@ export default function HomePage() {
       {/* 首屏 · 实拍照片轮播（全宽出血，故意不套 max-w-lg） */}
       <HeroCarousel />
 
-      <div className="mx-auto max-w-lg">
+      <div className="mx-auto max-w-lg md:max-w-3xl">
         {/* 宣传小影片（竖版在手机上播） */}
         <VideoPromo />
         <FloodPromo />

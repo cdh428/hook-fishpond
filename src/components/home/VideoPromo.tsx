@@ -49,7 +49,7 @@ export default function VideoPromo() {
 
   return (
     <section className="px-4 pt-5">
-      <div className="mx-auto max-w-lg">
+      <div className="mx-auto max-w-lg md:max-w-3xl">
         <h3 className="text-lg font-bold text-neutral-900">{t('home.video.title')}</h3>
         <p className="mt-1 text-sm text-neutral-500">{t('home.video.subtitle')}</p>
 

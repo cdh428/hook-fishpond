@@ -162,7 +162,7 @@ export default function PaymentPage() {
   // --- Error ---
   if (error && !amount) {
     return (
-      <div className="mx-auto max-w-md px-4 py-12 text-center">
+      <div className="mx-auto max-w-md md:max-w-lg px-4 py-12 text-center">
         <div className="mb-4 text-5xl">⚠️</div>
         <h2 className="text-xl font-bold text-neutral-900">{t('payment.errorTitle')}</h2>
         <p className="mt-2 text-sm text-neutral-500">{error}</p>
@@ -182,7 +182,7 @@ export default function PaymentPage() {
     // table (or the same customer re-ordering) starts fresh.
     clearStoredTable();
     return (
-      <div className="mx-auto flex min-h-[60vh] max-w-md flex-col items-center justify-center px-4">
+      <div className="mx-auto flex min-h-[60vh] max-w-md md:max-w-lg flex-col items-center justify-center px-4">
         <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-green-100">
           <svg className="h-10 w-10 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -212,7 +212,7 @@ export default function PaymentPage() {
   // --- Failed ---
   if (status === 'FAILED') {
     return (
-      <div className="mx-auto flex min-h-[60vh] max-w-md flex-col items-center justify-center px-4">
+      <div className="mx-auto flex min-h-[60vh] max-w-md md:max-w-lg flex-col items-center justify-center px-4">
         <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-red-100">
           <svg className="h-10 w-10 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -242,7 +242,7 @@ export default function PaymentPage() {
   // --- Processing (user confirmed, waiting for verification) ---
   if (status === 'PROCESSING') {
     return (
-      <div className="mx-auto flex min-h-[60vh] max-w-md flex-col items-center justify-center px-4">
+      <div className="mx-auto flex min-h-[60vh] max-w-md md:max-w-lg flex-col items-center justify-center px-4">
         <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-blue-100">
           <div className="h-10 w-10 animate-spin rounded-full border-4 border-blue-200 border-t-blue-600" />
         </div>
@@ -258,7 +258,7 @@ export default function PaymentPage() {
 
   // --- Pending (show QR) ---
   return (
-    <div className="mx-auto max-w-md px-4 py-6">
+    <div className="mx-auto max-w-md md:max-w-lg px-4 py-6">
       <h2 className="mb-2 text-center text-xl font-bold text-neutral-900">
         {t('payment.scanQR')}
       </h2>

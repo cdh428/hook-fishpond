@@ -113,7 +113,7 @@ export default function OrderDetailPage() {
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-lg px-4 py-20 text-center text-sm text-neutral-400">
+      <div className="mx-auto max-w-lg md:max-w-3xl px-4 py-20 text-center text-sm text-neutral-400">
         {t('common.loading')}
       </div>
     );
@@ -121,7 +121,7 @@ export default function OrderDetailPage() {
 
   if (error || !order) {
     return (
-      <div className="mx-auto max-w-lg px-4 py-20 text-center">
+      <div className="mx-auto max-w-lg md:max-w-3xl px-4 py-20 text-center">
         <p className="text-sm text-error-600">{error || t('common.error')}</p>
         <Link
           href="/menu"
@@ -143,7 +143,7 @@ export default function OrderDetailPage() {
     : '';
 
   return (
-    <div className="mx-auto max-w-lg px-4 py-6">
+    <div className="mx-auto max-w-lg md:max-w-3xl px-4 py-6">
       {/* 下单成功提示 */}
       {status === 'PENDING' && (
         <div className="mb-5 flex flex-col items-center text-center">
