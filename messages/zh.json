@@ -832,6 +832,7 @@
     "addWeighing": "称重",
     "weightKg": "重量 (kg)",
     "fishRuleHint": "前 {kg} 公斤免费，超出部分 {price}฿/公斤，在结算时计入订单。",
+    "rodFreeHint": "本单共 {rods} 根鱼竿，每根免 {kg}kg 渔获（已计入免费额度）。",
     "weighNotePlaceholder": "备注（鱼种等）",
     "weighSave": "添加称重",
     "weighList": "称重记录",

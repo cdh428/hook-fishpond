@@ -18,8 +18,39 @@ import { bangkokDayRange, consumeReservation, type ConsumeResult } from "@/lib/s
  *  - 渔获费天然计入营收，折扣天然被扣除。
  */
 
-/** 渔获免费额度：前 1 公斤 */
-export const FISH_INCLUDED_KG = 1;
+/** 渔获免费额度：每根鱼竿免 1 公斤（鱼竿总数 = 自带杆 + 租杆 数量） */
+export const FISH_INCLUDED_KG_PER_ROD = 1;
+
+/** 鱼竿类菜品的名称匹配规则（三语全表）。
+ *  订单里鱼竿是普通菜品录入的，靠名字识别；价格 100/150 在菜单里不是唯一的，
+ *  不能按价格匹配。 */
+const ROD_ITEM_NAMES = [
+  // zh
+  "自带竿", "自带杆", "自带钓竿", "自带魚竿",
+  "租竿", "租杆", "租钓竿", "租借钓竿", "租赁钓竿", "租借钓竿",
+  // en
+  "Bring your own rod", "Own rod", "Rod rental", "Rented rod", "Rental rod",
+  "Fishing rod (own)", "Fishing rod (rental)", "Fishing rod",
+  // th（从 menu 里实际出现的名称）
+  "ค่านำมาเอง", "เช่าค่านำมาเอง", "คันเบ็ด (นำมาเอง)", "ค่าเช่าคันเบ็ด", "เช่าคันเบ็ด",
+];
+
+/** 判断一个菜品（OrderItem）是否算鱼竿。三语名任一命中即可。 */
+function isRodItem(menuItem: { name_zh?: string; name_en?: string; name_th?: string } | null | undefined): boolean {
+  if (!menuItem) return false;
+  const names = [menuItem.name_zh, menuItem.name_en, menuItem.name_th].filter(Boolean) as string[];
+  const norm = (s: string) => s.replace(/\s+/g, "").toLowerCase();
+  return names.some((n) =>
+    ROD_ITEM_NAMES.some((rod) => norm(n) === norm(rod) || norm(n).includes(norm(rod))),
+  );
+}
+
+/** 从订单 items 里统计鱼竿总数（每行 quantity 累加） */
+export function countRodsFromItems(
+  items: Array<{ quantity: number; menuItem?: { name_zh?: string; name_en?: string; name_th?: string } | null }>,
+): number {
+  return items.reduce((s, it) => s + (isRodItem(it.menuItem) ? (it.quantity || 0) : 0), 0);
+}
 /** 渔获超出部分单价：60 泰铢/公斤 */
 export const FISH_PRICE_PER_KG = 60;
 /** 店员可直接改价的上限（占订单毛额比例）。超出需管理员确认。 */
@@ -32,13 +63,13 @@ export function round2(n: number): number {
   return Math.round((Number(n) || 0) * 100) / 100;
 }
 
-/** 渔获费 = max(0, 总重 − 1kg) × 60 */
+/** 渔获费 = max(0, 总重 − 免扣 kg) × 单价；免扣 kg 由鱼竿数 × 1 决定 */
 export function fishChargeFor(
   weightKg: number,
   opts: { includedKg?: number; pricePerKg?: number } = {},
 ): number {
   const w = Math.max(0, Number(weightKg) || 0);
-  const included = opts.includedKg ?? FISH_INCLUDED_KG;
+  const included = Math.max(0, opts.includedKg ?? FISH_INCLUDED_KG_PER_ROD);
   const perKg = opts.pricePerKg ?? FISH_PRICE_PER_KG;
   return round2(Math.max(0, w - included) * perKg);
 }
@@ -108,18 +139,25 @@ export async function recalcOrderTotals(tx: Tx, orderId: string): Promise<OrderT
 
   const items = await tx.orderItem.findMany({
     where: { orderId },
-    select: { totalPrice: true },
+    select: {
+      quantity: true,
+      totalPrice: true,
+      menuItem: { select: { name_zh: true, name_en: true, name_th: true } },
+    },
   });
   const weighings = await tx.weighing.findMany({
     where: { orderId },
     select: { weightKg: true },
   });
 
+  const rodCount = countRodsFromItems(items);
+  const includedKg = rodCount * FISH_INCLUDED_KG_PER_ROD;
   const totals = computeOrderTotals({
     subtotal: items.reduce((s, i) => s + i.totalPrice, 0),
     fishWeightKg: weighings.reduce((s, w) => s + w.weightKg, 0),
     discountType: order.discountType as DiscountTypeValue,
     discountValue: order.discountValue,
+    includedKg,
   });
 
   await tx.order.update({

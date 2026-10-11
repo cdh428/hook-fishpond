@@ -832,6 +832,7 @@
     "addWeighing": "ชั่งน้ำหนัก",
     "weightKg": "น้ำหนัก (กก.)",
     "fishRuleHint": "{kg} กก.แรกฟรี ส่วนเกิน {price} บาท/กก. รวมตอนชำระเงิน",
+    "rodFreeHint": "โต๊ะนี้มีคันเบ็ด {rods} คัน แต่ละคัน ฟรี {kg} กก.",
     "weighNotePlaceholder": "หมายเหตุ (ชนิดปลา ฯลฯ)",
     "weighSave": "เพิ่มการชั่ง",
     "weighList": "ประวัติการชั่ง",

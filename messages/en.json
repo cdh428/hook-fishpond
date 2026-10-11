@@ -832,6 +832,7 @@
     "addWeighing": "Weigh catch",
     "weightKg": "Weight (kg)",
     "fishRuleHint": "First {kg} kg free, then ฿{price}/kg, added to the order when settling.",
+    "rodFreeHint": "{rods} rods on this table — each rod covers {kg}kg of free catch.",
     "weighNotePlaceholder": "Note (species, etc.)",
     "weighSave": "Add weighing",
     "weighList": "Weighing records",

@@ -51,8 +51,31 @@ type Modal =
   | { kind: 'rebind'; order: any }
   | null;
 
-const FISH_FREE_KG = 1;
+const FISH_FREE_KG = 1; // 每根鱼竿免 1kg
 const FISH_PRICE_PER_KG = 60;
+
+// 鱼竿类菜品名（三语，用于在订单 items 里统计鱼竿总数）
+const ROD_ITEM_NAMES = [
+  "自带竿", "自带杆", "自带钓竿", "自带魚竿",
+  "租竿", "租杆", "租钓竿", "租借钓竿", "租赁钓竿", "租借钓竿",
+  "Bring your own rod", "Own rod", "Rod rental", "Rented rod", "Rental rod",
+  "ค่านำมาเอง", "เช่าค่านำมาเอง", "คันเบ็ด (นำมาเอง)", "ค่าเช่าคันเบ็ด", "เช่าคันเบ็ด",
+];
+
+function isRodItem(menuItem: any): boolean {
+  if (!menuItem) return false;
+  const names = [menuItem.name_zh, menuItem.name_en, menuItem.name_th].filter(Boolean);
+  const norm = (s: string) => s.replace(/\s+/g, "").toLowerCase();
+  return names.some((n: string) =>
+    ROD_ITEM_NAMES.some((rod) => norm(n) === norm(rod) || norm(n).includes(norm(rod))),
+  );
+}
+
+/** 统计订单里鱼竿总数（自带杆 + 租杆 数量） */
+function countRods(order: any): number {
+  const items = order?.items || [];
+  return items.reduce((s: number, it: any) => s + (isRodItem(it?.menuItem) ? (it.quantity || 0) : 0), 0);
+}
 
 export default function AdminOrdersPage() {
   const t = useTranslations();
@@ -792,10 +815,12 @@ function WeighModal({
 
   const weighings = order.weighings || [];
   const totalKg = weighings.reduce((s: number, w: any) => s + w.weightKg, 0);
-  const charge = Math.max(0, totalKg - FISH_FREE_KG) * FISH_PRICE_PER_KG;
+  const rodCount = countRods(order);
+  const freeKg = rodCount * FISH_FREE_KG; // 每根鱼竿免 1kg
+  const charge = Math.max(0, totalKg - freeKg) * FISH_PRICE_PER_KG;
   const newKg = Number(kg) || 0;
   const previewTotal = totalKg + newKg;
-  const previewCharge = Math.max(0, previewTotal - FISH_FREE_KG) * FISH_PRICE_PER_KG;
+  const previewCharge = Math.max(0, previewTotal - freeKg) * FISH_PRICE_PER_KG;
 
   const add = async () => {
     if (!(newKg > 0)) return;
@@ -827,7 +852,12 @@ function WeighModal({
   return (
     <Sheet title={`🐟 ${t('adminOrders.addWeighing')} · ${order.orderNumber}`} onClose={onClose}>
       <p className="mb-3 rounded-lg bg-primary-50 px-3 py-2 text-[11px] leading-relaxed text-primary-700">
-        {t('adminOrders.fishRuleHint', { kg: FISH_FREE_KG, price: FISH_PRICE_PER_KG })}
+        {t('adminOrders.fishRuleHint', { kg: freeKg, price: FISH_PRICE_PER_KG })}
+        {rodCount > 0 && (
+          <span className="mt-1 block text-neutral-600">
+            🎣 {t('adminOrders.rodFreeHint', { rods: rodCount, kg: freeKg })}
+          </span>
+        )}
       </p>
 
       <label className="mb-1 block text-xs font-medium text-neutral-700">

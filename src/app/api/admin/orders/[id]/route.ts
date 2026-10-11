@@ -16,6 +16,8 @@ import {
   checkStaffChange,
   isOrderEditable,
   recalcOrderTotals,
+  countRodsFromItems,
+  FISH_INCLUDED_KG_PER_ROD,
   type DiscountTypeValue,
 } from "@/lib/orders";
 
@@ -286,14 +288,19 @@ export async function PATCH(
       const discountValue = Math.max(0, Number(body.discountValue) || 0);
       const note = typeof body.note === "string" ? body.note.trim() : "";
 
-      // 先按现状算出「毛额」，用于判断改价幅度
-      const items = await prisma.orderItem.findMany({ where: { orderId: id } });
+      // 先按现状算出「毛额」，用于判断改价幅度（免扣按鱼竿数×1kg）
+      const items = await prisma.orderItem.findMany({
+        where: { orderId: id },
+        select: { quantity: true, totalPrice: true, menuItem: { select: { name_zh: true, name_en: true, name_th: true } } },
+      });
       const weighings = await prisma.weighing.findMany({ where: { orderId: id } });
+      const rodCount = countRodsFromItems(items);
       const probe = computeOrderTotals({
         subtotal: items.reduce((s, i) => s + i.totalPrice, 0),
         fishWeightKg: weighings.reduce((s, w) => s + w.weightKg, 0),
         discountType,
         discountValue,
+        includedKg: rodCount * FISH_INCLUDED_KG_PER_ROD,
       });
 
       const guard = checkStaffChange(probe.gross, probe.discountAmount);

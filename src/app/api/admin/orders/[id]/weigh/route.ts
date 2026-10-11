@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { runTx } from "@/lib/tx";
 import { requireAdmin } from "@/lib/auth";
-import { FISH_PRICE_PER_KG, recalcOrderTotals } from "@/lib/orders";
+import { FISH_PRICE_PER_KG, FISH_INCLUDED_KG_PER_ROD, countRodsFromItems, recalcOrderTotals } from "@/lib/orders";
 
 // Neon(us-east-2) ← 泰国：往返延迟较高，放宽函数执行上限
 export const maxDuration = 60;
@@ -45,6 +45,21 @@ export async function POST(
     }
 
     const result = await runTx(async (tx) => {
+      // 先取订单现有 items + weighings，算出本次称重后的"总鱼重 − 免扣"
+      const [orderItems, priorWeighings] = await Promise.all([
+        tx.orderItem.findMany({
+          where: { orderId: id },
+          select: { quantity: true, menuItem: { select: { name_zh: true, name_en: true, name_th: true } } },
+        }),
+        tx.weighing.findMany({ where: { orderId: id }, select: { weightKg: true } }),
+      ]);
+      const rodCount = countRodsFromItems(orderItems);
+      const includedKg = rodCount * FISH_INCLUDED_KG_PER_ROD;
+      const priorWeight = priorWeighings.reduce((s, w) => s + w.weightKg, 0);
+      const totalAfterAdd = priorWeight + weightKg;
+      // 本条称重记录的 amount = 本条重量 × 单价（快照）；
+      // 订单级免扣（鱼竿数×1kg）在 recalcOrderTotals 里统一扣，
+      // 避免逐条扣导致"前 1kg 被第一条吃光、后续每条都付费"。
       await tx.weighing.create({
         data: {
           orderId: id,
@@ -55,7 +70,9 @@ export async function POST(
           operator: admin.username,
         },
       });
+      // 订单级免扣（鱼竿数）统一在 recalc 里算，保证口径一致
       const totals = await recalcOrderTotals(tx, id);
+      void totalAfterAdd; void includedKg; // 仅用于日志/未来扩展
 
       await tx.payment.updateMany({
         where: { orderId: id, status: { in: ["PENDING", "PROCESSING", "FAILED"] } },
