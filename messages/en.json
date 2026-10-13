@@ -98,6 +98,13 @@
       "facebook": "Facebook: Hookhappyness",
       "website": "hookfishpond.com"
     },
+    "notice": {
+      "title": "📌 Price & Service Adjustment",
+      "img": "/media/notice-en.jpg",
+      "alt": "Price and Service Adjustment Announcement (English)",
+      "caption": "New prices effective from October 16, 2026",
+      "placeholder": "Announcement image coming soon — pricing is as described on this page"
+    },
     "foodWall": {
       "title": "From the pond to the table",
       "subtitle": "Whole grilled fish, skewers, drinks · cooking service 100฿ per fish",
@@ -980,10 +987,17 @@
       "overPrice": "Then 60฿ per kg",
       "weigh": "Weighed at the counter in front of you — can be weighed in parts and added to the same bill",
       "speciesTitle": "Species you can take home",
-      "noTake": "May not leave the pond · no size limit"
+      "noTake": "May not leave the pond · no size limit",
+      "priceTitle": "Take-Home Fish Prices",
+      "price50": "Striped Catfish — 50฿/kg",
+      "price60": "Walking Catfish / Silver Barb / Climbing Perch — 60฿/kg",
+      "price80": "Tilapia / Snakehead — 80฿/kg",
+      "price100": "Marbled Goby — 100฿/kg",
+      "gameFish": "Fish over 4 kg (per fish) are game fish — do not take home",
+      "buekNoTake": "Mekong Giant Catfish (Pla Buek) must not be removed"
     },
     "fish": {
-      "tilapia": "Nile Tilapia",
+      "tilapia": "Tilapia",
       "snakehead": "Snakehead",
       "climbingPerch": "Climbing Perch",
       "silverBarb": "Silver Barb",

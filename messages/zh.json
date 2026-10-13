@@ -98,6 +98,13 @@
       "facebook": "Facebook: Hookhappyness",
       "website": "hookfishpond.com"
     },
+    "notice": {
+      "title": "📌 价格与服务调整",
+      "img": "/media/notice-zh.jpg",
+      "alt": "价格与服务调整公告（中文）",
+      "caption": "自 2026 年 10 月 16 日起执行新价格",
+      "placeholder": "公告图片即将上线 · 价格以本页面说明为准"
+    },
     "foodWall": {
       "title": "钓上来，就能吃上",
       "subtitle": "整条烤鱼、烤串、饮品 · 代加工 100฿/条",
@@ -980,15 +987,22 @@
       "overPrice": "超出部分 60฿ / 公斤",
       "weigh": "在柜台当面称重，可分次称、累计到同一张单",
       "speciesTitle": "可带走的鱼种",
-      "noTake": "禁止带出池塘 · 不分大小"
+      "noTake": "禁止带出池塘 · 不分大小",
+      "priceTitle": "外带鱼价格",
+      "price50": "条纹鲶 — 50฿/公斤",
+      "price60": "鲇鱼 / 银鲃 / 攀鲈 — 60฿/公斤",
+      "price80": "罗非鱼 / 鳢鱼 — 80฿/公斤",
+      "price100": "云斑尖塘鲌 — 100฿/公斤",
+      "gameFish": "超过 4 公斤（每尾）的鱼为竞赛鱼，禁止带走",
+      "buekNoTake": "湄公巨鲶（Pla Buek）禁止移出"
     },
     "fish": {
       "tilapia": "尼罗罗非鱼",
-      "snakehead": "线鳢",
+      "snakehead": "鳢鱼",
       "climbingPerch": "攀鲈",
-      "silverBarb": "泰国银鲃",
-      "marbledGoby": "笋壳鱼",
-      "walkingCatfish": "胡鲶",
+      "silverBarb": "银鲃",
+      "marbledGoby": "云斑尖塘鲌",
+      "walkingCatfish": "鲇鱼",
       "stripedCatfish": "条纹鲶",
       "mekongCatfish": "湄公巨鲶"
     },

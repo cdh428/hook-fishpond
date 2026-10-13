@@ -175,6 +175,39 @@ export default function HomePage() {
         <VideoPromo />
         <FloodPromo />
 
+        {/* 公告位（价格调整等临时公告，三语各自放自己的图） */}
+        <section className="px-4 py-4">
+          <div className="mx-auto max-w-lg md:max-w-3xl">
+            <div className="rounded-2xl border border-amber-200 bg-gradient-to-b from-amber-50 to-white p-5 shadow-md">
+              <h3 className="text-lg font-bold text-neutral-900">
+                {t('home.notice.title')}
+              </h3>
+              <p className="mt-0.5 text-xs text-neutral-500">
+                {t('home.notice.caption')}
+              </p>
+              {/* 图片槽：图放进 public/media/notice-{locale}.jpg 后自动显示，没放则显示占位提示 */}
+              <div className="mt-4 overflow-hidden rounded-xl">
+                <img
+                  src={t('home.notice.img')}
+                  alt={t('home.notice.alt')}
+                  className="w-full"
+                  loading="lazy"
+                  decoding="async"
+                  style={{ display: 'none' }}
+                  onLoad={(e) => {
+                    (e.currentTarget as HTMLImageElement).style.display = '';
+                    const ph = (e.currentTarget as HTMLImageElement).nextElementSibling as HTMLElement | null;
+                    if (ph) ph.style.display = 'none';
+                  }}
+                />
+                <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-xs text-amber-700">
+                  {t('home.notice.placeholder')}
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* Pond Cards */}
         <section className="px-4 pt-5">
         <h3 className="mb-3 text-lg font-bold text-neutral-900">
