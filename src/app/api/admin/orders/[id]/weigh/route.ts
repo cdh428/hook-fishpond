@@ -9,18 +9,19 @@ import {
   recalcOrderTotals,
 } from "@/lib/orders";
 
-// 鱼种价格档（2026-10-16 起，按泰文公告）
+// 鱼种价格档（2026-10-16 起，按泰文公告；0=免重档，不计费）
 export const FISH_TIER_PRICES = {
+  0: 0,
   50: 50,
   60: 60,
   80: 80,
   100: 100,
 } as const;
 
-export type FishTier = 50 | 60 | 80 | 100;
+export type FishTier = 0 | 50 | 60 | 80 | 100;
 
 export function isValidTier(t: unknown): t is FishTier {
-  return t === 50 || t === 60 || t === 80 || t === 100;
+  return t === 0 || t === 50 || t === 60 || t === 80 || t === 100;
 }
 
 // Neon(us-east-2) ← 泰国：往返延迟较高，放宽函数执行上限
@@ -63,50 +64,64 @@ export async function POST(
       return NextResponse.json({ error: "Order is cancelled" }, { status: 400 });
     }
 
-    // 鱼种价格档（可选）
-    let fishTier: FishTier | undefined;
+    // 档位（0=免重、50/60/80/100=收费档；不传则按历史兜底 60）
+    let fishTier: FishTier | null;
     if (body?.fishTier != null) {
-      if (!isValidTier(Number(body.fishTier))) {
+      const tier = Number(body.fishTier);
+      if (!isValidTier(tier)) {
         return NextResponse.json(
-          { error: "fishTier must be one of 50 | 60 | 80 | 100" },
+          { error: "fishTier must be one of 0 | 50 | 60 | 80 | 100" },
           { status: 400 },
         );
       }
-      fishTier = Number(body.fishTier) as FishTier;
+      fishTier = tier;
+    } else {
+      fishTier = null;
     }
-    const tierPrice = fishTier !== undefined ? FISH_TIER_PRICES[fishTier] : undefined;
+    // 免重档（0）单价为 0（只记录重量、不计费）；收费档按档价；缺省按兜底 60
+    const pricePerKg = fishTier === 0 ? 0 : fishTier != null ? FISH_TIER_PRICES[fishTier] : FISH_PRICE_PER_KG;
+
+    // 免重校验：免重行的累计重量不能超过鱼竿数×1kg
+    if (fishTier === 0) {
+      const items = await prisma.orderItem.findMany({
+        where: { orderId: id },
+        select: { quantity: true, menuItem: { select: { name_zh: true, name_en: true, name_th: true } } },
+      });
+      const rodCount = countRodsFromItems(items);
+      const totalIncludedKg = rodCount * FISH_INCLUDED_KG_PER_ROD;
+      const priorFree = (await prisma.weighing.findMany({
+        where: { orderId: id, fishTier: 0 },
+        select: { weightKg: true },
+      })).reduce((s, w) => s + w.weightKg, 0);
+      if (priorFree + weightKg > totalIncludedKg + 1e-9) {
+        return NextResponse.json(
+          {
+            error: "FREE_TIER_EXCEEDED",
+            freeKg: totalIncludedKg,
+            priorFreeKg: priorFree,
+            msg: `免重超出：本桌免重共 ${totalIncludedKg}kg，已填 ${priorFree}kg，本条 ${weightKg}kg 超出`,
+          },
+          { status: 400 },
+        );
+      }
+    }
 
     const result = await runTx(async (tx) => {
-      // 先取订单现有 items + weighings，算出本次称重后的"总鱼重 − 免扣"
-      const [orderItems, priorWeighings] = await Promise.all([
-        tx.orderItem.findMany({
-          where: { orderId: id },
-          select: { quantity: true, menuItem: { select: { name_zh: true, name_en: true, name_th: true } } },
-        }),
-        tx.weighing.findMany({ where: { orderId: id }, select: { weightKg: true } }),
-      ]);
-      const rodCount = countRodsFromItems(orderItems);
-      const includedKg = rodCount * FISH_INCLUDED_KG_PER_ROD;
-      const priorWeight = priorWeighings.reduce((s, w) => s + w.weightKg, 0);
-      const totalAfterAdd = priorWeight + weightKg;
-      // 本条称重记录的 amount = 本条重量 × 该档单价（快照）；
-      // 订单级免扣（鱼竿数×1kg）在 recalcOrderTotals 里统一扣，
-      // 避免逐条扣导致"前 1kg 被第一条吃光、后续每条都付费"。
-      const pricePerKg = tierPrice ?? FISH_PRICE_PER_KG;
+      const priorWeighings = await tx.weighing.findMany({ where: { orderId: id }, select: { weightKg: true } });
+      void priorWeighings;
       await tx.weighing.create({
         data: {
           orderId: id,
           weightKg: Math.round(weightKg * 1000) / 1000,
-          fishTier: fishTier ?? null,
+          fishTier,
           pricePerKg,
           amount: Math.round(weightKg * pricePerKg * 100) / 100,
           note: typeof body?.note === "string" && body.note.trim() ? body.note.trim() : null,
           operator: admin.username,
         },
       });
-      // 订单级免扣（鱼竿数）统一在 recalc 里算，保证口径一致
+      // 渔获费 = 各收费档重量×单价之和（免重档不计费），统一在 recalc 里算
       const totals = await recalcOrderTotals(tx, id);
-      void totalAfterAdd; void includedKg; // 仅用于日志/未来扩展
 
       await tx.payment.updateMany({
         where: { orderId: id, status: { in: ["PENDING", "PROCESSING", "FAILED"] } },

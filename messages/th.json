@@ -852,9 +852,9 @@
     "tierPrice100": "100 บาท/กก.",
     "tierRowLabel": "จำนวนกก.",
     "tierRowAmount": "ค่าระน่",
-    "tierNotCharged": "อยู่ในสว่่นฟรี",
-    "fishPayable": "ค่าปลาตองลวง",
-    "totalFreeKg": "รวมสว่่นฟรี {kg} กก.",
+    "tierNotCharged": "อยูในสวนฟร",
+    "fishPayable": "คาปลาตองลวง",
+    "totalFreeKg": "รวมสวนฟร {kg} กก.",
     "weighNotePlaceholder": "หมายเหตุ (ชนิดปลา ฯลฯ)",
     "weighSave": "เพิ่มการชั่ง",
     "weighList": "ประวัติการชั่ง",
@@ -896,7 +896,13 @@
     "settledAt": "เวลาชำระ",
     "newLine": "รายการใหม่ (เลือกตัวเลือก)",
     "addItem": "เพิ่มเมนู",
-    "lineWillBeRemoved": "จำนวน 0 บรรทัดนี้จะถูกลบเมื่อบันทึก"
+    "lineWillBeRemoved": "จำนวน 0 บรรทัดนี้จะถูกลบเมื่อบันทึก",
+    "freeRow": "สวนฟร (ไมหำ)",
+    "freeRowFree": "ฟร",
+    "freeOk": "OK",
+    "freeOver": "หยุดปลา 1 ตัว",
+    "freeOverMsg": "สวนฟรเกิน พนั้ปลา 1 ตัว (สวนฟรไมเกินรวม)",
+    "freeUsed": "กรอกแล {kg} กก."
   },
   "printLabels": {
     "brandSub": "ไทย · ตกปลา · อาหาร",

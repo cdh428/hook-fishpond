@@ -53,15 +53,13 @@ type Modal =
 
 const FISH_FREE_KG = 1; // 每根鱼竿免 1kg
 
-// 鱼种价格档（2026-10-16 起，按泰文公告；i18n key 映射）
+// 称重 5 行：第 1 行免重（不计费），后 4 行价格档
 const FISH_TIER_KEYS = [
-  { tier: 50, labelKey: 'tier50', priceKey: 'tierPrice50' },
-  { tier: 60, labelKey: 'tier60', priceKey: 'tierPrice60' },
-  { tier: 80, labelKey: 'tier80', priceKey: 'tierPrice80' },
-  { tier: 100, labelKey: 'tier100', priceKey: 'tierPrice100' },
+  { tier: 50, labelKey: 'tier50', priceKey: 'tierPrice50', price: 50 },
+  { tier: 60, labelKey: 'tier60', priceKey: 'tierPrice60', price: 60 },
+  { tier: 80, labelKey: 'tier80', priceKey: 'tierPrice80', price: 80 },
+  { tier: 100, labelKey: 'tier100', priceKey: 'tierPrice100', price: 100 },
 ] as const;
-
-const TIER_PRICES: Record<number, number> = { 50: 50, 60: 60, 80: 80, 100: 100 };
 
 // 鱼竿类菜品名（三语，用于在订单 items 里统计鱼竿总数）
 const ROD_ITEM_NAMES = [
@@ -820,34 +818,59 @@ function WeighModal({
   const t = useTranslations();
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
-  // 每档填的公斤数（留空 = 该档没钓到）
+  const [freeInput, setFreeInput] = useState('');
   const [tierInputs, setTierInputs] = useState<Record<number, string>>({});
 
   const weighings = order.weighings || [];
   const totalKg = weighings.reduce((s: number, w: any) => s + w.weightKg, 0);
   const rodCount = countRods(order);
-  const freeKg = rodCount * FISH_FREE_KG; // 每根鱼竿免 1kg
+  const freeKg = rodCount * FISH_FREE_KG; // 总免重 = 鱼竿数 × 1kg
 
-  // 各档本次填写
+  // 免重行已填（含本次）
+  const freeUsed = weighings
+    .filter((w: any) => w.fishTier === 0)
+    .reduce((s: number, w: any) => s + w.weightKg, 0);
+  const newFreeKg = Number(freeInput) || 0;
+  const freeTotal = freeUsed + newFreeKg;
+  const freeOver = freeTotal > freeKg + 1e-9;
+
+  // 各价格档本次填写
   const tierVals = FISH_TIER_KEYS.map((k) => ({
     ...k,
     kg: Number(tierInputs[k.tier]) || 0,
-    amount: (Number(tierInputs[k.tier]) || 0) * TIER_PRICES[k.tier],
+    amount: (Number(tierInputs[k.tier]) || 0) * k.price,
   }));
-  const newTotalKg = tierVals.reduce((s, x) => s + x.kg, 0);
-  const newTotalCharge = tierVals.reduce((s, x) => s + x.amount, 0);
-  // 是否超免费额度（总重 > 免重 才收费；简化口径）
-  const willCharge = newTotalKg > freeKg + 1e-9;
-  const previewCharge = willCharge ? newTotalCharge : 0;
+  const newPaidKg = tierVals.reduce((s, x) => s + x.kg, 0);
+  const newPaidCharge = tierVals.reduce((s, x) => s + x.amount, 0);
+  // 历史收费档合计（已落库的）
+  const histPaidCharge = weighings
+    .filter((w: any) => w.fishTier && w.fishTier !== 0)
+    .reduce((s: number, w: any) => s + (w.amount || 0), 0);
 
   const setTier = (tier: number, v: string) =>
     setTierInputs((s) => ({ ...s, [tier]: v }));
 
+  const anyInput = newFreeKg > 0 || newPaidKg > 0;
+
   const add = async () => {
-    if (!(newTotalKg > 0)) return;
+    if (!anyInput) return;
+    // 前端校验：免重超额
+    if (freeOver) {
+      onError(t('adminOrders.freeOverMsg'));
+      return;
+    }
     setBusy(true);
     try {
       let updated: any = order;
+      // 免重行
+      if (newFreeKg > 0) {
+        updated = await addOrderWeighing(order.id, {
+          weightKg: newFreeKg,
+          fishTier: 0,
+          note: note || undefined,
+        });
+      }
+      // 4 个收费档
       for (const x of tierVals) {
         if (x.kg > 0) {
           updated = await addOrderWeighing(order.id, {
@@ -857,11 +880,16 @@ function WeighModal({
           });
         }
       }
+      setFreeInput('');
       setTierInputs({});
       setNote('');
       onSaved(updated, true);
     } catch (e: any) {
-      onError(e?.message || t('common.error'));
+      if (e?.message?.includes('FREE_TIER_EXCEEDED')) {
+        onError(t('adminOrders.freeOverMsg'));
+      } else {
+        onError(e?.message || t('common.error'));
+      }
     } finally {
       setBusy(false);
     }
@@ -881,68 +909,95 @@ function WeighModal({
 
   return (
     <Sheet title={`🐟 ${t('adminOrders.addWeighing')} · ${order.orderNumber}`} onClose={onClose}>
-      {/* 第一行：总杆数 + 总免重 */}
-      <div className="mb-3 rounded-xl bg-primary-50 px-4 py-3">
-        <div className="flex items-center justify-between text-sm">
-          <span className="font-medium text-primary-800">
-            🎣 {t('adminOrders.rodFreeHint', { rods: rodCount, kg: FISH_FREE_KG })}
-          </span>
-          <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-primary-700">
+      {/* 标题提示 */}
+      <p className="mb-3 rounded-lg bg-primary-50 px-3 py-2 text-[11px] leading-relaxed text-primary-700">
+        {t('adminOrders.weighByTier')}
+      </p>
+
+      {/* 第 1 行：免重 */}
+      <div className="mb-2 rounded-xl border border-neutral-200 bg-white px-3 py-2.5">
+        <div className="mb-1 flex items-center justify-between">
+          <div className="text-xs font-semibold text-neutral-800">
+            {t('adminOrders.freeRow')}
+          </div>
+          <div className="text-[11px] text-neutral-500">
             {t('adminOrders.totalFreeKg', { kg: freeKg })}
+            {freeUsed > 0 && ` · ${t('adminOrders.freeUsed', { kg: freeUsed })}`}
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            inputMode="decimal"
+            step="0.01"
+            min="0"
+            value={freeInput}
+            onChange={(e) => setFreeInput(e.target.value)}
+            placeholder="0.00"
+            className={`w-24 rounded-lg border px-2 py-1.5 text-right text-sm font-bold focus:outline-none ${
+              freeOver
+                ? 'border-error-400 bg-error-50'
+                : 'border-neutral-200 focus:border-primary-500'
+            }`}
+          />
+          <span className="text-xs text-neutral-400">kg</span>
+          <span className="flex-1 text-right">
+            {freeOver ? (
+              <span className="rounded bg-error-50 px-2 py-1 text-[11px] font-bold text-error-600">
+                {t('adminOrders.freeOver')}
+              </span>
+            ) : newFreeKg > 0 ? (
+              <span className="text-xs font-bold text-success-600">
+                {t('adminOrders.freeOk')}
+              </span>
+            ) : (
+              <span className="text-xs text-neutral-300">—</span>
+            )}
           </span>
         </div>
-        <p className="mt-2 text-[11px] leading-relaxed text-neutral-600">
-          {t('adminOrders.weighByTier')}
-        </p>
       </div>
 
-      {/* 4 档价格 */}
-      <div className="mb-3 space-y-2">
-        {tierVals.map((x) => (
-          <div
-            key={x.tier}
-            className="flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2.5"
-          >
-            <div className="flex-1 min-w-0">
-              <div className="text-xs font-semibold text-neutral-800">
-                {t(`adminOrders.${x.labelKey}`)}
-              </div>
-              <div className="text-[11px] text-neutral-500">
-                {t(`adminOrders.${x.priceKey}`)}
-              </div>
+      {/* 第 2–5 行：4 个价格档 */}
+      {tierVals.map((x) => (
+        <div
+          key={x.tier}
+          className="mb-2 flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2.5"
+        >
+          <div className="min-w-0 flex-1">
+            <div className="text-xs font-semibold text-neutral-800">
+              {t(`adminOrders.${x.labelKey}`)}
             </div>
-            <input
-              type="number"
-              inputMode="decimal"
-              step="0.01"
-              min="0"
-              value={tierInputs[x.tier] ?? ''}
-              onChange={(e) => setTier(x.tier, e.target.value)}
-              placeholder="0.00"
-              className="w-20 rounded-lg border border-neutral-200 px-2 py-1.5 text-right text-sm font-bold focus:border-primary-500 focus:outline-none"
-            />
-            <span className="w-4 text-xs text-neutral-400">kg</span>
-            <span
-              className={`w-16 text-right text-sm font-bold ${
-                x.kg > 0 ? (willCharge ? 'text-primary-700' : 'text-neutral-400') : 'text-neutral-300'
-              }`}
-            >
-              {x.kg > 0
-                ? willCharge
-                  ? `฿${Math.round(x.amount * 100) / 100}`
-                  : t('adminOrders.tierNotCharged')
-                : '—'}
-            </span>
+            <div className="text-[11px] text-neutral-500">{t(`adminOrders.${x.priceKey}`)}</div>
           </div>
-        ))}
-      </div>
+          <input
+            type="number"
+            inputMode="decimal"
+            step="0.01"
+            min="0"
+            value={tierInputs[x.tier] ?? ''}
+            onChange={(e) => setTier(x.tier, e.target.value)}
+            placeholder="0.00"
+            className="w-20 rounded-lg border border-neutral-200 px-2 py-1.5 text-right text-sm font-bold focus:border-primary-500 focus:outline-none"
+          />
+          <span className="w-4 text-xs text-neutral-400">kg</span>
+          <span className="w-16 text-right text-sm font-bold">
+            {x.kg > 0 ? (
+              <span className="text-primary-700">฿{Math.round(x.amount * 100) / 100}</span>
+            ) : (
+              <span className="text-neutral-300">—</span>
+            )}
+          </span>
+        </div>
+      ))}
 
-      {/* 本次预览加总 */}
+      {/* 本次预览 */}
       <div className="mb-3 flex items-center justify-between rounded-xl bg-neutral-50 px-3 py-2 text-xs">
         <span className="text-neutral-500">
-          {t('adminOrders.afterWeigh')} {newTotalKg} kg
+          {t('adminOrders.afterWeigh')} {newFreeKg + newPaidKg} kg
         </span>
-        <span className="font-bold text-primary-700">฿{Math.round(previewCharge * 100) / 100}</span>
+        <span className="font-bold text-primary-700">
+          ฿{Math.round(newPaidCharge * 100) / 100}
+        </span>
       </div>
 
       <input
@@ -954,7 +1009,7 @@ function WeighModal({
 
       <button
         onClick={add}
-        disabled={busy || !(newTotalKg > 0)}
+        disabled={busy || !anyInput || freeOver}
         className="w-full rounded-xl bg-primary-700 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
       >
         {t('adminOrders.weighSave')}
@@ -974,11 +1029,13 @@ function WeighModal({
               >
                 <span className="text-neutral-700">
                   {w.weightKg} kg
-                  {w.fishTier ? ` · ${t(`adminOrders.tier${w.fishTier}`)}` : ''}
+                  {w.fishTier === 0 ? ` · ${t('adminOrders.freeRow')}` : w.fishTier ? ` · ${t(`adminOrders.tier${w.fishTier}`)}` : ''}
                   {w.note ? ` · ${w.note}` : ''}
                 </span>
                 <span className="flex items-center gap-2">
-                  <span className="text-neutral-500">฿{w.amount}</span>
+                  <span className="text-neutral-500">
+                    {w.fishTier === 0 ? t('adminOrders.freeRowFree') : `฿${w.amount}`}
+                  </span>
                   <button
                     onClick={() => remove(w.id)}
                     disabled={busy}
@@ -1001,7 +1058,9 @@ function WeighModal({
         </div>
         <div className="flex justify-between">
           <span className="text-neutral-500">{t('adminOrders.fishCharge')}</span>
-          <span className="font-semibold text-primary-700">฿{Math.round(order.fishCharge * 100) / 100}</span>
+          <span className="font-semibold text-primary-700">
+            ฿{Math.round((histPaidCharge + newPaidCharge) * 100) / 100}
+          </span>
         </div>
       </div>
     </Sheet>

@@ -61,32 +61,31 @@ export function isValidTier(t: unknown): t is FishTier {
   return t === 50 || t === 60 || t === 80 || t === 100;
 }
 
-/** 一条称重记录的计价单元：重量 + 该档单价 */
+/** 免重档标识：0 = 免费额度内的重量（只记录、不计费） */
+export const FISH_TIER_FREE = 0;
+
+/** 一条称重记录的计价单元：重量 + 档位 */
 export interface WeighingLike {
   weightKg: number;
-  /** 该条称重所在的鱼种档（null/缺省 = 按兜底价 60） */
+  /** 档位：0=免重（不计费），50/60/80/100=收费档，null=历史数据按兜底 60 */
   fishTier?: number | null;
 }
 
 /**
- * 渔获费 = Σ(各称重档 重量 × 该档单价) 再扣除全局免扣。
+ * 渔获费 = 各收费档（50/60/80/100）的「重量 × 该档价」之和。
+ * 免重档（fishTier=0）不计费。历史数据 fishTier=null 按兜底 60฿ 计。
  *
- * 免扣规则：鱼竿数 × 1kg 为总免重；超过总免重才收费。
- * 按各档分别算毛额（Σ 各档 weightKg × 该档价），若总重 > 总免重，
- * 再按「超出总免重的比例」从毛额里扣免（或简化为：总重 ≤ 免重 → 0，否则全部收费）。
- * 这里采用**简化口径**：总重 ≤ 总免重 → 渔获费 0；总重 > 总免重 → 全部鱼按各档价收费。
+ * 说明：免重只在**前端**做校验（免重行填的量 ≤ 鱼竿数×1kg），
+ * 后端渔获费只累加收费档，所以这里不需要再减免重。
  */
-export function fishChargeByTiers(
-  weighings: WeighingLike[],
-  totalIncludedKg: number,
-): number {
-  const totalW = weighings.reduce((s, w) => s + Math.max(0, w.weightKg), 0);
-  if (totalW <= totalIncludedKg + 1e-9) return 0; // 全在免重内
-  // 超出免重：按各档价收费（每档全部重量）
+export function fishChargeByTiers(weighings: WeighingLike[]): number {
   let charge = 0;
   for (const w of weighings) {
-    const price = isValidTier(w.fishTier) ? FISH_TIER_PRICES[w.fishTier] : FISH_PRICE_PER_KG;
-    charge += Math.max(0, w.weightKg) * price;
+    const wt = Math.max(0, w.weightKg);
+    const tier = w.fishTier;
+    if (tier === FISH_TIER_FREE) continue; // 免重档不计费
+    const price = isValidTier(tier) ? FISH_TIER_PRICES[tier] : FISH_PRICE_PER_KG;
+    charge += wt * price;
   }
   return round2(charge);
 }
@@ -187,12 +186,9 @@ export async function recalcOrderTotals(tx: Tx, orderId: string): Promise<OrderT
     select: { weightKg: true, fishTier: true, pricePerKg: true },
   });
 
-  const rodCount = countRodsFromItems(items);
-  const includedKg = rodCount * FISH_INCLUDED_KG_PER_ROD;
-  // 按鱼种档分别计价：总重 ≤ 总免重 → 0；否则全部按各档价
+  // 渔获费 = 各收费档（50/60/80/100）重量×单价之和；免重档(0)不计费，null 历史数据按 60
   const fishCharge = fishChargeByTiers(
     weighings.map((w) => ({ weightKg: w.weightKg, fishTier: w.fishTier })),
-    includedKg,
   );
   const subtotal = items.reduce((s, i) => s + i.totalPrice, 0);
   const fishWeightKg = weighings.reduce((s, w) => s + w.weightKg, 0);
