@@ -51,8 +51,45 @@ export function countRodsFromItems(
 ): number {
   return items.reduce((s, it) => s + (isRodItem(it.menuItem) ? (it.quantity || 0) : 0), 0);
 }
-/** 渔获超出部分单价：60 泰铢/公斤 */
+/** 渔获超出部分单价：60 泰铢/公斤（兜底价；实际按鱼种档计） */
 export const FISH_PRICE_PER_KG = 60;
+
+/** 鱼种价格档（2026-10-16 起，按泰文公告；单位 ฿/kg） */
+export const FISH_TIER_PRICES = { 50: 50, 60: 60, 80: 80, 100: 100 } as const;
+export type FishTier = 50 | 60 | 80 | 100;
+export function isValidTier(t: unknown): t is FishTier {
+  return t === 50 || t === 60 || t === 80 || t === 100;
+}
+
+/** 一条称重记录的计价单元：重量 + 该档单价 */
+export interface WeighingLike {
+  weightKg: number;
+  /** 该条称重所在的鱼种档（null/缺省 = 按兜底价 60） */
+  fishTier?: number | null;
+}
+
+/**
+ * 渔获费 = Σ(各称重档 重量 × 该档单价) 再扣除全局免扣。
+ *
+ * 免扣规则：鱼竿数 × 1kg 为总免重；超过总免重才收费。
+ * 按各档分别算毛额（Σ 各档 weightKg × 该档价），若总重 > 总免重，
+ * 再按「超出总免重的比例」从毛额里扣免（或简化为：总重 ≤ 免重 → 0，否则全部收费）。
+ * 这里采用**简化口径**：总重 ≤ 总免重 → 渔获费 0；总重 > 总免重 → 全部鱼按各档价收费。
+ */
+export function fishChargeByTiers(
+  weighings: WeighingLike[],
+  totalIncludedKg: number,
+): number {
+  const totalW = weighings.reduce((s, w) => s + Math.max(0, w.weightKg), 0);
+  if (totalW <= totalIncludedKg + 1e-9) return 0; // 全在免重内
+  // 超出免重：按各档价收费（每档全部重量）
+  let charge = 0;
+  for (const w of weighings) {
+    const price = isValidTier(w.fishTier) ? FISH_TIER_PRICES[w.fishTier] : FISH_PRICE_PER_KG;
+    charge += Math.max(0, w.weightKg) * price;
+  }
+  return round2(charge);
+}
 /** 店员可直接改价的上限（占订单毛额比例）。超出需管理员确认。 */
 export const STAFF_DISCOUNT_LIMIT_RATIO = 0.1;
 
@@ -147,18 +184,34 @@ export async function recalcOrderTotals(tx: Tx, orderId: string): Promise<OrderT
   });
   const weighings = await tx.weighing.findMany({
     where: { orderId },
-    select: { weightKg: true },
+    select: { weightKg: true, fishTier: true, pricePerKg: true },
   });
 
   const rodCount = countRodsFromItems(items);
   const includedKg = rodCount * FISH_INCLUDED_KG_PER_ROD;
-  const totals = computeOrderTotals({
-    subtotal: items.reduce((s, i) => s + i.totalPrice, 0),
-    fishWeightKg: weighings.reduce((s, w) => s + w.weightKg, 0),
-    discountType: order.discountType as DiscountTypeValue,
-    discountValue: order.discountValue,
+  // 按鱼种档分别计价：总重 ≤ 总免重 → 0；否则全部按各档价
+  const fishCharge = fishChargeByTiers(
+    weighings.map((w) => ({ weightKg: w.weightKg, fishTier: w.fishTier })),
     includedKg,
-  });
+  );
+  const subtotal = items.reduce((s, i) => s + i.totalPrice, 0);
+  const fishWeightKg = weighings.reduce((s, w) => s + w.weightKg, 0);
+  const gross = round2(subtotal + fishCharge);
+  const discountAmount = discountAmountFor(
+    gross,
+    order.discountType as DiscountTypeValue,
+    order.discountValue,
+  );
+  const totalPrice = round2(gross - discountAmount);
+
+  const totals = {
+    subtotal,
+    fishWeightKg: round2(Math.max(0, fishWeightKg)),
+    fishCharge,
+    gross,
+    discountAmount,
+    totalPrice,
+  };
 
   await tx.order.update({
     where: { id: orderId },

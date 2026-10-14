@@ -499,6 +499,7 @@ model Weighing {
   orderId    String
   order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   weightKg   Float
+  fishTier   Int?     // 鱼种价格档：50/60/80/100（฿/kg）；null=按统一价 60
   pricePerKg Float    @default(60)   // 超出部分单价快照
   amount     Float                   // 本条毛额快照 = weightKg * pricePerKg（不含免费额度）
   note       String?

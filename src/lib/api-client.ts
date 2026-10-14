@@ -574,7 +574,7 @@ export async function cancelAdminOrder(orderId: string): Promise<any> {
 /** Admin — 录入渔获称重（前 1kg 免费，超出 60฿/kg） */
 export async function addOrderWeighing(
   orderId: string,
-  input: { weightKg: number; note?: string },
+  input: { weightKg: number; note?: string; fishTier?: number },
 ): Promise<any> {
   return request<any>(`/api/admin/orders/${orderId}/weigh`, {
     method: 'POST',
