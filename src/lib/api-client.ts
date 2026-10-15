@@ -478,7 +478,7 @@ export interface AdminOrderSummary {
 
 export async function fetchAdminOrders(params?: {
   status?: string;
-  scope?: 'open' | 'awaiting' | 'today';
+  scope?: 'open' | 'awaiting' | 'today' | 'unsettled';
   startDate?: string;
   endDate?: string;
 }): Promise<{ orders: any[]; summary: AdminOrderSummary }> {

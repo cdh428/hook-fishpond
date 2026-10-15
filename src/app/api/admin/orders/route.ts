@@ -41,6 +41,10 @@ export async function GET(request: NextRequest) {
     } else if (scope === "today") {
       const { start, end } = bangkokDayRange();
       where.createdAt = { gte: start, lt: end };
+    } else if (scope === "unsettled") {
+      // 未结清：不做日期限制。跨天未结的桌必须一直出现在后台，直到结清或取消，
+      // 否则隔天就「消失」，收不到钱也结不掉。
+      where.status = { notIn: ["SETTLED", "CANCELLED"] };
     }
 
     if (startDate || endDate) {

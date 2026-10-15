@@ -861,6 +861,7 @@
     "freeOver": "拿出一条鱼",
     "freeOverMsg": "免重超出，请拿出一条鱼（免重填的量不能超过总免重）",
     "freeUsed": "已填 {kg} kg",
+      "unsettledAllDays": "未结清 · 不限日期",
     "weighNotePlaceholder": "备注（鱼种等）",
     "weighSave": "添加称重",
     "weighList": "称重记录",

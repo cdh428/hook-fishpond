@@ -861,6 +861,7 @@
     "freeOver": "Set one fish out",
     "freeOverMsg": "Free allowance exceeded — set one fish out (the free row cannot exceed the total free kg)",
     "freeUsed": "{kg} kg entered",
+      "unsettledAllDays": "Unsettled · all dates",
     "weighNotePlaceholder": "Note (species, etc.)",
     "weighSave": "Add weighing",
     "weighList": "Weighing records",

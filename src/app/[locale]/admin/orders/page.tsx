@@ -110,7 +110,15 @@ export default function AdminOrdersPage() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetchAdminOrders({ scope: todayOnly ? 'today' : undefined });
+      // 「进行中 / 待收款」不受「只看今天」限制：跨天未结的桌必须一直可见，
+      // 否则隔天就在后台消失，钱收不到也结不掉。已结算 / 已取消才按日期筛。
+      const scope =
+        tab === 'open' || tab === 'awaiting'
+          ? 'unsettled'
+          : todayOnly
+            ? 'today'
+            : undefined;
+      const res = await fetchAdminOrders({ scope });
       setOrders(res.orders);
       setSummary(res.summary);
     } catch (e: any) {
@@ -118,7 +126,7 @@ export default function AdminOrdersPage() {
     } finally {
       setLoading(false);
     }
-  }, [todayOnly, t]);
+  }, [tab, todayOnly, t]);
 
   useEffect(() => {
     load();
@@ -372,14 +380,20 @@ export default function AdminOrdersPage() {
             </button>
           ))}
         </div>
-        <button
-          onClick={() => setTodayOnly((v) => !v)}
-          className={`shrink-0 rounded-lg px-2.5 py-2 text-xs font-medium transition ${
-            todayOnly ? 'bg-primary-700 text-white' : 'bg-neutral-100 text-neutral-600'
-          }`}
-        >
-          {todayOnly ? t('adminOrders.today') : t('adminOrders.allTime')}
-        </button>
+        {tab === 'settled' || tab === 'cancelled' ? (
+          <button
+            onClick={() => setTodayOnly((v) => !v)}
+            className={`shrink-0 rounded-lg px-2.5 py-2 text-xs font-medium transition ${
+              todayOnly ? 'bg-primary-700 text-white' : 'bg-neutral-100 text-neutral-600'
+            }`}
+          >
+            {todayOnly ? t('adminOrders.today') : t('adminOrders.allTime')}
+          </button>
+        ) : (
+          <span className="shrink-0 rounded-lg bg-neutral-100 px-2.5 py-2 text-xs font-medium text-neutral-500">
+            {t('adminOrders.unsettledAllDays')}
+          </span>
+        )}
         <button
           onClick={load}
           className="shrink-0 rounded-lg bg-neutral-100 px-2.5 py-2 text-xs font-medium text-neutral-600"
