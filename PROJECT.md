@@ -6,6 +6,7 @@
 > - 日常要做什么 → [`docs/OPERATIONS.md`](docs/OPERATIONS.md)
 > - 账号与密钥在哪 → [`docs/CREDENTIALS.md`](docs/CREDENTIALS.md)
 > - 改完怎么发上去 → [`docs/playbooks/push-checklist.md`](docs/playbooks/push-checklist.md)
+> - **踩过的坑，别再踩** → [`docs/playbooks/gotchas.md`](docs/playbooks/gotchas.md)
 > - 环境和命令 → [`README.md`](README.md) · [`docs/SETUP_GUIDE.md`](docs/SETUP_GUIDE.md)
 > - AI 运营团队 / 社媒发布 → [`docs/AGENT-TEAM.md`](docs/AGENT-TEAM.md) · [`docs/playbooks/social-publishing.md`](docs/playbooks/social-publishing.md)
 
@@ -28,7 +29,7 @@
 
 | 塘 | 类型 | 价格 | 规则 |
 |---|---|---|---|
-| 休闲塘 | 个人 | **100 ฿/位/天**（自带竿 100 / 租竿 150，**二选一**） | 约 30 个钓位 |
+| 休闲塘 | 个人 | **100 ฿/位/天**（竿费：自带竿 100 / 租借竿 150，**可同时存在**；每竿免 1 kg 渔获） | 约 30 个钓位 |
 | 竞赛塘 | 团体 | **500 ฿/人/天** | 10 人起，最多 40 人；**按人头**计费 |
 
 营业 **09:00–18:00**，**周一固定休息**，同日预约 **17:00 截止**。
@@ -89,6 +90,9 @@
 | 2026-09-27 | 管理员口令轮换；推送改为**三层凭据链** | 口令曾明文进仓库；PAT 权限过大 |
 | 2026-09-28 | 自有域名 `hookfishpond.com` 上线；生产标识（canonical / OG / icons）收口 | 旧 `*.vercel.app` 会让 Google 认错正主 |
 | 2026-09-28 | 上密文闸门（`scripts/check-secrets.sh` + CI）；**公开仓库里的活凭据按已泄漏处置** | 见 `CREDENTIALS.md` §5 |
+| 2026-10-14 | 渔获计价改为「**按竿免重 + 4 档鱼价**（50/60/80/100）」，称重页 **5 行制** | 涨价公告落地；旧口径「所有鱼种首 1 kg 免费 + 单一 60฿/kg」作废 |
+| 2026-10-15 | 未结清单据**不再按日期过滤**（`scope=unsettled`） | 跨天未结的桌曾在后台「消失」，钱收不到也结不掉 |
+| 2026-10-15 | 首页公告图改为**直接渲染** | 「SSR 隐藏 + onLoad 显示」有竞态，图片永久不可见 |
 
 ---
 
@@ -104,7 +108,7 @@ src/
 ├── contexts/AppContext.tsx     # 购物车 + 会话（localStorage）
 ├── lib/                        # 见下表
 └── i18n/                       # routing + 语言探测
-messages/{zh,en,th}.json        # 978 键 × 3，必须完全对齐
+messages/{zh,en,th}.json        # 1039 键 × 3，必须完全对齐（`node scripts/check-i18n.mjs`）
 prisma/schema.prisma            # 23 model + 17 enum
 tools/print-bridge/             # 本地打印桥（Python，只监听 127.0.0.1）
 docs/playbooks/                 # 流程知识（推送 / 安全 / 素材）
