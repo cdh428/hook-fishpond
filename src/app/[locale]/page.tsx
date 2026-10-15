@@ -185,24 +185,18 @@ export default function HomePage() {
               <p className="mt-0.5 text-xs text-neutral-500">
                 {t('home.notice.caption')}
               </p>
-              {/* 图片槽：图放进 public/media/notice-{locale}.jpg 后自动显示，没放则显示占位提示 */}
-              <div className="mt-4 overflow-hidden rounded-xl">
+              {/* 公告图：public/media/notice-{locale}.jpg
+                  直接正常渲染。不要用「SSR 先给 display:none、onLoad 再显示」的写法：
+                  SSR 出的 HTML 本身就是隐藏的，而 onLoad 存在竞态（图片在 hydration
+                  完成前就加载完时事件不会触发），会导致图永久不可见。 */}
+              <div className="mt-4 overflow-hidden rounded-xl border border-amber-200 bg-white">
                 <img
                   src={t('home.notice.img')}
                   alt={t('home.notice.alt')}
-                  className="w-full"
+                  className="block w-full"
                   loading="lazy"
                   decoding="async"
-                  style={{ display: 'none' }}
-                  onLoad={(e) => {
-                    (e.currentTarget as HTMLImageElement).style.display = '';
-                    const ph = (e.currentTarget as HTMLImageElement).nextElementSibling as HTMLElement | null;
-                    if (ph) ph.style.display = 'none';
-                  }}
                 />
-                <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-xs text-amber-700">
-                  {t('home.notice.placeholder')}
-                </div>
               </div>
             </div>
           </div>
