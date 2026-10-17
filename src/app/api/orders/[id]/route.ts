@@ -19,7 +19,7 @@ export async function GET(
     const order = await prisma.order.findUnique({
       where: { id },
       include: {
-        items: { include: { menuItem: true } },
+        items: { include: { menuItem: true }, orderBy: { createdAt: "asc" } },
         payment: true,
         bookings: { include: { pond: true, spot: true } },
         weighings: { orderBy: { createdAt: "asc" } },
@@ -31,17 +31,24 @@ export async function GET(
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
+    // 合单提示：堂食后付订单若在本桌既有账单上被追加过菜品行
+    //（行 createdAt 晚于订单 createdAt），则带上 merged 标志，前端显示横幅。
+    const merged =
+      order.orderType === "DINE_IN" &&
+      order.settlementMode === "POSTPAID" &&
+      order.items.some((it) => it.createdAt.getTime() > order.createdAt.getTime());
+
     // 这是「能力 URL」模式（凭 cuid 读单），顾客下单成功页要靠它，所以不能直接要求登录。
     // 但**手机号**没必要暴露给任何持有链接的人：只有管理员或订单本人能拿到完整值。
     const admin = await requireAdmin(request);
     const me = admin ? null : await getUserFromRequest(request);
     const privileged = !!admin || (!!me && me.id === order.userId);
 
-    return NextResponse.json(
-      privileged
-        ? order
-        : { ...order, customerPhone: maskPhone(order.customerPhone) },
-    );
+    const payload = privileged
+      ? order
+      : { ...order, customerPhone: maskPhone(order.customerPhone) };
+
+    return NextResponse.json({ ...payload, merged });
   } catch (error: any) {
     console.error("Get order error:", error);
     return NextResponse.json(

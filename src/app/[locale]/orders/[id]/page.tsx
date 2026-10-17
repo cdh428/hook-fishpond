@@ -161,6 +161,16 @@ export default function OrderDetailPage() {
         </div>
       )}
 
+      {/* 合单提示：本次点单已并入本桌既有账单 */}
+      {order.merged && (
+        <div className="mb-5 flex items-center gap-2 rounded-xl border border-info-200 bg-info-50 px-4 py-3 text-sm font-medium text-info-800">
+          <svg className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m6 7H4m0 0 4 4m-4-4 4-4" />
+          </svg>
+          {t('cart.mergedBanner')}
+        </div>
+      )}
+
       {/* 订单头 */}
       <div className="mb-4 rounded-xl bg-white p-4 shadow-md">
         <div className="flex items-start justify-between gap-2">

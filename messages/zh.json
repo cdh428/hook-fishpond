@@ -229,7 +229,8 @@
     "editLine": "改规格",
     "itemGone": "有菜品已下架，请重新选择",
     "loadOptionsFailed": "加载规格失败，请重试",
-    "orderNotePlaceholder": "整单备注，如：先上饮料、分开打包…"
+    "orderNotePlaceholder": "整单备注，如：先上饮料、分开打包…",
+    "mergedBanner": "已并入本桌账单，一起结账"
   },
   "payment": {
     "title": "选择支付方式",
@@ -860,7 +861,7 @@
     "freeOver": "拿出一条鱼",
     "freeOverMsg": "免重超出，请拿出一条鱼（免重填的量不能超过总免重）",
     "freeUsed": "已填 {kg} kg",
-      "unsettledAllDays": "未结清 · 不限日期",
+    "unsettledAllDays": "未结清 · 不限日期",
     "weighNotePlaceholder": "备注（鱼种等）",
     "weighSave": "添加称重",
     "weighList": "称重记录",

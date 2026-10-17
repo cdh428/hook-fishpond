@@ -229,7 +229,8 @@
     "editLine": "Edit",
     "itemGone": "Some items are unavailable, please reselect",
     "loadOptionsFailed": "Failed to load options, please retry",
-    "orderNotePlaceholder": "Order note, e.g. drinks first, pack separately…"
+    "orderNotePlaceholder": "Order note, e.g. drinks first, pack separately…",
+    "mergedBanner": "Added to this table's bill — settle together"
   },
   "payment": {
     "title": "Select Payment Method",
@@ -860,7 +861,7 @@
     "freeOver": "Set one fish out",
     "freeOverMsg": "Free allowance exceeded — set one fish out (the free row cannot exceed the total free kg)",
     "freeUsed": "{kg} kg entered",
-      "unsettledAllDays": "Unsettled · all dates",
+    "unsettledAllDays": "Unsettled · all dates",
     "weighNotePlaceholder": "Note (species, etc.)",
     "weighSave": "Add weighing",
     "weighList": "Weighing records",

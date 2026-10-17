@@ -5,7 +5,7 @@ import { runTx } from "@/lib/tx";
 import { bangkokDateString } from "@/lib/date-utils";
 import { isClosedDate } from "@/lib/closed-days";
 import { reserveStock, InsufficientStockError } from "@/lib/stock";
-import { generateOrderNumber } from "@/lib/orders";
+import { generateOrderNumber, recalcOrderTotals } from "@/lib/orders";
 import { resolveOrderLines, OptionError } from "@/lib/menu-options-server";
 import { requireAdmin, getUserFromRequest } from "@/lib/auth";
 
@@ -92,16 +92,76 @@ export async function POST(request: NextRequest) {
       pickupAt = d;
     }
 
-    // Create order with items in a transaction; link booking if provided.
-    // 订单号按当日流水生成，并发下可能撞号 —— 重试三次。
-    // 单价与选项一律由 resolveOrderLines 在服务端重算（不采信前端价格）。
+    // ----- 后付堂食合单判断：先算好新菜行；若同桌已有未结清订单则并入，否则新开 -----
+    // 规则：只有「堂食 + 后付(POSTPAID)」才合并（一张桌最后统一结一次账）；
+    //       先付(PREPAID)当场付钱、外带(TAKEAWAY)无桌，都必须独立成单。
+    const willMerge = orderType === "DINE_IN" && settlementMode === "POSTPAID" && !!tableId;
+    let mergedInto: { id: string; orderNumber: string } | null = null;
+
     let order: { id: string } | null = null;
     let lastError: any = null;
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
         order = await runTx(async (tx) => {
-          const orderNumber = await generateOrderNumber(tx, attempt);
           const { lines, subtotal } = await resolveOrderLines(tx, items);
+
+          // —— 合并分支：同桌最早一张未结清订单 ——
+          if (willMerge && tableId) {
+            const existing = await tx.order.findFirst({
+              where: {
+                tableId,
+                settlementMode: "POSTPAID",
+                // 与「本桌账单」接口同款判定：只要未结清就并入
+                // （含 PENDING/PREPARING/READY/SERVED；SETTLED/CANCELLED 除外）
+                status: { notIn: ["SETTLED", "CANCELLED"] },
+              },
+              orderBy: { createdAt: "asc" },
+              select: { id: true, orderNumber: true },
+            });
+            if (existing) {
+              // 追加菜品行（每行带 optionKey，库存预占按行精确挂到对应 orderItem）
+              await tx.orderItem.createMany({
+                data: lines.map((l) => ({
+                  orderId: existing.id,
+                  menuItemId: l.menuItemId,
+                  quantity: l.quantity,
+                  unitPrice: l.unitPrice,
+                  totalPrice: l.totalPrice,
+                  optionKey: l.optionKey,
+                  note: l.note,
+                  ...(l.options ? { options: l.options as unknown as Prisma.InputJsonValue } : {}),
+                })),
+              });
+
+              // 预占库存：先读出刚插入的行拿到各 orderItemId，再逐行挂预占
+              const addedItems = await tx.orderItem.findMany({
+                where: {
+                  orderId: existing.id,
+                  menuItemId: { in: lines.map((l) => l.menuItemId) },
+                },
+                select: { id: true, menuItemId: true, quantity: true, optionKey: true },
+              });
+              await reserveStock(
+                tx,
+                existing.id,
+                addedItems.map((it) => ({
+                  menuItemId: it.menuItemId,
+                  quantity: it.quantity,
+                  optionKey: it.optionKey,
+                  orderItemId: it.id,
+                })),
+              );
+
+              // 重算订单小计/渔获/折扣/应付（全量按行+称重+折扣）
+              await recalcOrderTotals(tx, existing.id);
+
+              mergedInto = { id: existing.id, orderNumber: existing.orderNumber };
+              return { id: existing.id, orderNumber: existing.orderNumber };
+            }
+          }
+
+          // —— 新开分支（先付 / 外带 / 无同桌未结清订单）——
+          const orderNumber = await generateOrderNumber(tx, attempt);
 
           const newOrder = await tx.order.create({
             data: {
@@ -174,6 +234,13 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // 合并时额外带一个标志，方便前端提示「已并入本桌账单」
+    if (mergedInto) {
+      return NextResponse.json(
+        { ...(fullOrder || {}), mergedIntoOrder: mergedInto, merged: true },
+        { status: 200 },
+      );
+    }
     return NextResponse.json(fullOrder || order, { status: 201 });
   } catch (error: any) {
     if (error instanceof OptionError) {
