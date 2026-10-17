@@ -108,11 +108,15 @@ export function canEditOrder(status: string): boolean {
   return status !== 'SETTLED' && status !== 'CANCELLED';
 }
 
-/** 是否待收款（后付且未结清） */
+/**
+ * 是否需要收款结算（未结清且未取消）。
+ *
+ * 历史：曾只认 POSTPAID，导致「先付 PREPAID 但只付了一部分」的单
+ * （如 FP-20261017-006）永远不显示结算按钮——顾客付了餐费 160、还没称重结清，
+ * 却没法在后台把那 160 记成「已付」再补渔获费差额。
+ * 现在放宽为**任何未结清订单**都可结算：后付 / 先付全付 / 先付部分付 一律给结算入口，
+ * 差额由「需付 = 总应付 − 已付」在结算弹窗里算。
+ */
 export function needsSettlement(order: { settlementMode: string; status: string }): boolean {
-  return (
-    order.settlementMode === 'POSTPAID' &&
-    order.status !== 'SETTLED' &&
-    order.status !== 'CANCELLED'
-  );
+  return order.status !== 'SETTLED' && order.status !== 'CANCELLED';
 }
