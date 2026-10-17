@@ -285,6 +285,9 @@ class Handler(BaseHTTPRequestHandler):
                     "printerCount": len(targets),
                     "targets": targets,
                     "chrome": _chrome_ok(),
+                    "lanUrls": [f"http://{ip}:{CONFIG['port']}" for ip in _lan_ips()],
+                    "cutMode": CONFIG.get("cutMode", "full"),
+                    "feedLines": CONFIG.get("feedLines", 6),
                 })
                 return
             if path == "/printers":
@@ -390,10 +393,40 @@ def _bt_label(port: str) -> str:
     return port
 
 
+def _lan_ips() -> list[str]:
+    """本机局域网 IPv4 地址（非 127.0.0.1），供手机等其它设备拼地址用。"""
+    ips: list[str] = []
+    try:
+        import socket
+        host = socket.gethostname()
+        for info in socket.getaddrinfo(host, None, socket.AF_INET):
+            ip = info[4][0]
+            if ip and not ip.startswith("127.") and ip not in ips:
+                ips.append(ip)
+    except Exception:
+        pass
+    if not ips:
+        # 兜底：连一个外部地址看看本机出口 IP（UDP，不发包）
+        try:
+            import socket
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            try:
+                s.connect(("8.8.8.8", 80))
+                ip = s.getsockname()[0]
+                if ip and not ip.startswith("127."):
+                    ips.append(ip)
+            finally:
+                s.close()
+        except Exception:
+            pass
+    return ips
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Hook Fishpond 本地打印桥接服务")
     parser.add_argument("--port", type=int, default=None, help=f"监听端口（默认 {CONFIG['port']}）")
-    parser.add_argument("--host", default="127.0.0.1", help="监听地址（默认仅本机）")
+    parser.add_argument("--host", default="0.0.0.0",
+                        help="监听地址（默认 0.0.0.0 = 本机 + 局域网，手机才能连；只给本机用可写 127.0.0.1）")
     parser.add_argument("--printer", default=None,
                         help="默认打印目标：Windows 打印机名（如 POS80）或蓝牙串口（如 COM8）")
     parser.add_argument("--width", type=int, default=None, help="打印宽度（点），默认 576")
@@ -448,7 +481,15 @@ def main(argv: list[str] | None = None) -> int:
     log(f"Chrome/Edge 渲染：{'就绪' if _chrome_ok() else '不可用（HTML 渲染会失败）'}")
 
     server = ThreadingHTTPServer((args.host, port), Handler)
-    log(f"已就绪 → http://{args.host}:{port}   (Ctrl+C 退出)")
+    log(f"已就绪 → http://127.0.0.1:{port}")
+    if args.host in ("0.0.0.0", ""):
+        ips = _lan_ips()
+        if ips:
+            for ip in ips:
+                log(f"         手机/其它设备可访问 → http://{ip}:{port}")
+            log(f"         在手机「打印设置 → 打印服务地址」里填上面任一地址（与电脑同一 Wi-Fi）")
+        else:
+            log("         未检测到局域网地址，手机可能连不上（检查 Wi-Fi）")
     log(f"网页端会访问 /health 探测本服务；探测不到就退回浏览器打印对话框。")
     try:
         server.serve_forever()

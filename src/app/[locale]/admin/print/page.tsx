@@ -5,30 +5,41 @@
  * ==============
  *
  * 收银机上打开这一页，就能：
- *   1. 看到本地打印桥是否在线（蓝牙小票机是否被识别到）；
- *   2. 给「后厨单 / 预结单 / 收据」分别指定打印目标（USB 机或蓝牙机）；
- *   3. 打测试页，确认纸宽 80mm、泰文/中文、二维码都正常。
+ *   1. 看到本地打印桥是否在线；
+ *   2. 给「后厨单 / 预结单 / 收据」分别指定走哪条通道（USB / 蓝牙 / 自动）；
+ *   3. 打测试页，确认纸宽 80mm、泰文/中文、二维码、切纸都正常。
  *
- * 选择结果存在本机 localStorage —— 每台收银机各存各的，互不影响。
+ * 关键变化：**配置存数据库，不再存浏览器**。
+ * 手机上打开这一页看到的是同一份配置 —— 以前各存各的，手机存 `COM8`、电脑存
+ * `POS80`，两边永远对不上。现在存的是「通道偏好」而不是端口号，所以换设备也成立。
+ *
+ * 唯一留在本机的是「打印服务地址」：手机要填电脑的局域网 IP，收银机用
+ * 127.0.0.1 —— 这本来就该按设备而定，共用反而会坏。
  */
 
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  DEFAULT_PREFERENCES,
   clearBridgeCache,
   getBridgeUrl,
+  getPreferences,
   getPrintMode,
-  getTargetFor,
+  loadPreferences,
   pickAutoTarget,
   printViaBridge,
   probeBridge,
+  savePreferences,
+  setPreferences as cachePreferences,
   setBridgeUrl,
   setPrintMode,
-  setTargetFor,
   targetId,
   type BridgeHealth,
   type BridgeTarget,
+  type ChannelPreference,
+  type CutMode,
   type PrintMode,
+  type PrintPreferences,
   type PrintPurpose,
 } from '@/lib/print-agent';
 import { buildKitchenTicketHtml, buildBillHtml, type PrintLabels, type ReceiptOrder } from '@/lib/print-receipt';
@@ -37,6 +48,8 @@ type Health = BridgeHealth | null;
 type ProbeState = 'checking' | 'online' | 'offline';
 
 const PURPOSES: PrintPurpose[] = ['kitchen', 'bill', 'receipt'];
+const CHANNELS: ChannelPreference[] = ['usb', 'bluetooth', 'auto'];
+const CUT_MODES: CutMode[] = ['full', 'partial', 'full-feed', 'partial-feed'];
 
 /** 设置页测试用的假订单 —— 只为验证链路，不进数据库 */
 function demoOrder(locale: string): ReceiptOrder {
@@ -78,11 +91,9 @@ export default function AdminPrintPage() {
   const [targets, setTargets] = useState<BridgeTarget[]>([]);
   const [mode, setMode] = useState<PrintMode>('bridge');
   const [bridgeAddr, setBridgeAddr] = useState('');
-  const [saved, setSaved] = useState<Record<PrintPurpose, string>>({
-    kitchen: '',
-    bill: '',
-    receipt: '',
-  });
+  const [prefs, setPrefs] = useState<PrintPreferences>(DEFAULT_PREFERENCES);
+  const [prefsSaving, setPrefsSaving] = useState(false);
+  const [prefsSaved, setPrefsSaved] = useState('');
   const [testing, setTesting] = useState<string | null>(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -112,11 +123,8 @@ export default function AdminPrintPage() {
   useEffect(() => {
     setMode(getPrintMode());
     setBridgeAddr(getBridgeUrl());
-    setSaved({
-      kitchen: getTargetFor('kitchen'),
-      bill: getTargetFor('bill'),
-      receipt: getTargetFor('receipt'),
-    });
+    setPrefs(getPreferences());
+    void loadPreferences(true).then(setPrefs);
     void refresh();
   }, [refresh]);
 
@@ -153,11 +161,6 @@ export default function AdminPrintPage() {
     [t],
   );
 
-  const chooseTarget = (purpose: PrintPurpose, id: string) => {
-    setTargetFor(purpose, id);
-    setSaved((s) => ({ ...s, [purpose]: id }));
-  };
-
   const applyMode = (m: PrintMode) => {
     setPrintMode(m);
     setMode(m);
@@ -168,12 +171,32 @@ export default function AdminPrintPage() {
     void refresh();
   };
 
+  /** 改偏好后立刻写库 —— 手机马上就能读到，不用再点保存 */
+  const updatePrefs = async (patch: Partial<PrintPreferences>) => {
+    const next = { ...prefs, ...patch };
+    setPrefs(next);
+    cachePreferences(next);
+    setPrefsSaving(true);
+    setPrefsSaved('');
+    try {
+      const r = await savePreferences(next);
+      if (r.ok) {
+        setPrefsSaved(t('adminPrint.prefsSaved'));
+        setTimeout(() => setPrefsSaved(''), 2000);
+      } else {
+        setError(t('adminPrint.prefsSaveFailed', { error: r.error || '' }));
+      }
+    } finally {
+      setPrefsSaving(false);
+    }
+  };
+
   const runTest = async (purpose: 'kitchen' | 'bill') => {
     if (!health) {
       setError(t('adminPrint.needBridge'));
       return;
     }
-    const target = saved[purpose] || pickAutoTarget(health, purpose);
+    const target = pickAutoTarget(health, purpose, prefs);
     if (!target) {
       setError(t('adminPrint.needTarget'));
       return;
@@ -187,7 +210,11 @@ export default function AdminPrintPage() {
         purpose === 'kitchen'
           ? buildKitchenTicketHtml(order, labels)
           : buildBillHtml(order, { qrDataUrl: null, labels });
-      const r = await printViaBridge(html, target, { copies: 1 });
+      const r = await printViaBridge(html, target, {
+        copies: 1,
+        cutMode: prefs.cutMode,
+        feedLines: prefs.feedLines,
+      });
       if (r.ok) {
         setMessage(
           t('adminPrint.testSent', {
@@ -210,6 +237,13 @@ export default function AdminPrintPage() {
     const color =
       kind === 'green' ? 'bg-success-500' : kind === 'red' ? 'bg-error-500' : kind === 'blue' ? 'bg-primary-500' : 'bg-neutral-300';
     return <span className={`inline-block h-2 w-2 rounded-full ${color}`} />;
+  };
+
+  /** 当前偏好在这台机器上会落到哪个目标 —— 让人一眼看出「配了但打不到」的情况 */
+  const effectiveTarget = (p: PrintPurpose): BridgeTarget | undefined => {
+    if (!health) return undefined;
+    const id = pickAutoTarget(health, p, prefs);
+    return health.targets.find((x) => targetId(x) === id);
   };
 
   return (
@@ -272,6 +306,7 @@ export default function AdminPrintPage() {
             <code className="mt-2 block break-all rounded bg-white/70 px-2 py-1.5 font-mono text-[11px] text-neutral-700">
               python tools/print-bridge/bridge.py
             </code>
+            <p className="mt-2">{t('adminPrint.offlinePhoneHint')}</p>
           </div>
         )}
       </div>
@@ -297,36 +332,94 @@ export default function AdminPrintPage() {
         <p className="mt-2 text-xs leading-relaxed text-neutral-400">{t('adminPrint.modeHint')}</p>
       </div>
 
-      {/* 目标分配 */}
+      {/* 通道偏好 —— 存数据库，手机电脑通用 */}
       <div className="rounded-2xl bg-white p-4 shadow-sm">
-        <p className="text-sm font-semibold text-neutral-900">{t('adminPrint.assign')}</p>
-        {probe !== 'online' ? (
-          <p className="mt-2 text-xs text-neutral-400">{t('adminPrint.needBridge')}</p>
-        ) : (
-          <div className="mt-3 space-y-3">
-            {PURPOSES.map((p) => (
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-semibold text-neutral-900">{t('adminPrint.assign')}</p>
+          {prefsSaving ? (
+            <span className="text-[11px] text-neutral-400">{t('adminPrint.saving')}</span>
+          ) : prefsSaved ? (
+            <span className="text-[11px] text-success-600">{prefsSaved}</span>
+          ) : null}
+        </div>
+        <p className="mt-1 text-xs leading-relaxed text-neutral-400">{t('adminPrint.assignHint')}</p>
+
+        <div className="mt-3 space-y-3">
+          {PURPOSES.map((p) => {
+            const eff = effectiveTarget(p);
+            return (
               <div key={p}>
-                <label className="mb-1 block text-xs font-medium text-neutral-600">
-                  {t(`adminPrint.${p}` as never)}
-                </label>
-                <select
-                  value={saved[p]}
-                  onChange={(e) => chooseTarget(p, e.target.value)}
-                  className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm"
-                >
-                  <option value="">{t('adminPrint.autoPick')}</option>
-                  {targets.map((x) => (
-                    <option key={`${x.kind}-${targetId(x)}`} value={targetId(x)}>
-                      {x.name}
-                      {x.isBluetooth ? ` · ${t('adminPrint.bluetooth')}` : ''}
-                      {x.kind === 'winspool' ? ` · ${t('adminPrint.usb')}` : ''}
-                    </option>
+                <div className="mb-1 flex items-baseline justify-between">
+                  <label className="text-xs font-medium text-neutral-600">
+                    {t(`adminPrint.${p}` as never)}
+                  </label>
+                  {probe === 'online' && (
+                    <span className={`text-[11px] ${eff ? 'text-neutral-400' : 'text-error-500'}`}>
+                      {eff ? `→ ${eff.name}` : t('adminPrint.noMatch')}
+                    </span>
+                  )}
+                </div>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {CHANNELS.map((ch) => (
+                    <button
+                      key={ch}
+                      onClick={() => void updatePrefs({ [p]: ch } as Partial<PrintPreferences>)}
+                      className={`rounded-lg border px-2 py-2 text-[11px] font-medium transition ${
+                        prefs[p] === ch
+                          ? 'border-primary-500 bg-primary-50 text-primary-700'
+                          : 'border-neutral-200 text-neutral-500 hover:border-neutral-300'
+                      }`}
+                    >
+                      {ch === 'usb'
+                        ? t('adminPrint.chUsb')
+                        : ch === 'bluetooth'
+                          ? t('adminPrint.chBluetooth')
+                          : t('adminPrint.chAuto')}
+                    </button>
                   ))}
-                </select>
+                </div>
               </div>
-            ))}
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 切纸 */}
+      <div className="rounded-2xl bg-white p-4 shadow-sm">
+        <p className="text-sm font-semibold text-neutral-900">{t('adminPrint.cut')}</p>
+        <p className="mt-1 text-xs leading-relaxed text-neutral-400">{t('adminPrint.cutHint')}</p>
+        <div className="mt-3 grid grid-cols-2 gap-1.5">
+          {CUT_MODES.map((c) => (
+            <button
+              key={c}
+              onClick={() => void updatePrefs({ cutMode: c })}
+              className={`rounded-lg border px-2 py-2 text-[11px] font-medium transition ${
+                prefs.cutMode === c
+                  ? 'border-primary-500 bg-primary-50 text-primary-700'
+                  : 'border-neutral-200 text-neutral-500 hover:border-neutral-300'
+              }`}
+            >
+              {t(`adminPrint.cut_${c.replace('-', '_')}` as never)}
+            </button>
+          ))}
+        </div>
+
+        <div className="mt-3">
+          <div className="mb-1 flex items-baseline justify-between">
+            <label className="text-xs font-medium text-neutral-600">{t('adminPrint.feedLines')}</label>
+            <span className="font-mono text-xs text-neutral-700">{prefs.feedLines}</span>
           </div>
-        )}
+          <input
+            type="range"
+            min={0}
+            max={12}
+            step={1}
+            value={prefs.feedLines}
+            onChange={(e) => void updatePrefs({ feedLines: Number(e.target.value) })}
+            className="w-full"
+          />
+          <p className="mt-1 text-[11px] leading-relaxed text-neutral-400">{t('adminPrint.feedLinesHint')}</p>
+        </div>
       </div>
 
       {/* 测试打印 */}
@@ -393,7 +486,7 @@ export default function AdminPrintPage() {
         </div>
       )}
 
-      {/* 高级：桥地址 */}
+      {/* 高级：桥地址（本机，不共用） */}
       <div className="rounded-2xl bg-white p-4 shadow-sm">
         <p className="text-sm font-semibold text-neutral-900">{t('adminPrint.advanced')}</p>
         <label className="mt-3 mb-1 block text-xs font-medium text-neutral-600">
@@ -413,6 +506,24 @@ export default function AdminPrintPage() {
           </button>
         </div>
         <p className="mt-2 text-xs leading-relaxed text-neutral-400">{t('adminPrint.bridgeUrlHint')}</p>
+
+        {health?.lanUrls && health.lanUrls.length > 0 && (
+          <div className="mt-3 rounded-xl bg-primary-50 p-3">
+            <p className="text-[11px] font-semibold text-primary-800">{t('adminPrint.lanTitle')}</p>
+            <p className="mt-1 text-[11px] leading-relaxed text-primary-700">{t('adminPrint.lanHint')}</p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {health.lanUrls.map((u) => (
+                <button
+                  key={u}
+                  onClick={() => setBridgeAddr(u)}
+                  className="rounded-lg bg-white px-2 py-1 font-mono text-[11px] text-primary-700 shadow-sm"
+                >
+                  {u}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

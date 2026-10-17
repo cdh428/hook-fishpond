@@ -456,6 +456,50 @@ def printer_exists(name: str) -> bool:
         return False
 
 
+def annotate_shared_device(targets: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """
+    标注「同一台打印机被两条通道发现」的情况。
+
+    典型场景：小票机既能 USB 直连（Windows 队列 `POS80`），又能蓝牙 SPP
+    （`GLPrinter → COM8`）。对使用者来说这**是一台机**，不该当成两个设备分别去
+    配置。
+
+    自动判断只认一条可靠线索：**蓝牙串口的 MAC 与某台 Windows 队列的端口信息里
+    出现的 MAC 相同**。名字/驱动都不算 —— 实测 `Microsoft IPP Class Driver`
+    会被三台不同打印机共用，按驱动归组会把完全无关的机器合并。
+
+    所以这里只做「MAC 完全一致」的归组；`POS80 ↔ GLPrinter` 这种名字完全
+    不同的绑定，交给用户在设置页手动指定（存数据库，两端通用）。
+    """
+    def norm_mac(s: Any) -> str:
+        m = re.sub(r"[^0-9a-f]", "", str(s or "").lower())
+        return m if len(m) == 12 and m != "0" * 12 else ""
+
+    for t in targets:
+        t["deviceGroup"] = ""
+        t["isPrimary"] = False
+        t["_mac"] = norm_mac(t.get("mac"))
+
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for t in targets:
+        if t["_mac"]:
+            groups.setdefault(t["_mac"], []).append(t)
+
+    for members in groups.values():
+        if len(members) < 2:
+            continue
+        label = min((m.get("name", "") for m in members), key=len)
+        for m in members:
+            m["deviceGroup"] = label
+        # 同组里让 Windows 队列当主通道：USB 更稳，不受蓝牙休眠/断链影响
+        primary = next((m for m in members if m.get("kind") == "winspool"), members[0])
+        primary["isPrimary"] = True
+
+    for t in targets:
+        t.pop("_mac", None)
+    return targets
+
+
 def list_targets() -> list[dict[str, Any]]:
     """打印目标全集 = Windows 打印队列 + 蓝牙串口（SPP）。热敏机排前面。"""
     items: list[dict[str, Any]] = []
@@ -469,7 +513,7 @@ def list_targets() -> list[dict[str, Any]]:
     except Exception:
         pass
     items.sort(key=lambda p: (not p.get("isThermal"), not p.get("isDefault"), p.get("name", "").lower()))
-    return items
+    return annotate_shared_device(items)
 
 
 def list_serial_ports_only() -> list[str]:

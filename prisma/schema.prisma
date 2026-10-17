@@ -596,3 +596,12 @@ enum LineTargetType {
   ROOM
 }
 
+/// 全局键值配置。
+/// 打印偏好放这里而不是浏览器 localStorage —— 手机和电脑（收银机）打开的是
+/// 同一套后台配置，不再各存各的。value 存 JSON 字符串。
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
