@@ -81,6 +81,32 @@
 - **正确做法**：走 `src/lib/orders.ts` 的 `isRodItem()` / `countRodsFromItems()` 三语名称表。
 - 另注：同一桌可以**同时**有自带竿（100）和租竿（150），不是二选一。
 
+### 3.4 恢复已取消订单：**状态、预占、回补**三件事必须一起做
+
+- **现象**：后台误点了「取消」，订单从列表里消失；即便把 `status` 改回 `PENDING`，
+  菜品也不占库存了，可能出现**超卖**。
+- **根因**：`releaseOrderStock()` 取消时做了两件事 —— `reservedQty` 归零、
+  对「已扣减部分」写 `CANCEL` 流水回补。只改 `status` 等于两件都没逆回来。
+- **可用量口径**：`stockQty − Σ(其他未取消订单的 reservedQty)`。预占为 0 →
+  这桌的菜不占位，别桌可以把它卖掉。
+- **正确做法**：`restoreOrderStock()`（`src/lib/stock.ts`），三步：
+  1. 按「菜品 + 选项键」逐行把 `reservedQty` 写回数量（库存按**菜品**汇总校验，
+     预占必须**逐行**写 —— 同菜品多行时按菜品写会翻倍）；
+  2. 冲销取消写的 `CANCEL` 分录（置 `voidedAt`），再补一条 `SALE` 把库存扣回去
+     —— 保留完整来龙去脉，不要直接删分录；
+  3. `stockConsumedAt = null` —— 否则结算时被幂等守卫跳过 → **漏扣库存**。
+- **拒绝方式**：库存不足时**整单拒绝**（抛 `InsufficientStockError` → 400），
+  不做「部分恢复」。路由动作：`PATCH { action: "restore", status }`，仅对 `CANCELLED` 生效。
+- ⚠️ 取消接口对 `CANCELLED` / `SETTLED` 一律返回 `Order is already closed`，
+  所以**恢复不能复用 `status` 动作**，必须是独立动作。
+
+### 3.5 误删订单时先查「是软删还是物理删」
+
+- 本项目的「删除」= 改 `status = CANCELLED`，**数据一行不丢**，不必去翻备份。
+- 排查顺序：① 查订单是否还在、状态是什么 → ② 查 `StockMovement` 有没有 `CANCEL`
+  分录（判断是否真回补过库存）→ ③ 查 `reservedQty` 是否被清零。
+- 若「无任何流水 + `reservedQty` 全 0」= 下单只预占、未扣减，恢复时**不用回补**，只需重建预占。
+
 ---
 
 ## 四、本机 / 工具链
