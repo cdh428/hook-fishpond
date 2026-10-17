@@ -643,8 +643,22 @@ export interface SettleResult {
  */
 export async function settleAdminOrder(
   orderId: string,
-  input: { action?: 'create' | 'confirm' | 'mark-paid'; method?: 'CASH' | 'PROMPTPAY' },
-): Promise<SettleResult> {
+  input: {
+    action?: 'create' | 'confirm' | 'mark-paid' | 'record-prepaid';
+    method?: 'CASH' | 'PROMPTPAY';
+    /** record-prepaid 用：本次记入的已付金额 */
+    amount?: number;
+    /** record-prepaid 用：收款备注（什么方式 / 谁收的） */
+    note?: string;
+  },
+): Promise<SettleResult & {
+  ok?: boolean;
+  exceeded?: boolean;
+  prepaidAmount?: number;
+  remaining?: number;
+  refundDue?: number;
+  message?: string;
+}> {
   return request<SettleResult>(`/api/admin/orders/${orderId}/settle`, {
     method: 'POST',
     body: JSON.stringify(input),

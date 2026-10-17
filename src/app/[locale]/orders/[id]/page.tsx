@@ -274,6 +274,31 @@ export default function OrderDetailPage() {
             <span className="font-semibold text-neutral-900">{t('payment.total')}</span>
             <span className="text-xl font-bold text-accent-600">฿{order.totalPrice}</span>
           </div>
+
+          {/* 部分付款：已付 / 需付差额（称重后渔获费追加时自动更新） */}
+          {(() => {
+            const prepaid = order.prepaidAmount ?? 0;
+            const remaining = Math.max(0, Math.round((order.totalPrice - prepaid) * 100) / 100);
+            if (prepaid <= 0 && mode !== 'PREPAID') return null;
+            return (
+              <div className="mt-2 space-y-1 border-t border-dashed border-neutral-200 pt-2">
+                {prepaid > 0 && (
+                  <div className="flex justify-between text-xs">
+                    <span className="text-neutral-500">{t('orders.prepaid')}</span>
+                    <span className="font-medium text-success-600">
+                      ฿{prepaid}
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-between text-xs">
+                  <span className="font-medium text-neutral-700">{t('orders.remaining')}</span>
+                  <span className={`font-bold ${remaining > 0 ? 'text-accent-600' : 'text-success-600'}`}>
+                    {remaining > 0 ? `฿${remaining}` : t('orders.paidInFull')}
+                  </span>
+                </div>
+              </div>
+            );
+          })()}
         </div>
 
         {order.note && (

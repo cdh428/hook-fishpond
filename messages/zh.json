@@ -309,7 +309,10 @@
     "served": "已送出",
     "settled": "已结清",
     "reorder": "再来一单",
-    "reordered": "已加入购物车"
+    "reordered": "已加入购物车",
+    "prepaid": "已付",
+    "remaining": "还需付",
+    "paidInFull": "已付清"
   },
   "profile": {
     "title": "个人中心",
@@ -447,7 +450,10 @@
       "recipients": "日报接收人",
       "noRecipientHint": "还没有接收人：用个人 LINE 给官方账号发一句话即可绑定。",
       "credentialHint": "推送凭据未配齐，日报无法发出 —— 去「报表 → 日报推送」查看。"
-    }
+    },
+    "recordPrepaidPlaceholder": "记已付金额",
+    "recordCash": "收现金",
+    "recordPromptPay": "记PromptPay定金"
   },
   "adminBulk": {
     "title": "批量管理",
@@ -910,9 +916,9 @@
     "cancelOrder": "取消",
     "cancelConfirm": "确认取消订单 {order}？对应的库存预占会被释放。",
     "cancelledToast": "订单已取消",
-      "restoreOrder": "恢复订单",
-      "restoreConfirm": "确认恢复订单 {order}？会重新占用库存，并调整为「待处理」。",
-      "restoredToast": "订单已恢复",
+    "restoreOrder": "恢复订单",
+    "restoreConfirm": "确认恢复订单 {order}？会重新占用库存，并调整为「待处理」。",
+    "restoredToast": "订单已恢复",
     "settle": "结算",
     "markPaid": "确认收款",
     "generatePayQr": "生成收款码",

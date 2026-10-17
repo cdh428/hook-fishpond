@@ -309,7 +309,10 @@
     "served": "Served",
     "settled": "Settled",
     "reorder": "Order again",
-    "reordered": "Added to cart"
+    "reordered": "Added to cart",
+    "prepaid": "Paid",
+    "remaining": "Remaining",
+    "paidInFull": "Paid in full"
   },
   "profile": {
     "title": "Profile",
@@ -447,7 +450,10 @@
       "recipients": "Report recipients",
       "noRecipientHint": "No recipients yet — send any message to the official account from your personal LINE to bind one.",
       "credentialHint": "Push credentials incomplete, so the daily report cannot send — check Reports → LINE report."
-    }
+    },
+    "recordPrepaidPlaceholder": "Record paid amount",
+    "recordCash": "Cash",
+    "recordPromptPay": "PromptPay deposit"
   },
   "adminBulk": {
     "title": "Bulk Management",
@@ -910,9 +916,9 @@
     "cancelOrder": "Cancel",
     "cancelConfirm": "Cancel order {order}? Reserved stock will be released.",
     "cancelledToast": "Order cancelled",
-      "restoreOrder": "Restore",
-      "restoreConfirm": "Restore order {order}? Stock will be reserved again and status set to Pending.",
-      "restoredToast": "Order restored",
+    "restoreOrder": "Restore",
+    "restoreConfirm": "Restore order {order}? Stock will be reserved again and status set to Pending.",
+    "restoredToast": "Order restored",
     "settle": "Settle",
     "markPaid": "Confirm payment",
     "generatePayQr": "Generate payment QR",

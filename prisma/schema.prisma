@@ -466,6 +466,11 @@ model Order {
   // ----- 结算与库存消耗时点 -----
   stockConsumedAt DateTime?   // 预占转正式扣减的时刻（先付=付款到账，后付=结清）
   settledAt     DateTime?     // 账单结清时刻（status=SETTLED）
+  // ----- 预付款 / 定金（2026-10-17）-----
+  // 顾客此前已付的钱（现金 / PromptPay 定金等），可分多次累计。
+  // 结算时：需付 remaining = max(0, totalPrice − prepaidAmount)；多付的差额由店员线下退现。
+  prepaidAmount Float       @default(0)
+  prepaidNote   String?     // 收款备注（谁收的、什么方式），便于对账
   payment       Payment?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt

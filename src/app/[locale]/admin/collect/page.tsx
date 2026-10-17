@@ -44,6 +44,8 @@ export default function AdminCollectPage() {
   const [linkedPaymentId, setLinkedPaymentId] = useState<string | null>(null);
   const [collectBusy, setCollectBusy] = useState(false);
   const [collectMsg, setCollectMsg] = useState('');
+  const [prepaidInput, setPrepaidInput] = useState('');
+  const [prepaidMsg, setPrepaidMsg] = useState('');
 
   const loadPending = useCallback(async () => {
     try {
@@ -112,11 +114,15 @@ export default function AdminCollectPage() {
   const linkOrder = (order: any) => {
     setLinkedOrder(order);
     setLinkedPaymentId(null);
-    setAmount(String(order.totalPrice));
+    // 金额默认带出「需付 = 总应付 − 已付」，扫码就只收差额
+    const remaining = Math.max(0, (order.totalPrice || 0) - (order.prepaidAmount || 0));
+    setAmount(String(remaining));
     setMethod('promptpay');
     setQrDataUrl('');
     setShowQR(false);
     setCollectMsg('');
+    setPrepaidInput('');
+    setPrepaidMsg('');
   };
 
   const unlinkOrder = () => {
@@ -200,6 +206,41 @@ export default function AdminCollectPage() {
     }
   }, [amount, method, config, t, linkedOrder]);
 
+  /** 记已付（部分付款/定金）：把金额累计进 order.prepaidAmount，供结账算差额 */
+  const recordPrepaid = async (payMethod: 'CASH' | 'PROMPTPAY') => {
+    if (!linkedOrder) return;
+    const val = parseFloat(prepaidInput);
+    if (!val || val <= 0) {
+      setPrepaidMsg('');
+      return;
+    }
+    setCollectBusy(true);
+    setPrepaidMsg('');
+    try {
+      const res = await settleAdminOrder(linkedOrder.id, {
+        action: 'record-prepaid',
+        method: payMethod,
+        amount: val,
+        note: payMethod === 'CASH' ? '现金' : 'PromptPay 定金',
+      });
+      if (res?.exceeded) {
+        setPrepaidMsg(res.message || '');
+      } else {
+        setPrepaidMsg(res.message || '');
+        // 刷新关联订单的已付金额
+        linkedOrder.prepaidAmount = res.prepaidAmount;
+        linkedOrder.remaining = res.remaining;
+        const rem = Math.max(0, (linkedOrder.totalPrice || 0) - (res.prepaidAmount || 0));
+        setAmount(String(rem));
+        setPrepaidInput('');
+      }
+    } catch (e: any) {
+      setPrepaidMsg(e?.message || t('common.error'));
+    } finally {
+      setCollectBusy(false);
+    }
+  };
+
   /** 确认已收款：记支付成功并把订单结清（预占转正式扣减） */
   const confirmCollected = async () => {
     if (!linkedOrder) return;
@@ -262,16 +303,56 @@ export default function AdminCollectPage() {
         {showPending && (
           <div className="border-t border-neutral-100">
             {linkedOrder ? (
-              <div className="flex items-center justify-between bg-primary-50 px-4 py-2.5">
-                <span className="text-xs font-medium text-primary-700">
-                  {t('admin.collectLinked')}: {linkedOrder.orderNumber} · ฿{linkedOrder.totalPrice}
-                </span>
-                <button
-                  onClick={unlinkOrder}
-                  className="text-xs text-neutral-500 hover:text-neutral-700"
-                >
-                  {t('admin.collectUnlink')}
-                </button>
+              <div className="bg-primary-50 px-4 py-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-primary-700">
+                    {t('admin.collectLinked')}: {linkedOrder.orderNumber}
+                    {' · '}
+                    ฿{linkedOrder.totalPrice}
+                    {linkedOrder.prepaidAmount > 0 && (
+                      <span className="ml-2 inline-block rounded bg-neutral-200 px-1.5 py-0.5 text-[10px] font-bold text-neutral-700">
+                        已付 ฿{linkedOrder.prepaidAmount}
+                      </span>
+                    )}
+                  </span>
+                  <button
+                    onClick={unlinkOrder}
+                    className="text-xs text-neutral-500 hover:text-neutral-700"
+                  >
+                    {t('admin.collectUnlink')}
+                  </button>
+                </div>
+                {/* 记已付（现金/PromptPay 定金） */}
+                <div className="mt-2 flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    placeholder={t('admin.recordPrepaidPlaceholder')}
+                    value={prepaidInput}
+                    onChange={(e) => setPrepaidInput(e.target.value)}
+                    className="w-24 rounded-lg border border-neutral-300 px-2 py-1.5 text-xs focus:border-primary-500 focus:outline-none"
+                  />
+                  <button
+                    onClick={() => recordPrepaid('CASH')}
+                    disabled={collectBusy}
+                    className="rounded-lg bg-neutral-100 px-2.5 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-200 disabled:opacity-50"
+                  >
+                    {t('admin.recordCash')}
+                  </button>
+                  <button
+                    onClick={() => recordPrepaid('PROMPTPAY')}
+                    disabled={collectBusy}
+                    className="rounded-lg bg-neutral-100 px-2.5 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-200 disabled:opacity-50"
+                  >
+                    {t('admin.recordPromptPay')}
+                  </button>
+                  {prepaidMsg && (
+                    <span className={`truncate text-[11px] ${prepaidMsg.startsWith('已记') ? 'text-success-600' : 'text-error-600'}`}>
+                      {prepaidMsg}
+                    </span>
+                  )}
+                </div>
               </div>
             ) : pendingOrders.length === 0 ? (
               <p className="px-4 py-3 text-xs text-neutral-400">{t('admin.collectNoPending')}</p>
@@ -299,8 +380,19 @@ export default function AdminCollectPage() {
                         {o.fishWeightKg > 0 && ` · 🐟 ${o.fishWeightKg}kg`}
                       </span>
                     </span>
-                    <span className="ml-2 shrink-0 text-sm font-bold text-accent-600">
-                      ฿{o.totalPrice}
+                    <span className="ml-2 shrink-0 text-right">
+                      {(() => {
+                        const paid = o.prepaidAmount || 0;
+                        const rem = Math.max(0, (o.totalPrice || 0) - paid);
+                        return (
+                          <>
+                            {paid > 0 && (
+                              <span className="block text-[10px] text-neutral-400">已付 ฿{paid}</span>
+                            )}
+                            <span className="block text-sm font-bold text-accent-600">需付 ฿{rem}</span>
+                          </>
+                        );
+                      })()}
                     </span>
                   </button>
                 ))}
