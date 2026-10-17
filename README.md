@@ -205,13 +205,13 @@ bash scripts/push-main.sh
 | **账号与密钥清单** | `docs/CREDENTIALS.md` | 哪个系统 / 谁持有 / 去哪改（**不含任何值**） |
 | 架构设计 | `docs/ARCHITECTURE_V2.md` | V2 架构详述 |
 | 设计系统 | `docs/DESIGN_SYSTEM.md` | 配色/字体/圆角/浮层层级规范 |
-| 运营手册 | `docs/OPERATIONS.md` | 每天 / 每周 / 每月要做什么 |
-| 本地增长与 API 计划 | `docs/local-growth-and-api-plan.html` | Google 商家资料 / Meta / LINE / OTP 四条线的分步计划 |
-| 顾客 OTP 方案 | `docs/otp-line-login-oa-plan.html` | LINE Login + 官方账号收码（零短信成本） |
-| LINE 官方账号管理 | `docs/LINE-OA-MANAGEMENT.md` | OA 配置与推送目标维护 |
-| 部署指南 | `docs/SETUP_GUIDE.md` | 环境变量 / 数据库 / 部署（**历史文档，含过期信息**） |
-| 小票打印 | `tools/print-bridge/README.md` | 打印桥部署、蓝牙 SPP、排错 |
-| 归档文档 | `docs/archive/` | 过期文档（DEV_SUMMARY, CONNECT_GUIDE） |
+| 运营手册 | `docs/OPERATIONS.md` | 每天 / 每周 / 每月要做什么（含部分付款 SOP） |
+| 代码契约 | `docs/CODE-CONTRACTS.md` | **改代码前必读**的四条契约 |
+| AI 运营团队名册 | `docs/AGENT-TEAM.md` | 随仓库走，换机/交接用 |
+| 本地增长与 API 计划 | `docs/local-growth-and-api-plan.html` | Google 商家资料 / Meta / LINE 四条线的分步计划 |
+| 社媒令牌与发布 | `docs/playbooks/social-tokens-setup.md` + `social-publishing.md` | LINE 停用后改第三方 SaaS |
+| 部署与备份 | `docs/playbooks/deploy-and-backup.md` | 环境变量 / 数据库 / 冷备 |
+| 归档文档 | `docs/archive/`（见其 README） | 过期/已实施文档，**勿再按它们操作** |
 
 ## 开发状态
 

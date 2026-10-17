@@ -111,7 +111,7 @@ grep -rniE "(postgres|postgresql|mysql)://[^:@/[:space:]]+:[^@/[:space:]]{6,}@" 
 #    能连上 = 活凭据泄漏，必须轮换；连不上 = 死凭据，删掉即可
 ```
 
-实测结论：`docs/SETUP_GUIDE.md` 与 `docs/archive/CONNECT_GUIDE.md` 里的 Supabase
+实测结论：`docs/archive/SETUP_GUIDE.md` 与 `docs/archive/CONNECT_GUIDE.md` 里的 Supabase
 连接串**仍然有效**，而仓库是 public、已暴露约 2.5 个月。
 
 **处置原则（重要）**：

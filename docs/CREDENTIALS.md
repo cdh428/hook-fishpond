@@ -119,13 +119,13 @@
   修法见 §3（建 Secret）+ `db-backup.yml` 里那三处缺陷注释；修好后**必须手动
   `workflow_dispatch` 跑一次**确认变绿。
 - 🔴 **Supabase 冷备库口令已泄漏，且仍然有效。**
-  公开仓库自 2026-07-15 起在 `docs/SETUP_GUIDE.md` 与 `docs/archive/CONNECT_GUIDE.md`
+  公开仓库自 2026-07-15 起在 `docs/archive/SETUP_GUIDE.md` 与 `docs/archive/CONNECT_GUIDE.md`
   里含明文连接串；2026-09-28 用只读探针实测**仍可连接**（PG 17.6）。
   **唯一修法是重置数据库密码**，然后把新值写进 §3 的 `SUPABASE_DATABASE_URL`。
 - 🔴 **一把全权限 GitHub classic PAT 按已泄漏处理，待撤销。**
   2026-09-28 实测仍有效、20 项 scope（含 `admin:public_key` ⇒ 能往账号加公钥 = 永久后门）。
   本机的两处副本已清除，**但 GitHub 那侧必须手动撤销**：github.com/settings/tokens
-- ⚠️ **Neon 主库口令**同样在 git 历史里出现过（`docs/SETUP_GUIDE.md` 的 Neon 段）。
+- ⚠️ **Neon 主库口令**同样在 git 历史里出现过（`docs/archive/SETUP_GUIDE.md` 的 Neon 段）。
   建议一并轮换，并同步 Vercel 的 `DATABASE_URL` / `DIRECT_URL`。
 - ⚠️ 顾客身份目前靠 `x-user-id` header 传递，**可伪造**。
   真正的修法是上 OTP（方案已定：LINE Login + 官方账号收码），见 `otp-line-login-oa-plan.html`。
