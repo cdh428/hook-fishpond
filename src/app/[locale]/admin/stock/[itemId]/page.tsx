@@ -593,6 +593,12 @@ export default function AdminStockItemPage() {
             {busy ? t('common.saving') : t('common.save')}
           </button>
         )}
+
+        {form.stockType === 'NONE' && (
+          <p className="mt-3 rounded-xl bg-neutral-50 px-3 py-2.5 text-xs text-neutral-500">
+            {t('adminStock.typeNoneHint')}
+          </p>
+        )}
       </div>
 
       {/* Action buttons */}
@@ -622,7 +628,7 @@ export default function AdminStockItemPage() {
         </button>
         <button
           onClick={handleSoldOut}
-          disabled={busy || form.stockType === 'NONE'}
+          disabled={busy}
           className={`rounded-xl py-2.5 text-sm font-medium text-white disabled:opacity-40 ${
             item.soldOut ? 'bg-success-600' : 'bg-error-600'
           }`}
