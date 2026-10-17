@@ -571,6 +571,17 @@ export async function cancelAdminOrder(orderId: string): Promise<any> {
   });
 }
 
+/** Admin — 恢复误取消的订单（重建预占 / 撤回取消回补）。库存不足会返回 400 + code=INSUFFICIENT_STOCK */
+export async function restoreAdminOrder(
+  orderId: string,
+  status: 'PENDING' | 'PREPARING' | 'READY' | 'SERVED' = 'PENDING',
+): Promise<any> {
+  return request<any>(`/api/admin/orders/${orderId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ action: 'restore', status }),
+  });
+}
+
 /** Admin — 录入渔获称重（前 1kg 免费，超出 60฿/kg） */
 export async function addOrderWeighing(
   orderId: string,

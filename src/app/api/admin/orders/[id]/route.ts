@@ -6,6 +6,7 @@ import { requireAdmin } from "@/lib/auth";
 import {
   applyOrderItemChange,
   releaseOrderStock,
+  restoreOrderStock,
   InsufficientStockError,
   type TargetLine,
 } from "@/lib/stock";
@@ -81,6 +82,7 @@ export async function GET(
  *  - "items"       → { items: [{menuItemId, quantity}] } 改单（减量会加回库存）
  *  - "discount"    → { discountType, discountValue, note, adminPassword? }
  *  - "cancel"      → 取消订单（释放预占 / 回补已扣库存）
+ *  - "restore"     → 误取消后恢复：{ status? } 重建预占、撤回取消时的回补
  */
 export async function PATCH(
   request: NextRequest,
@@ -374,6 +376,66 @@ export async function PATCH(
         });
       });
       return NextResponse.json(updated);
+    }
+
+    // ---------- 6) 恢复误取消的订单 ----------
+    //
+    // 只对 CANCELLED 生效。三件事必须一起做，否则账实不符：
+    //   1) 状态改回 PENDING/…（默认 PENDING）
+    //   2) 重建预占 —— 取消时把它清零了，不重建这桌的菜就不占库存，可能超卖
+    //   3) 撤回取消时的回补 —— 若取消真的加回过库存，要再扣回去
+    // 库存不足则整单拒绝，不做「部分恢复」。
+    if (action === "restore") {
+      if (order.status !== "CANCELLED") {
+        return NextResponse.json(
+          {
+            error: "Order is not cancelled",
+            code: "NOT_CANCELLED",
+            status: order.status,
+          },
+          { status: 400 },
+        );
+      }
+      const status = String(body.status || "PENDING");
+      const allowed = ["PENDING", "PREPARING", "READY", "SERVED"];
+      if (!allowed.includes(status)) {
+        return NextResponse.json(
+          { error: `Invalid status. Allowed: ${allowed.join(", ")}` },
+          { status: 400 },
+        );
+      }
+
+      let stock: { reserved: number; unRestored: number };
+      try {
+        stock = await runTx(async (tx) => {
+          const res = await restoreOrderStock(tx, id, { adminName: admin.username });
+          await tx.order.update({
+            where: { id },
+            data: {
+              status: status as any,
+              // 恢复后订单重新变为未结清：清空结清与库存转正时点，留痕在 adjustedBy
+              settledAt: null,
+              adjustedBy: admin.username,
+              adjustedAt: new Date(),
+            },
+          });
+          return res;
+        });
+      } catch (e: any) {
+        if (e instanceof InsufficientStockError) {
+          return NextResponse.json(
+            {
+              error: `${e.itemName} 库存不足，无法恢复该订单`,
+              code: "INSUFFICIENT_STOCK",
+            },
+            { status: 400 },
+          );
+        }
+        throw e;
+      }
+
+      const updated = await prisma.order.findUnique({ where: { id }, include: ORDER_INCLUDE });
+      return NextResponse.json({ order: updated, stock });
     }
 
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });

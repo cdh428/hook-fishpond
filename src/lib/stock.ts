@@ -557,6 +557,132 @@ export async function releaseOrderStock(
   return { released, restored };
 }
 
+/**
+ * 恢复已取消订单（`releaseOrderStock` 的反向操作）。
+ *
+ * 取消做了两件事：`reservedQty` 归零、对「已扣减部分」写 CANCEL 流水回补。
+ * 恢复必须把这两件事各自逆回来，否则账实不符：
+ *
+ *  - **重新预占**：按「菜品 + 选项键」逐行把 `reservedQty` 写回订单数量
+ *    （与 `reserveStock` 同口径；库存是菜品口径校验，预占必须逐行写）。
+ *  - **撤回回补**：若取消时真的加回过库存，就冲销对应的 CANCEL 分录，
+ *    再补一条 SALE 分录把库存扣回去 —— 这样台账里「为什么往返一次」有据可查，
+ *    而不是悄悄把 CANCEL 记录删掉。
+ *  - **幂等**：CANCEL 分录带幂等键 `cancel:{订单行 id}`，冲销后置 `voidedAt`，
+ *    重复恢复不会把库存扣成负的。
+ *
+ * 库存不足时抛 `InsufficientStockError`（由路由转成 400 提示），
+ * 调用方不应在抛错后提交任何状态变更。
+ */
+export async function restoreOrderStock(
+  tx: Prisma.TransactionClient,
+  orderId: string,
+  opts: { adminName?: string } = {},
+): Promise<{ reserved: number; unRestored: number }> {
+  const orderItems = await tx.orderItem.findMany({
+    where: { orderId },
+    include: { menuItem: true },
+  });
+  if (orderItems.length === 0) return { reserved: 0, unRestored: 0 };
+
+  const ids = [...new Set(orderItems.map((oi) => oi.menuItemId))];
+  await lockItems(tx, ids);
+
+  // ---------- 1) 重新预占：先整单校验可用量，再逐行写入 ----------
+  // 与 reserveStock 一致：库存是「菜品」口径，所以按菜品汇总后一次性校验，
+  // 避免同菜品多行（加大/标准）各查一次、每次都通过、合起来却超卖。
+  const itemById = new Map(orderItems.map((oi) => [oi.menuItemId, oi.menuItem]));
+  const needByItem = new Map<string, number>();
+  for (const oi of orderItems) {
+    const st = oi.menuItem.stockType as StockTypeValue;
+    if (st !== "PURCHASED") continue;
+    needByItem.set(oi.menuItemId, (needByItem.get(oi.menuItemId) ?? 0) + oi.quantity);
+  }
+
+  for (const [itemId, need] of needByItem) {
+    const item = itemById.get(itemId)!;
+    await assertCanHold(
+      tx,
+      {
+        id: item.id,
+        name_zh: item.name_zh,
+        stockType: "PURCHASED",
+        dailyLimit: item.dailyLimit,
+        stockQty: item.stockQty,
+        soldOut: item.soldOut,
+      },
+      need,
+      orderId,
+    );
+  }
+
+  let reserved = 0;
+  for (const oi of orderItems) {
+    if ((oi.menuItem.stockType as StockTypeValue) !== "PURCHASED") continue;
+    if (oi.reservedQty === oi.quantity) continue; // 已是正确预占，无需改
+    await tx.orderItem.update({
+      where: { id: oi.id },
+      data: { reservedQty: oi.quantity },
+    });
+    reserved += oi.quantity;
+  }
+
+  // ---------- 2) 撤回取消时的回补 ----------
+  let unRestored = 0;
+  for (const oi of orderItems) {
+    const st = oi.menuItem.stockType as StockTypeValue;
+    if (st === "NONE") continue;
+
+    const cancelRows = await tx.stockMovement.findMany({
+      where: {
+        orderId,
+        itemId: oi.menuItemId,
+        type: "CANCEL",
+        voidedAt: null,
+        balanceAfter: { not: null },
+        idempotencyKey: `cancel:${oi.id}`,
+      },
+      select: { id: true, quantity: true, unitCost: true },
+    });
+    if (cancelRows.length === 0) continue; // 取消时没回补过，无需撤回
+
+    let back = 0;
+    for (const row of cancelRows) {
+      // 幂等：置 voidedAt 后不会被再次计入，重复执行也不会二次冲销
+      const v = await tx.stockMovement.updateMany({
+        where: { id: row.id, voidedAt: null },
+        data: { voidedAt: new Date(), note: "订单恢复：冲销取消回补" },
+      });
+      if (v.count > 0) back += row.quantity;
+    }
+    if (back <= 0) continue;
+
+    // 补一条 SALE 把「已经加回过」的数量扣回去，台账保留完整来龙去脉
+    await postMovement(tx, {
+      itemId: oi.menuItemId,
+      type: "SALE",
+      quantity: -back,
+      unitCost: cancelRows[0].unitCost,
+      docType: "ORDER",
+      docId: orderId,
+      orderId,
+      adminName: opts.adminName ?? null,
+      note: "订单恢复：撤回取消回补",
+      allowNegative: true,
+      idempotencyKey: `restore:${oi.id}`,
+    });
+    unRestored += back;
+  }
+
+  // 恢复后的订单尚未结算 → 清掉「已转正」标记，否则结算时会被幂等守卫跳过、漏扣库存
+  await tx.order.update({
+    where: { id: orderId },
+    data: { stockConsumedAt: null },
+  });
+
+  return { reserved, unRestored };
+}
+
 /** @deprecated 兼容旧调用；新流程请用 releaseOrderStock */
 export async function restoreStock(
   tx: Prisma.TransactionClient,

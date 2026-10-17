@@ -10,6 +10,7 @@ import {
   updateAdminOrderItems,
   applyAdminOrderDiscount,
   cancelAdminOrder,
+  restoreAdminOrder,
   addOrderWeighing,
   deleteOrderWeighing,
   settleAdminOrder,
@@ -270,6 +271,20 @@ export default function AdminOrdersPage() {
     }
   };
 
+  const doRestore = async (order: any) => {
+    if (!window.confirm(t('adminOrders.restoreConfirm', { order: order.orderNumber }))) return;
+    setBusy(true);
+    try {
+      await restoreAdminOrder(order.id, 'PENDING');
+      await load();
+      flash(t('adminOrders.restoredToast'));
+    } catch (e: any) {
+      setError(e?.message || t('common.error'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const tabs: { key: Tab; labelKey: string; count: number }[] = [
     { key: 'open', labelKey: 'adminOrders.tabOpen', count: summary.open },
     { key: 'awaiting', labelKey: 'adminOrders.tabAwaiting', count: summary.awaitingCount },
@@ -432,6 +447,7 @@ export default function AdminOrdersPage() {
               onItems={() => setModal({ kind: 'items', order })}
               onSettle={() => setModal({ kind: 'settle', order })}
               onRebind={() => setModal({ kind: 'rebind', order })}
+              onRestore={() => doRestore(order)}
             />
           ))}
         </div>
@@ -566,6 +582,7 @@ function OrderCard({
   onItems,
   onSettle,
   onRebind,
+  onRestore,
 }: {
   order: any;
   busy: boolean;
@@ -579,6 +596,7 @@ function OrderCard({
   onItems: () => void;
   onSettle: () => void;
   onRebind: () => void;
+  onRestore: () => void;
 }) {
   const t = useTranslations();
   const locale = useLocale();
@@ -743,6 +761,12 @@ function OrderCard({
         {editable && (
           <Btn onClick={onCancel} tone="danger" disabled={busy}>
             {t('adminOrders.cancelOrder')}
+          </Btn>
+        )}
+
+        {order.status === 'CANCELLED' && (
+          <Btn onClick={onRestore} tone="primary" disabled={busy}>
+            ↩ {t('adminOrders.restoreOrder')}
           </Btn>
         )}
       </div>
