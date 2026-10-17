@@ -28,6 +28,7 @@ import {
 type OrderTypeValue = 'DINE_IN' | 'TAKEAWAY';
 
 type PaymentMethodType =
+  | 'CASH'
   | 'PROMPTPAY'
   | 'TRUEMONEY'
   | 'BANK_TRANSFER'
@@ -40,6 +41,7 @@ const paymentMethods: {
   labelKey: string;
   icon: string;
 }[] = [
+  { key: 'CASH', labelKey: 'payment.cash', icon: '💵' },
   { key: 'PROMPTPAY', labelKey: 'payment.promptpay', icon: '🔵' },
   { key: 'TRUEMONEY', labelKey: 'payment.truemoney', icon: '💳' },
   { key: 'BANK_TRANSFER', labelKey: 'payment.bankTransfer', icon: '🏧' },
