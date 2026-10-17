@@ -51,7 +51,7 @@ export interface PrintOutcome {
   /** 目标显示名 */
   targetLabel?: string;
   /** 回退到浏览器时的原因，便于界面提示 */
-  fallbackReason?: 'mode-browser' | 'bridge-offline' | 'no-target' | 'bridge-error';
+  fallbackReason?: 'mode-browser' | 'bridge-offline' | 'no-target' | 'bridge-error' | 'bt-offline';
   error?: string;
   ms?: number;
 }
@@ -205,7 +205,7 @@ export function pickAutoTarget(health: BridgeHealth, purpose: PrintPurpose): str
 export async function printViaBridge(
   html: string,
   target: string,
-  opts?: { copies?: number; cut?: boolean; feedLines?: number },
+  opts?: { copies?: number; cut?: boolean; feedLines?: number; cutMode?: string },
 ): Promise<{ ok: boolean; width?: number; height?: number; bytes?: number; ms?: number; transport?: string; error?: string }> {
   try {
     const res = await fetchWithTimeout(
@@ -221,6 +221,7 @@ export async function printViaBridge(
           copies: opts?.copies ?? 1,
           cut: opts?.cut ?? true,
           ...(opts?.feedLines != null ? { feedLines: opts.feedLines } : {}),
+          ...(opts?.cutMode ? { cutMode: opts.cutMode } : {}),
         }),
       },
       PRINT_TIMEOUT_MS,
@@ -276,6 +277,30 @@ export async function submitPrint(
     };
   }
 
+  // 蓝牙目标失败（打印机关机 / 断链 / 被占用）→ 先自动改投同机的 USB 票据机，
+  // 别让店员在收银台干等一张出不来的单子。
+  // 只在「失败目标是蓝牙」且「存在别的热敏票据机」时才降级，
+  // 避免 USB 机故障时来回重试。
+  const failedIsBt = health.targets.find((t) => targetId(t) === target)?.kind === 'serial';
+  if (failedIsBt) {
+    const fallback = health.targets.find(
+      (t) => t.kind === 'winspool' && t.isThermal && targetId(t) !== target,
+    );
+    if (fallback) {
+      const fb = await printViaBridge(html, targetId(fallback), { copies: opts?.copies ?? 1 });
+      if (fb.ok) {
+        return {
+          via: 'bridge',
+          target: targetId(fallback),
+          targetLabel: fallback.name,
+          fallbackReason: 'bt-offline',
+          error: r.error,
+          ms: Date.now() - started,
+        };
+      }
+    }
+  }
+
   // 桥在但打印失败：不能静默吞掉，回退对话框让店员有机会手选，同时把错误带回去
   await printHtml(html);
   return {
@@ -292,6 +317,10 @@ type TranslateFn = (key: string, values?: Record<string, string | number | Date>
 
 export function describeOutcome(o: PrintOutcome, t: TranslateFn): string {
   if (o.via === 'bridge') {
+    // 蓝牙失败改投了 USB：明确说出来，否则店员会以为蓝牙机在正常工作
+    if (o.fallbackReason === 'bt-offline') {
+      return t('printAgent.btFallback', { target: o.targetLabel || o.target || '' });
+    }
     return t('printAgent.sentTo', { target: o.targetLabel || o.target || '' });
   }
   switch (o.fallbackReason) {

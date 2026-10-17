@@ -923,7 +923,8 @@
     "browserMode": "Browser print dialog opened",
     "bridgeOffline": "Local print service not found — opened the browser dialog instead",
     "noTarget": "No print target set — opened the browser dialog instead",
-    "bridgeError": "Print service error ({error}) — opened the browser dialog instead"
+    "bridgeError": "Print service error ({error}) — opened the browser dialog instead",
+    "btFallback": "📶 Bluetooth printer not responding — fell back to {target}"
   },
   "options": {
     "subtitle": "Choose size & preferences",

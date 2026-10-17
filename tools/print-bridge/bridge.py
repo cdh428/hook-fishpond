@@ -65,7 +65,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "bitmapMode": "threshold",
     "threshold": 128,
     "cut": True,
-    "feedLines": 4,
+    "cutMode": "full",      # full=全切(默认,兼容最好) / partial=半切 / none=不切
+    "feedLines": 6,         # 切纸前走纸行数（一行≈4mm）；走不够会切在字上或切不断
     "baudRate": 9600,       # 仅蓝牙串口用；SPP 是虚拟链路，此值对吞吐无影响
 }
 
@@ -141,8 +142,18 @@ def resolve_printer(requested: str | None) -> str:
     if m and escpos.target_exists(m.group(1)):
         return m.group(1).upper()
 
+    # 常见误配：把蓝牙机写成了打印机名（没有 COM 口），或把 USB 机写成 COM 口。
+    # 这里给出可执行的整改提示，而不是一句「不存在」。
+    hint = ""
+    lname = name.lower()
+    if escpos.is_serial_target(name):
+        hint = (f"　{name} 是串口写法但本机没有这个串口。"
+                "请确认蓝牙已配对并在「蓝牙和其他设备 → COM 端口」里看到它。")
+    elif "gl" in lname or "bt" in lname or "blue" in lname:
+        hint = (f"　{name} 像是蓝牙打印机，但它不是一个 COM 口。"
+                "蓝牙机要选成 `GLPrinter (COMx)` 这种串口目标，不能按打印机名选。")
     available = ", ".join(t["name"] for t in escpos.list_targets()) or "（无）"
-    raise ValueError(f"打印目标不存在：{name}。本机可用：{available}")
+    raise ValueError(f"打印目标不存在：{name}。{hint} 本机可用：{available}")
 
 
 def do_print(payload: dict[str, Any]) -> dict[str, Any]:
@@ -155,6 +166,7 @@ def do_print(payload: dict[str, Any]) -> dict[str, Any]:
     mode = str(payload.get("mode") or CONFIG["bitmapMode"])
     threshold = int(payload.get("threshold") or CONFIG["threshold"])
     cut = bool(payload.get("cut", CONFIG["cut"]))
+    cut_mode = str(payload.get("cutMode") or CONFIG.get("cutMode") or "full")
     feed = int(payload.get("feedLines", CONFIG["feedLines"]))
     copies = max(1, min(5, int(payload.get("copies") or 1)))
     baud = int(payload.get("baud") or CONFIG.get("baudRate") or 9600)
@@ -170,7 +182,7 @@ def do_print(payload: dict[str, Any]) -> dict[str, Any]:
         else:
             raise ValueError("请求里必须带 html 或 text")
 
-        job = escpos.build_raster_job(img, cut=cut, feed_lines=feed)
+        job = escpos.build_raster_job(img, cut=cut, feed_lines=feed, cut_mode=cut_mode)
         transport = ""
         for i in range(copies):
             transport = escpos.send(

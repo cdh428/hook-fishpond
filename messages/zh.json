@@ -923,7 +923,8 @@
     "browserMode": "已弹出浏览器打印对话框",
     "bridgeOffline": "未检测到本地打印服务，已改为弹出对话框打印",
     "noTarget": "未指定打印目标，已改为弹出对话框打印",
-    "bridgeError": "打印服务出错（{error}），已改为弹出对话框打印"
+    "bridgeError": "打印服务出错（{error}），已改为弹出对话框打印",
+    "btFallback": "📶 蓝牙打印机未响应，已改走 {target}"
   },
   "options": {
     "subtitle": "选择规格与口味",

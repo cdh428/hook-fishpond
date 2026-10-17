@@ -156,11 +156,57 @@ toast(describeOutcome(outcome, t));
 | 现象 | 原因 | 处理 |
 |---|---|---|
 | `/admin/print` 显示「未启动」 | 服务没跑 / 浏览器拦了跨域 | 先跑 `bridge.py`；确认 `http://127.0.0.1:17777/health` 能打开 |
+| **打完不切纸，一直吐出很长的空白纸** | 切纸指令机型不认（旧版用 `GS V 66 n`，部分机型直接忽略，且 n 是「点」不是「行」，起不到留边作用） | 已改为默认 `GS V 0`（全切）+ `feedLines: 6` 走纸。若仍不切，试 `cutMode`：`partial` / `full-feed` / `partial-feed` |
+| **切在字上 / 切不断** | 走纸不够，内容还在切刀口里 | 调大 `feedLines`（一行≈4mm，默认 6 ≈ 24mm） |
 | `打不开串口 COM8` | 蓝牙断了 / 端口被别的程序占 | 重新配对蓝牙；检查「蓝牙与其他设备 → 更多蓝牙选项 → COM 端口」 |
+| **蓝牙机连不上（列表里没有 GLPrinter）** | ① 服务没启动；② 打印机没开机；③ 配对丢了 SPP 端口 | 依次查：服务是否在跑 → 打印机开机 → 「COM 端口」里有无对应 COM 口；用 `bridge.py --list` 确认 |
 | 蓝牙发了但不出纸 | 打印机休眠、没纸、或数据太小没触发 | 先用 `--selftest` 打一张大的试试 |
 | 泰文变方框 | 走了驱动而不是光栅 | 确认用的是本服务的 `/print`，不要走系统打印对话框 |
 | `POS80` 任务卡住不动 | 打印机被标「脱机使用」 | 控制面板 → 设备和打印机 → 右键 POS80 → 取消「脱机使用打印机」 |
 | 网页探测不到桥但服务在跑 | Chrome Private Network Access 预检被拒 | 本服务已回 `Access-Control-Allow-Private-Network: true`，若仍失败检查浏览器版本 |
+
+### 蓝牙失败会自动改走 USB
+
+若「后厨单/预结单/收据」指定的是蓝牙目标，而它打不开（关机、断链、端口被占），
+网页端会**自动改投本机另一台热敏票据机**（通常是 `POS80`），并提示
+「📶 蓝牙打印机未响应，已改走 POS80」——不让店员在收银台干等。
+
+### 开机自启（强烈建议）
+
+服务没启动 = 蓝牙永远连不上。把启动器放进启动文件夹，开机自动静默拉起：
+
+```bat
+copy tools\print-bridge\HookFishpond-PrintBridge.vbs.example ^
+     "%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\HookFishpond-PrintBridge.vbs"
+```
+
+> ⚠️ 打开 `.vbs.example` 把里面的 `bridgeDir` / `pythonExe` 改成你机器上的实际路径。
+> 启动器是幂等的：已在运行就不会重复启动。日志写在 `tools/print-bridge/bridge.log`。
+
+---
+
+## 切纸参数
+
+`config.json` 里：
+
+```json
+{
+  "cut": true,
+  "cutMode": "full",   // full | partial | full-feed | partial-feed | none
+  "feedLines": 6       // 切纸前走纸行数（一行≈4mm）
+}
+```
+
+| cutMode | 指令 | 说明 |
+|---|---|---|
+| `full`（默认） | `GS V 0` | 全切，兼容性最好 |
+| `partial` | `GS V 1` | 半切（留一点连着，方便撕） |
+| `full-feed` | `GS V 65 16` | 进 16 点后全切（部分机型支持） |
+| `partial-feed` | `GS V 66 16` | 进 16 点后半切（部分机型支持） |
+| `none` | — | 不切（配撕纸机型） |
+
+`POST /print` 也可以带 `cutMode` 覆盖单次请求。
+
 
 ---
 

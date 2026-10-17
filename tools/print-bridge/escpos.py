@@ -32,11 +32,14 @@ class EscPosError(RuntimeError):
     pass
 
 
-def build_raster_job(img1, *, cut: bool = True, feed_lines: int = 4, init: bool = True) -> bytes:
+def build_raster_job(img1, *, cut: bool = True, feed_lines: int = 4, init: bool = True,
+                     cut_mode: str = "full") -> bytes:
     """
     把 Pillow 的 1-bit 图像（mode "1"）转成 ESC/POS 光栅打印作业。
 
     img1: PIL.Image，mode 必须是 "1"，宽度必须是 8 的倍数。
+    feed_lines: 切纸前走纸行数（一行约 4mm）。走够了内容才会完全脱离切刀口。
+    cut_mode: 见 CUT_MODES；默认 "full"（全切，兼容性最好）。
     """
     if img1.mode != "1":
         raise EscPosError(f'图像必须是 1-bit（mode "1"），当前是 {img1.mode!r}')
@@ -68,10 +71,42 @@ def build_raster_job(img1, *, cut: bool = True, feed_lines: int = 4, init: bool 
     out += bytes((bytes_per_row & 0xFF, (bytes_per_row >> 8) & 0xFF))
     out += bytes((height & 0xFF, (height >> 8) & 0xFF))
     out += raw
-    out += b"\n" * max(0, feed_lines)  # 走纸，方便撕纸
+    # 走纸：feed_lines 行（一行约 4mm）。热敏机必须把内容完全推出切刀口才能切干净。
+    out += b"\n" * max(0, feed_lines)
     if cut:
-        out += GS + b"V" + bytes((66, 0))  # GS V 66 0 —— 进纸后部分切纸
+        out += build_cut(cut_mode)
     return bytes(out)
+
+
+# --------------------------------------------------------------------------- #
+# 切纸
+# --------------------------------------------------------------------------- #
+#
+# 切纸指令有几个变体，不同机型支持度不同 —— 这就是「打完不切、一直吐长纸」的根因：
+#
+#   GS V 0   /  GS V 48   m=0  全切（整刀），最通用
+#   GS V 1   /  GS V 49   m=1  半切（留一点连着，方便撕），需机型支持
+#   GS V 65  n                 进纸 n 点后【全切】  ← n 单位是「点」，不是行
+#   GS V 66  n                 进纸 n 点后【半切】  ← 同上
+#
+# 注意 GS V 65/66 里的 n 是**点（dot）**，一行点阵通常只有几十点高，
+# 所以传 n=66 几乎等于「立即切」，起不到留边作用；
+# 而如果机型不认 66 这个子命令，就会被整条忽略 → 完全不切。
+#
+# 所以默认改成最通用的 `GS V 0`（全切），走纸交给调用方的 feed_lines。
+
+CUT_MODES = {
+    "full": b"\x1d\x56\x00",        # GS V 0 —— 全切（默认，兼容性最好）
+    "partial": b"\x1d\x56\x01",     # GS V 1 —— 半切（留一点）
+    "full-feed": b"\x1d\x56\x41\x10",   # GS V 65 16 —— 进 16 点后全切
+    "partial-feed": b"\x1d\x56\x42\x10",  # GS V 66 16 —— 进 16 点后半切
+    "none": b"",
+}
+
+
+def build_cut(mode: str = "full") -> bytes:
+    """返回切纸指令字节。未知模式退回全切，避免「静默不切」。"""
+    return CUT_MODES.get((mode or "full").strip().lower(), CUT_MODES["full"])
 
 
 # --------------------------------------------------------------------------- #
@@ -264,9 +299,11 @@ def send_serial(port: str, data: bytes, *, baudrate: int = 9600, warmup: float =
     """
     把原始字节写进蓝牙串口。
 
-    两个要点：
+    三个要点：
       * 蓝牙小票机大多有省电休眠，刚打开链路时写入会丢包 —— 先 warmup 等链路稳定；
-      * SPP 的缓冲很小，一次性 WriteFile 大块光栅数据会溢出 —— 分块写入并轻微限速。
+      * SPP 的缓冲很小，一次性 WriteFile 大块光栅数据会溢出 —— 分块写入并轻微限速；
+      * **ComTimeouts**：不设超时的话，蓝牙断链时 WriteFile 会一直阻塞（界面表现为
+        「点了打印没反应」），这里设成写超时 15s / 读超时 2s。
     """
     if not port:
         raise EscPosError("未指定串口（如 COM8）")
@@ -287,10 +324,24 @@ def send_serial(port: str, data: bytes, *, baudrate: int = 9600, warmup: float =
         )
     except Exception as exc:
         raise EscPosError(
-            f"打不开串口 {port}：{exc}。请确认蓝牙已连接、且没有别的程序占用该端口"
+            f"打不开串口 {port}：{exc}。\n"
+            f"请依次确认：① 打印机已开机；② Windows「蓝牙和其他设备」里 GLPrinter 显示为已连接；"
+            f"③ 没有别的程序（打印机工具/串口助手）占着 {port}。"
         ) from exc
 
     try:
+        # 通讯超时：写 15s（一整张票据），读 2s
+        try:
+            from pywintypes import Timeout
+            win32file.SetCommTimeouts(handle, (
+                0xFFFFFFFF, 0,     # ReadIntervalTimeout, ReadTotalTimeoutMultiplier
+                2000,              # ReadTotalTimeoutConstant (ms)
+                0,                 # WriteTotalTimeoutMultiplier
+                15000,             # WriteTotalTimeoutConstant (ms)
+            ))
+        except Exception:
+            pass  # 老版本 pywin32 不支持就算了，不能因此打不了
+
         dcb = win32file.GetCommState(handle)
         dcb.BaudRate = int(baudrate)
         dcb.ByteSize = 8
