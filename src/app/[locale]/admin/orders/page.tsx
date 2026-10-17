@@ -120,7 +120,22 @@ export default function AdminOrdersPage() {
             ? 'today'
             : undefined;
       const res = await fetchAdminOrders({ scope });
-      setOrders(res.orders);
+      // 财务口径：按「最近一次变动」倒序 —— 追加了菜、记了一笔收款、改了折扣，
+      // 这张单立刻浮到顶部。结算时间也要算进变动时间（结清也是一次变动）。
+      const activityAt = (o: any): number =>
+        Math.max(
+          new Date(o.updatedAt || o.createdAt || 0).getTime(),
+          new Date(o.settledAt || 0).getTime(),
+          ...(Array.isArray(o.paymentRecords)
+            ? o.paymentRecords.map((r: any) => new Date(r.paidAt || 0).getTime())
+            : [0]),
+          ...(Array.isArray(o.items)
+            ? o.items.map((it: any) => new Date(it.createdAt || 0).getTime())
+            : [0]),
+        );
+      setOrders(
+        [...res.orders].sort((a, b) => activityAt(b) - activityAt(a)),
+      );
       setSummary(res.summary);
     } catch (e: any) {
       setError(e?.message || t('common.error'));
@@ -660,8 +675,52 @@ function OrderCard({
         </div>
         <div className="shrink-0 text-right">
           <p className="text-base font-bold text-accent-600">฿{order.totalPrice}</p>
+          {/* 已收 / 需付：一单可分多次付款，这里给出汇总，明细见下方收款记录 */}
+          {(order.prepaidAmount || 0) > 0 && (
+            <p className="text-[10px] text-success-600">
+              {t('adminOrders.prepaid')} ฿{order.prepaidAmount}
+            </p>
+          )}
+          {(order.prepaidAmount || 0) > 0 && order.status !== 'SETTLED' && (
+            <p className="text-[10px] font-bold text-error-600">
+              {t('admin.needPay')} ฿
+              {Math.max(0, Math.round(((order.totalPrice || 0) - order.prepaidAmount) * 100) / 100)}
+            </p>
+          )}
         </div>
       </div>
+
+      {/* 收款记录：时间正序，账本式从早到晚 */}
+      {Array.isArray(order.paymentRecords) && order.paymentRecords.length > 0 && (
+        <div className="mt-1.5 rounded-lg border border-neutral-100 bg-white px-2.5 py-1.5">
+          <p className="text-[10px] font-bold text-neutral-500">{t('admin.paymentHistory')}</p>
+          <ul className="mt-0.5 space-y-0.5">
+            {order.paymentRecords.map((r: any) => (
+              <li key={r.id} className="flex items-center justify-between text-[10px] text-neutral-600">
+                <span className="truncate">
+                  {new Date(r.paidAt).toLocaleString([], {
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                  {' · '}
+                  {r.method === 'CASH'
+                    ? t('payment.cash')
+                    : r.method === 'PROMPTPAY'
+                      ? t('payment.promptpay')
+                      : r.method}
+                  {r.operator && ` · ${r.operator}`}
+                  {r.note && ` · ${r.note}`}
+                </span>
+                <span className={`ml-2 shrink-0 font-bold ${r.amount < 0 ? 'text-error-600' : 'text-neutral-800'}`}>
+                  ฿{r.amount}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* 菜品 */}
       <div className="space-y-0.5 rounded-lg bg-neutral-50 px-2.5 py-2">

@@ -474,6 +474,10 @@ export interface AdminOrderSummary {
   awaitingCount: number;
   awaitingAmount: number;
   unsettledPrepaid: number;
+  /** 未结清单上已收的钱合计（已付未结清的挂账） */
+  awaitingPrepaid?: number;
+  /** 有预付但未结清的单数（前端分组用） */
+  partiallyPaidCount?: number;
 }
 
 export async function fetchAdminOrders(params?: {
@@ -644,7 +648,7 @@ export interface SettleResult {
 export async function settleAdminOrder(
   orderId: string,
   input: {
-    action?: 'create' | 'confirm' | 'mark-paid' | 'record-prepaid';
+    action?: 'create' | 'confirm' | 'mark-paid' | 'record-prepaid' | 'refund';
     method?: 'CASH' | 'PROMPTPAY';
     /** record-prepaid 用：本次记入的已付金额 */
     amount?: number;

@@ -144,6 +144,58 @@ def send_raw(printer_name: str, data: bytes, *, job_name: str = "Hook Fishpond")
         win32print.ClosePrinter(handle)
 
 
+def send_image_gdi(printer_name: str, img, *, job_name: str = "Hook Fishpond",
+                   auto_cut: bool = True, feed_lines: int = 1) -> None:
+    """
+    通过 Windows 原生 GDI 驱动设备上下文将图像打印至指定打印机。
+    规格升级：
+      1. 安全宽度扩展至 78mm (520 像素)，充分利用纸宽，文字等比加大。
+      2. 底部增加 1 行空白后紧随切纸，杜绝单独切出多余空白纸条。
+    """
+    import win32ui, win32con
+    from PIL import Image, ImageWin
+
+    # 黄金安全宽度锁定 400 像素 (基准点 420 纸边内，留 15px 安全边距，绝不超出边界)
+    target_w = 400
+    ratio = target_w / max(1, img.width)
+    target_h = int(round(img.height * ratio))
+    resized = img.resize((target_w, target_h), Image.LANCZOS)
+    if resized.mode != "RGB":
+        resized = resized.convert("RGB")
+
+    hdc = win32ui.CreateDC()
+    hdc.CreatePrinterDC(printer_name)
+    try:
+        hdc.StartDoc(job_name)
+        hdc.StartPage()
+
+        dib = ImageWin.Dib(resized)
+        left_margin = 12
+        top_margin = 10
+        dib.draw(hdc.GetHandleOutput(), (left_margin, top_margin, left_margin + target_w, top_margin + target_h))
+
+        hdc.EndPage()
+        hdc.EndDoc()
+    finally:
+        del hdc
+
+    # 如果开启自动切纸：直接向打印机 RAW 管道写入物理走纸 2 行与全切指令
+    # ⚠️ 绝对不调用 StartPagePrinter，紧随原菜单底部留下 1 行空白后下刀，杜绝多余空白小纸条
+    if auto_cut:
+        try:
+            win32print = _load_win32print()
+            h = win32print.OpenPrinter(printer_name)
+            try:
+                win32print.StartDocPrinter(h, 1, ("Cut", None, "RAW"))
+                # 物理走纸 2 行 (\n\n) + GS V 0 全切
+                win32print.WritePrinter(h, b"\n\n\x1d\x56\x00")
+                win32print.EndDocPrinter(h)
+            finally:
+                win32print.ClosePrinter(h)
+        except Exception:
+            pass
+
+
 # --------------------------------------------------------------------------- #
 # 蓝牙串口（SPP）直发
 # --------------------------------------------------------------------------- #

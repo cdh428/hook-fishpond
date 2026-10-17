@@ -453,7 +453,16 @@
     },
     "recordPrepaidPlaceholder": "记已付金额",
     "recordCash": "收现金",
-    "recordPromptPay": "记PromptPay定金"
+    "recordPromptPay": "记PromptPay定金",
+    "needPay": "需付",
+    "refundDue": "需退",
+    "groupPartiallyPaid": "已付未结清",
+    "groupUnpaid": "未付款",
+    "recordPrepaidHint": "收钱就记一笔，可分多次。需付会自动扣减。",
+    "paymentHistory": "收款记录",
+    "noPaymentHistory": "暂无收款记录",
+    "undoPayment": "作废",
+    "undoPaymentConfirm": "确认作废这条收款记录？作废后不再计入实收。"
   },
   "adminBulk": {
     "title": "批量管理",

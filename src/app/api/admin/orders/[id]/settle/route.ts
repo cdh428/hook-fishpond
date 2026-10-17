@@ -9,6 +9,11 @@ import {
   maskPromptPayId,
 } from "@/lib/promptpay";
 import { recalcOrderTotals, settleOrder, round2 } from "@/lib/orders";
+import {
+  addPaymentRecord,
+  syncPrepaidFromRecords,
+  sumCollected,
+} from "@/lib/payment-records";
 
 // Neon(us-east-2) ← 泰国：往返延迟较高，放宽函数执行上限
 export const maxDuration = 60;
@@ -67,7 +72,7 @@ export async function POST(
     const promptPayId = getPromptPayId();
 
     // ---------- 记已付（部分付款 / 定金）----------
-    // 把店员当面收的钱累计进 order.prepaidAmount，结账时算「需付 = 总应付 − 已付」。
+    // 落一条**流水**（只增不改），再把 Order.prepaidAmount 重算成流水之和。
     // 防呆：累计不得超过总应付（超出部分拒记，提示线下退款）。
     if (action === "record-prepaid") {
       const amount = round2(Number(body?.amount));
@@ -78,11 +83,7 @@ export async function POST(
 
       const result = await runTx(async (tx) => {
         const totals = await recalcOrderTotals(tx, id);
-        const row = await tx.order.findUnique({
-          where: { id },
-          select: { prepaidAmount: true },
-        });
-        const curPrepaid = round2(row?.prepaidAmount ?? 0);
+        const curPrepaid = await sumCollected(tx, id);
         const allowed = round2(Math.max(0, totals.totalPrice - curPrepaid));
         if (amount > allowed + 1e-6) {
           return {
@@ -94,24 +95,68 @@ export async function POST(
             message: `最多可再记 ฿${allowed}（总应付 ฿${totals.totalPrice}，已记 ฿${curPrepaid}）`,
           };
         }
-        await tx.order.update({
-          where: { id },
-          data: {
-            prepaidAmount: round2(curPrepaid + amount),
-            prepaidNote: note ?? null,
-          },
+        // 首笔记 DEPOSIT，之后算 PARTIAL；结清补差在 confirm / mark-paid 里写 FINAL
+        const kind = curPrepaid <= 0 ? "DEPOSIT" : "PARTIAL";
+        await addPaymentRecord(tx, {
+          orderId: id,
+          amount,
+          method: method as any,
+          kind: kind as any,
+          operator: admin.username,
+          note,
         });
-        const newPrepaid = round2(curPrepaid + amount);
+        const newPrepaid = await syncPrepaidFromRecords(tx, id);
+        await tx.order.update({ where: { id }, data: { prepaidNote: note } });
         return {
           ok: true,
           exceeded: false,
           prepaidAmount: newPrepaid,
-          remaining: allowed - amount,
+          remaining: round2(Math.max(0, totals.totalPrice - newPrepaid)),
           refundDue: 0,
-          message: `已记 ฿${amount}，累计已付 ฿${newPrepaid}，还需付 ฿${allowed - amount}`,
+          message: `已记 ฿${amount}，累计已付 ฿${newPrepaid}，还需付 ฿${round2(Math.max(0, totals.totalPrice - newPrepaid))}`,
         };
       });
 
+      return NextResponse.json(result);
+    }
+
+    // ---------- 退款（现金线下退，系统只留痕）----------
+    // 记一条负数流水，实收自动下降。不做自动退款网关，钱由店员当面退。
+    if (action === "refund") {
+      const amount = round2(Number(body?.amount));
+      if (!Number.isFinite(amount) || amount <= 0) {
+        return NextResponse.json({ error: "amount must be > 0" }, { status: 400 });
+      }
+      const result = await runTx(async (tx) => {
+        const curCollected = await sumCollected(tx, id);
+        if (amount > curCollected + 1e-6) {
+          return {
+            ok: false,
+            message: `最多可退 ฿${curCollected}（已收合计）`,
+            prepaidAmount: curCollected,
+            remaining: 0,
+            refundDue: 0,
+          };
+        }
+        await addPaymentRecord(tx, {
+          orderId: id,
+          amount: -amount,
+          method: method as any,
+          kind: "REFUND" as any,
+          operator: admin.username,
+          note: body?.note ? String(body.note) : "线下退现",
+        });
+        const newCollected = await syncPrepaidFromRecords(tx, id);
+        const row = await tx.order.findUnique({ where: { id }, select: { totalPrice: true } });
+        const total = round2(row?.totalPrice ?? 0);
+        return {
+          ok: true,
+          prepaidAmount: newCollected,
+          remaining: round2(Math.max(0, total - newCollected)),
+          refundDue: round2(Math.max(0, newCollected - total)),
+          message: `已退 ฿${amount}，剩余已收 ฿${newCollected}`,
+        };
+      });
       return NextResponse.json(result);
     }
 
@@ -123,16 +168,23 @@ export async function POST(
         | undefined;
       const stock = await runTx(async (tx) => {
         const totals = await recalcOrderTotals(tx, id);
-        // 预付款上限：已付不得超过总应付（超出部分不记入，需线下退款处理）
-        const orderRow = await tx.order.findUnique({
-          where: { id },
-          select: { prepaidAmount: true },
-        });
-        const prepaid = Math.min(
-          round2(orderRow?.prepaidAmount ?? 0),
-          totals.totalPrice,
-        );
+        // 实收取自流水；预付款上限：已收不得超过总应付（超出部分不记入，需线下退款处理）
+        const collected = Math.min(await sumCollected(tx, id), totals.totalPrice);
+        const prepaid = collected;
         const remaining = round2(totals.totalPrice - prepaid);
+        // 本次补差 > 0 才落 FINAL 流水（避免 0 元流水污染账本）。
+        // 这样 006 这类「先付 160、称重后补 120」的单据会有两条清晰流水：DEPOSIT 160 + FINAL 120。
+        if (remaining > 0) {
+          await addPaymentRecord(tx, {
+            orderId: id,
+            amount: remaining,
+            method: method as any,
+            kind: "FINAL" as any,
+            operator: admin.username,
+            note: action === "mark-paid" ? "结清·直接标记已收" : "结清·补差",
+          });
+          await syncPrepaidFromRecords(tx, id);
+        }
         // 落一张「本次实收」的支付凭证。amount 记 remaining（补差部分），
         // 并带上预付上下文，便于对账（006 这类：已付 160，本次只补差额）。
         await tx.payment.upsert({
@@ -184,11 +236,7 @@ export async function POST(
     // ---------- 生成 / 刷新收款单 ----------
     const created = await runTx(async (tx) => {
       const t = await recalcOrderTotals(tx, id);
-      const orderRow = await tx.order.findUnique({
-        where: { id },
-        select: { prepaidAmount: true },
-      });
-      const prepaid = Math.min(round2(orderRow?.prepaidAmount ?? 0), t.totalPrice);
+      const prepaid = Math.min(await sumCollected(tx, id), t.totalPrice);
       const remaining = round2(t.totalPrice - prepaid);
       // 收款码只收「需付」（差额）；若 0 元则不出码（已付满或超额）
       const qrString = remaining > 0 ? generatePromptPayQR(promptPayId, remaining) : "";

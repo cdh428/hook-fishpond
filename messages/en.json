@@ -453,7 +453,16 @@
     },
     "recordPrepaidPlaceholder": "Record paid amount",
     "recordCash": "Cash",
-    "recordPromptPay": "PromptPay deposit"
+    "recordPromptPay": "PromptPay deposit",
+    "needPay": "Due",
+    "refundDue": "Refund",
+    "groupPartiallyPaid": "Partially paid",
+    "groupUnpaid": "Unpaid",
+    "recordPrepaidHint": "Record each payment; can be done several times. Amount due updates automatically.",
+    "paymentHistory": "Payment history",
+    "noPaymentHistory": "No payments recorded",
+    "undoPayment": "Void",
+    "undoPaymentConfirm": "Void this payment record? It will no longer count as collected."
   },
   "adminBulk": {
     "title": "Bulk Management",

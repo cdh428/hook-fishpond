@@ -103,44 +103,48 @@ const BASE_CSS = `
     margin: 0; padding: 0;
     width: 80mm;
     background: #fff; color: #000;
-    font-family: 'Noto Sans Thai','Noto Sans SC','Sarabun',-apple-system,'Segoe UI',sans-serif;
+    font-family: 'Leelawadee UI', 'Noto Sans Thai', 'Noto Sans SC', 'Sarabun', -apple-system, 'Segoe UI', sans-serif;
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
-  .ticket { width: 80mm; padding: 3mm 4mm 6mm; }
+  /* 黄金安全宽度锁定 70mm (点阵 400px)，饱满且绝不超出 420 纸边，底部留足 1 行空白切纸 */
+  .ticket { width: 70mm; margin: 0 auto; padding: 2mm 1mm 6mm; }
   .center { text-align: center; }
-  .brand { font-size: 15px; font-weight: 700; letter-spacing: .5px; }
-  .brand-sub { font-size: 10px; margin-top: 1px; }
+  .brand { font-size: 18px; font-weight: 700; letter-spacing: .5px; }
+  .brand-sub { font-size: 12px; margin-top: 1px; }
   .doc-type {
     margin: 6px 0 4px; padding: 3px 0;
-    border-top: 1.5px dashed #000; border-bottom: 1.5px dashed #000;
-    font-size: 13px; font-weight: 700; letter-spacing: 1px;
+    border-top: 2px dashed #000; border-bottom: 2px dashed #000;
+    font-size: 16px; font-weight: 800; letter-spacing: 1px;
   }
-  .dashed { border-top: 1px dashed #000; margin: 5px 0; }
-  .solid { border-top: 1px solid #000; margin: 5px 0; }
-  .row { display: flex; justify-content: space-between; gap: 6px; font-size: 11px; line-height: 1.5; }
+  .dashed { border-top: 1.5px dashed #000; margin: 5px 0; }
+  .solid { border-top: 2px solid #000; margin: 5px 0; }
+  .row { display: flex; justify-content: space-between; gap: 6px; font-size: 13px; line-height: 1.6; }
   .row .k { color: #000; }
   .row .v { text-align: right; font-weight: 600; }
-  .order-no { font-size: 22px; font-weight: 800; letter-spacing: 1px; line-height: 1.15; }
-  .meta { font-size: 11px; line-height: 1.55; }
+  .order-no { font-size: 28px; font-weight: 900; letter-spacing: 1px; line-height: 1.15; }
+  .meta { font-size: 13px; line-height: 1.6; }
   .items { margin-top: 4px; }
-  .item { display: flex; justify-content: space-between; gap: 6px; font-size: 12px; line-height: 1.5; }
-  .item .n { flex: 1 1 auto; word-break: break-word; }
-  .item .q { flex: 0 0 auto; font-weight: 700; }
-  .item-note { font-size: 10px; padding-left: 6px; }
-  .big .item { font-size: 15px; line-height: 1.7; }
-  .big .item .n { font-weight: 700; }
-  .total-row { display: flex; justify-content: space-between; font-size: 16px; font-weight: 800; }
-  .grand { font-size: 19px; font-weight: 800; }
+  .item { display: flex; justify-content: space-between; gap: 6px; font-size: 14px; line-height: 1.6; }
+  .item .n { flex: 1 1 auto; word-break: break-word; font-weight: 600; }
+  .item .q { flex: 0 0 auto; font-weight: 800; padding-right: 1mm; font-size: 15px; }
+  .item-note { font-size: 12px; padding-left: 6px; line-height: 1.5; }
+  /* 后厨单泰文大字与规格按 78mm 比例进一步放大 */
+  .big .item { font-size: 20px; line-height: 1.8; }
+  .big .item .n { font-weight: 900; font-size: 20px; }
+  .big .item .q { font-size: 22px; font-weight: 900; }
+  .big .item-note { font-size: 15px; font-weight: 700; line-height: 1.6; padding-left: 8px; }
+  .total-row { display: flex; justify-content: space-between; font-size: 18px; font-weight: 800; }
+  .grand { font-size: 23px; font-weight: 900; }
   .qr { text-align: center; margin: 6px 0 2px; }
-  .qr img { width: 46mm; height: 46mm; image-rendering: pixelated; }
-  .qr-cap { font-size: 11px; font-weight: 700; margin-top: 2px; }
-  .qr-amt { font-size: 16px; font-weight: 800; }
-  .foot { text-align: center; font-size: 10px; margin-top: 8px; line-height: 1.6; }
-  .warn { font-size: 10px; }
+  .qr img { width: 48mm; height: 48mm; image-rendering: pixelated; }
+  .qr-cap { font-size: 12px; font-weight: 700; margin-top: 2px; }
+  .qr-amt { font-size: 18px; font-weight: 800; }
+  .foot { text-align: center; font-size: 12px; margin-top: 8px; line-height: 1.6; }
+  .warn { font-size: 11px; }
   .stamp {
-    margin: 6px 0 2px; text-align: center;
-    font-size: 15px; font-weight: 800; letter-spacing: 2px;
-    border: 2px solid #000; padding: 3px 0;
+    margin: 6px auto 2px; text-align: center; width: 90px;
+    font-size: 18px; font-weight: 900; letter-spacing: 2px;
+    border: 2px solid #000; padding: 2px 0;
   }
 `;
 

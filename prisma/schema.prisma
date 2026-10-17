@@ -467,13 +467,46 @@ model Order {
   stockConsumedAt DateTime?   // 预占转正式扣减的时刻（先付=付款到账，后付=结清）
   settledAt     DateTime?     // 账单结清时刻（status=SETTLED）
   // ----- 预付款 / 定金（2026-10-17）-----
-  // 顾客此前已付的钱（现金 / PromptPay 定金等），可分多次累计。
+  // ⚠️ 这是**派生存量**，唯一真相是 paymentRecords 流水之和（见 docs/playbooks/finance-rules-cashier.md）。
+  // 每次写流水后由 syncPrepaidFromRecords() 重算，不要手工 +amount，否则会和流水对不上。
   // 结算时：需付 remaining = max(0, totalPrice − prepaidAmount)；多付的差额由店员线下退现。
   prepaidAmount Float       @default(0)
-  prepaidNote   String?     // 收款备注（谁收的、什么方式），便于对账
+  prepaidNote   String?     // 最近一次收款备注（完整历史在 paymentRecords.note）
   payment       Payment?
+  // 分次收款流水（定金 / 补款 / 结清 / 退款）。只追加不覆盖，可标 voidedAt 作废。
+  paymentRecords PaymentRecord[]
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
+}
+
+// ===== 收款流水（2026-10-17）=====
+// 一单可多次点单、多次付款：每次收钱都落一行，是财务核对与纠纷追溯的唯一凭证。
+// 金额口径：kind=REFUND 存负数；其余存正数。
+// 汇总口径：实收 = Σ(未作废流水金额)；需付 = max(0, 总应付 − 实收)。
+model PaymentRecord {
+  id        String      @id @default(cuid())
+  orderId   String
+  order     Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  amount    Float
+  method    PaymentMethod @default(CASH)
+  kind      PaymentKind   @default(PARTIAL)
+  operator  String?      // 操作人（管理员用户名）
+  note      String?      // 备注：现金 / PromptPay 定金 / 结清补差 …
+  // 流水时间。显式写入，不依赖 createdAt 的库默认值，便于补录与按天归集营业额。
+  paidAt    DateTime    @default(now())
+  voidedAt  DateTime?   // 作废时点（更正用，不物理删除）
+  voidedBy  String?
+  createdAt DateTime    @default(now())
+
+  @@index([orderId, paidAt])
+  @@index([paidAt])
+}
+
+enum PaymentKind {
+  DEPOSIT // 定金 / 预付
+  PARTIAL // 中途补款
+  FINAL   // 结清补差
+  REFUND  // 退款（金额为负）
 }
 
 model OrderItem {

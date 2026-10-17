@@ -46,6 +46,10 @@ export default function AdminCollectPage() {
   const [collectMsg, setCollectMsg] = useState('');
   const [prepaidInput, setPrepaidInput] = useState('');
   const [prepaidMsg, setPrepaidMsg] = useState('');
+  // 当前选中订单的收款流水（账本，时间正序）
+  const [linkedRecords, setLinkedRecords] = useState<
+    { id: string; amount: number; method: string; kind: string; operator?: string | null; note?: string | null; paidAt: string; voidedAt?: string | null }[]
+  >([]);
 
   const loadPending = useCallback(async () => {
     try {
@@ -123,11 +127,14 @@ export default function AdminCollectPage() {
     setCollectMsg('');
     setPrepaidInput('');
     setPrepaidMsg('');
+    // 直接取列表里带的流水（接口已按 paidAt 正序返回），不必多打一次请求
+    setLinkedRecords(Array.isArray(order.paymentRecords) ? order.paymentRecords : []);
   };
 
   const unlinkOrder = () => {
     setLinkedOrder(null);
     setLinkedPaymentId(null);
+    setLinkedRecords([]);
     setQrDataUrl('');
     setShowQR(false);
     setCollectMsg('');
@@ -233,6 +240,8 @@ export default function AdminCollectPage() {
         const rem = Math.max(0, (linkedOrder.totalPrice || 0) - (res.prepaidAmount || 0));
         setAmount(String(rem));
         setPrepaidInput('');
+        // 重拉列表：流水、分组、汇总金额都会随之一致刷新
+        await loadPending();
       }
     } catch (e: any) {
       setPrepaidMsg(e?.message || t('common.error'));
@@ -323,6 +332,9 @@ export default function AdminCollectPage() {
                   </button>
                 </div>
                 {/* 记已付（现金/PromptPay 定金） */}
+                <p className="mt-1.5 text-[10px] text-neutral-500">
+                  {t('admin.recordPrepaidHint')}
+                </p>
                 <div className="mt-2 flex items-center gap-2">
                   <input
                     type="number"
@@ -353,51 +365,157 @@ export default function AdminCollectPage() {
                     </span>
                   )}
                 </div>
+                {/* 收款记录：时间正序，像账本一样从早到晚读 */}
+                <div className="mt-2 rounded-lg bg-white/70 px-2 py-1.5">
+                  <p className="text-[10px] font-bold text-neutral-500">
+                    {t('admin.paymentHistory')}
+                    {(linkedRecords.length > 0) && (
+                      <span className="ml-1 font-normal">
+                        · {t('adminOrders.prepaid')} ฿
+                        {linkedRecords
+                          .filter((r) => !r.voidedAt)
+                          .reduce((s, r) => s + r.amount, 0)}
+                      </span>
+                    )}
+                  </p>
+                  {linkedRecords.length === 0 ? (
+                    <p className="text-[10px] text-neutral-400">{t('admin.noPaymentHistory')}</p>
+                  ) : (
+                    <ul className="mt-0.5 space-y-0.5">
+                      {linkedRecords.map((r) => (
+                        <li
+                          key={r.id}
+                          className={`flex items-center justify-between text-[10px] ${r.voidedAt ? 'text-neutral-300 line-through' : 'text-neutral-600'}`}
+                        >
+                          <span className="truncate">
+                            {new Date(r.paidAt).toLocaleString([], {
+                              month: '2-digit',
+                              day: '2-digit',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                            {' · '}
+                            {r.method === 'CASH'
+                              ? t('payment.cash')
+                              : r.method === 'PROMPTPAY'
+                                ? t('payment.promptpay')
+                                : r.method}
+                            {r.operator && ` · ${r.operator}`}
+                            {r.note && ` · ${r.note}`}
+                          </span>
+                          <span className={`ml-2 shrink-0 font-bold ${r.amount < 0 ? 'text-error-600' : 'text-neutral-800'}`}>
+                            ฿{r.amount}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
               </div>
             ) : pendingOrders.length === 0 ? (
               <p className="px-4 py-3 text-xs text-neutral-400">{t('admin.collectNoPending')}</p>
             ) : (
-              <div className="max-h-64 divide-y divide-neutral-100 overflow-y-auto">
-                {pendingOrders.map((o) => (
-                  <button
-                    key={o.id}
-                    onClick={() => linkOrder(o)}
-                    className="flex w-full items-center justify-between px-4 py-2.5 text-left transition hover:bg-neutral-50"
-                  >
-                    <span className="min-w-0">
-                      <span className="block text-xs font-semibold text-neutral-800">
-                        {o.orderNumber}
-                      </span>
-                      <span className="block text-[11px] text-neutral-400">
-                        {o.orderType === 'TAKEAWAY' || !o.table
-                          ? t('orderType.takeaway')
-                          : `${o.table.code}`}
-                        {' · '}
-                        {new Date(o.createdAt).toLocaleTimeString([], {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                        {o.fishWeightKg > 0 && ` · 🐟 ${o.fishWeightKg}kg`}
-                      </span>
-                    </span>
-                    <span className="ml-2 shrink-0 text-right">
-                      {(() => {
-                        const paid = o.prepaidAmount || 0;
-                        const rem = Math.max(0, (o.totalPrice || 0) - paid);
-                        return (
-                          <>
-                            {paid > 0 && (
-                              <span className="block text-[10px] text-neutral-400">已付 ฿{paid}</span>
+              <div className="max-h-72 divide-y divide-neutral-100 overflow-y-auto">
+                {/* 分组：已预付未结清 排前面（这些单收过钱、更容易被忘掉，必须最先看到） */}
+                {(() => {
+                  const paidRows = pendingOrders.filter((o) => (o.prepaidAmount || 0) > 0);
+                  const blankRows = pendingOrders.filter((o) => !((o.prepaidAmount || 0) > 0));
+                  const renderRow = (o: any) => {
+                    const paid = o.prepaidAmount || 0;
+                    const rem = Math.max(0, (o.totalPrice || 0) - paid);
+                    const over = Math.max(0, paid - (o.totalPrice || 0));
+                    return (
+                      <button
+                        key={o.id}
+                        onClick={() => linkOrder(o)}
+                        className="flex w-full items-start justify-between gap-2 px-4 py-2.5 text-left transition hover:bg-neutral-50"
+                      >
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-xs font-semibold text-neutral-800">
+                            {o.orderNumber}
+                            {o.settlementMode === 'PREPAID' && (
+                              <span className="ml-1 rounded bg-primary-100 px-1 py-0.5 text-[10px] font-medium text-primary-700">
+                                {t('adminOrders.prepaid')}
+                              </span>
                             )}
-                            <span className="block text-sm font-bold text-accent-600">需付 ฿{rem}</span>
-                          </>
-                        );
-                      })()}
-                    </span>
-                  </button>
-                ))}
+                          </span>
+                          <span className="block text-[11px] text-neutral-400">
+                            {o.orderType === 'TAKEAWAY' || !o.table
+                              ? t('orderType.takeaway')
+                              : `${o.table.code}`}
+                            {' · '}
+                            {new Date(o.createdAt).toLocaleTimeString([], {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                            {o.fishWeightKg > 0 && ` · 🐟 ${o.fishWeightKg}kg`}
+                          </span>
+                          {/* 流水摘要：几点、什么方式、收了多少 —— 一眼看清这单收过几次钱 */}
+                          {(o.paymentRecords || []).length > 0 && (
+                            <span className="mt-0.5 block text-[10px] text-neutral-500">
+                              {(o.paymentRecords || []).map((r: any) => (
+                                <span key={r.id} className="mr-1.5 inline-block">
+                                  {new Date(r.paidAt).toLocaleTimeString([], {
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  })}{' '}
+                                  {r.method === 'CASH'
+                                    ? t('payment.cash')
+                                    : r.method === 'PROMPTPAY'
+                                      ? t('payment.promptpay')
+                                      : r.method}
+                                  {' '}
+                                  <span className={r.amount < 0 ? 'text-error-600' : 'text-neutral-700'}>
+                                    ฿{r.amount}
+                                  </span>
+                                </span>
+                              ))}
+                            </span>
+                          )}
+                        </span>
+                        <span className="shrink-0 text-right">
+                          {paid > 0 && (
+                            <span className="block text-[10px] text-success-600">
+                              {t('adminOrders.prepaid')} ฿{paid}
+                            </span>
+                          )}
+                          {over > 0 ? (
+                            <span className="block text-sm font-bold text-error-600">
+                              {t('admin.refundDue')} ฿{over}
+                            </span>
+                          ) : (
+                            <span className="block text-sm font-bold text-accent-600">
+                              {t('admin.needPay')} ฿{rem}
+                            </span>
+                          )}
+                        </span>
+                      </button>
+                    );
+                  };
+                  return (
+                    <>
+                      {paidRows.length > 0 && (
+                        <>
+                          <p className="bg-success-50 px-4 py-1 text-[10px] font-bold text-success-700">
+                            {t('admin.groupPartiallyPaid')} · {paidRows.length}
+                          </p>
+                          {paidRows.map(renderRow)}
+                        </>
+                      )}
+                      {blankRows.length > 0 && (
+                        <>
+                          <p className="bg-neutral-50 px-4 py-1 text-[10px] font-bold text-neutral-500">
+                            {t('admin.groupUnpaid')} · {blankRows.length}
+                          </p>
+                          {blankRows.map(renderRow)}
+                        </>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             )}
+
           </div>
         )}
       </div>

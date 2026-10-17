@@ -182,14 +182,26 @@ def do_print(payload: dict[str, Any]) -> dict[str, Any]:
         else:
             raise ValueError("请求里必须带 html 或 text")
 
-        job = escpos.build_raster_job(img, cut=cut, feed_lines=feed, cut_mode=cut_mode)
-        transport = ""
-        for i in range(copies):
-            transport = escpos.send(
-                printer, job,
-                job_name=f"Hook Fishpond ticket {i + 1}/{copies}",
-                baudrate=baud,
-            )
+        # 如果目标是 Windows 驱动打印机 (非串口，如 POS80)，走高保真 GDI 驱动渲染
+        if not escpos.is_serial_target(printer):
+            for i in range(copies):
+                escpos.send_image_gdi(
+                    printer, img,
+                    job_name=f"Hook Fishpond ticket {i + 1}/{copies}",
+                    auto_cut=cut,
+                    feed_lines=feed
+                )
+            transport = "winspool-gdi"
+            job = b"" # GDI 直接通过 DC 输出
+        else:
+            job = escpos.build_raster_job(img, cut=cut, feed_lines=feed, cut_mode=cut_mode)
+            transport = ""
+            for i in range(copies):
+                transport = escpos.send(
+                    printer, job,
+                    job_name=f"Hook Fishpond ticket {i + 1}/{copies}",
+                    baudrate=baud,
+                )
 
     elapsed = int((time.time() - started) * 1000)
     return {

@@ -453,7 +453,16 @@
     },
     "recordPrepaidPlaceholder": "จำนวนเงินที่ชำระแล้ว",
     "recordCash": "เงินสด",
-    "recordPromptPay": "มัดจำ PromptPay"
+    "recordPromptPay": "มัดจำ PromptPay",
+    "needPay": "ต้องชำระ",
+    "refundDue": "ต้องคืน",
+    "groupPartiallyPaid": "ชำระบางส่วนแล้ว",
+    "groupUnpaid": "ยังไม่ชำระ",
+    "recordPrepaidHint": "บันทึกทุกครั้งที่รับเงิน แบ่งจ่ายได้หลายครั้ง ยอดที่ต้องชำระจะหักให้อัตโนมัติ",
+    "paymentHistory": "ประวัติการรับชำระ",
+    "noPaymentHistory": "ยังไม่มีประวัติการรับชำระ",
+    "undoPayment": "ยกเลิก",
+    "undoPaymentConfirm": "ยืนยันยกเลิกรายการรับชำระนี้? เมื่อยกเลิกแล้วจะไม่นับเป็นยอดรับจริง"
   },
   "adminBulk": {
     "title": "จัดการแบบกลุ่ม",
