@@ -19,6 +19,8 @@ export interface PrintLabels {
   brand: string;
   brandSub?: string;
   kitchenTicket: string;
+  kitchenCopy1?: string;
+  kitchenCopy2?: string;
   bill: string;
   receipt: string;
   orderNo: string;
@@ -111,6 +113,14 @@ const BASE_CSS = `
   .center { text-align: center; }
   .brand { font-size: 18px; font-weight: 700; letter-spacing: .5px; }
   .brand-sub { font-size: 12px; margin-top: 1px; }
+  .copy-tag {
+    display: inline-block;
+    border: 2px solid #000;
+    padding: 2px 8px;
+    font-size: 15px;
+    font-weight: 900;
+    margin: 4px auto 2px;
+  }
   .doc-type {
     margin: 6px 0 4px; padding: 3px 0;
     border-top: 2px dashed #000; border-bottom: 2px dashed #000;
@@ -230,10 +240,15 @@ function itemsBlock(order: ReceiptOrder, labels: PrintLabels, withPrices: boolea
     </div>`;
 }
 
-/** 后厨出票：不带价格，菜品放大，方便备餐核对 */
-export function buildKitchenTicketHtml(order: ReceiptOrder, labels: PrintLabels): string {
+/** 后厨出票：不带价格，菜品放大，方便备餐核对，支持联单区分（如厨房留存联 / 备餐传菜联） */
+export function buildKitchenTicketHtml(
+  order: ReceiptOrder,
+  labels: PrintLabels,
+  copyLabel?: string,
+): string {
   const inner = `
     ${header(labels.kitchenTicket, labels)}
+    ${copyLabel ? `<div class="center"><div class="copy-tag">${esc(copyLabel)}</div></div>` : ''}
     ${orderMeta(order, labels)}
     <div class="big">${itemsBlock({ ...order, items: order.items }, labels, false)}</div>
     ${
@@ -242,7 +257,7 @@ export function buildKitchenTicketHtml(order: ReceiptOrder, labels: PrintLabels)
         : ''
     }
     <div class="solid"></div>
-    <div class="foot">${esc(labels.kitchenTicket)} · ${esc(order.orderNumber)}</div>`;
+    <div class="foot">${esc(labels.kitchenTicket)}${copyLabel ? ` (${esc(copyLabel)})` : ''} · ${esc(order.orderNumber)}</div>`;
   return shell(order.orderNumber, inner, labels);
 }
 

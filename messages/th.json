@@ -949,6 +949,8 @@
   "printLabels": {
     "brandSub": "ไทย · ตกปลา · อาหาร",
     "kitchenTicket": "ใบครัว",
+    "kitchenCopy1": "【 ครัว / 厨房留存联 】",
+    "kitchenCopy2": "【 ส่งอาหาร / 备餐传菜联 】",
     "bill": "ใบเรียกเก็บเงิน",
     "receipt": "ใบเสร็จรับเงิน",
     "table": "โต๊ะ",

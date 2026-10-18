@@ -949,6 +949,8 @@
   "printLabels": {
     "brandSub": "Thailand · Fishing · Dining",
     "kitchenTicket": "KITCHEN TICKET",
+    "kitchenCopy1": "【 Kitchen Copy / 厨房留存联 】",
+    "kitchenCopy2": "【 Customer Copy / 备餐传菜联 】",
     "bill": "BILL",
     "receipt": "RECEIPT",
     "table": "Table",

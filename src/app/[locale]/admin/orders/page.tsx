@@ -200,6 +200,8 @@ export default function AdminOrdersPage() {
       brand: t('common.siteName'),
       brandSub: t('printLabels.brandSub'),
       kitchenTicket: t('printLabels.kitchenTicket'),
+      kitchenCopy1: t('printLabels.kitchenCopy1'),
+      kitchenCopy2: t('printLabels.kitchenCopy2'),
       bill: t('printLabels.bill'),
       receipt: t('printLabels.receipt'),
       orderNo: t('orders.orderNumber'),
@@ -231,9 +233,23 @@ export default function AdminOrdersPage() {
 
   // ---------- 动作 ----------
   const doPrintKitchen = async (order: any) => {
-    const html = buildKitchenTicketHtml(toReceiptOrder(order, locale), printLabels);
-    const outcome = await submitPrint(html, 'kitchen');
-    flash(describeOutcome(outcome, t));
+    // 厨房小票固定出 2 联：第一联厨房留存制作，第二联备餐后送给客户
+    const receiptOrder = toReceiptOrder(order, locale);
+    const html1 = buildKitchenTicketHtml(
+      receiptOrder,
+      printLabels,
+      printLabels.kitchenCopy1 || '【 ครัว / 厨房留存联 】',
+    );
+    const html2 = buildKitchenTicketHtml(
+      receiptOrder,
+      printLabels,
+      printLabels.kitchenCopy2 || '【 ส่งอาหาร / 备餐传菜联 】',
+    );
+    const outcome1 = await submitPrint(html1, 'kitchen');
+    const outcome2 = await submitPrint(html2, 'kitchen');
+    flash(
+      `${describeOutcome(outcome1, t)} (厨房联) + ${describeOutcome(outcome2, t)} (传菜联)`,
+    );
   };
 
   const doPrintBill = async (order: any, qrString?: string | null) => {
