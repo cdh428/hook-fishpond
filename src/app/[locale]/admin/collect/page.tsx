@@ -170,7 +170,9 @@ export default function AdminCollectPage() {
         setShowQR(true);
         if (res.order) {
           setLinkedOrder(res.order);
-          setAmount(String(res.order.totalPrice));
+          // 金额与收款码一致 = 需付差额（res.amount 是服务端算的 remaining），
+          // 不再显示 order.totalPrice（那是含已付的总额，会误导店员多收）
+          setAmount(String(res.amount ?? res.order.totalPrice));
         }
       } catch (e: any) {
         alert(e?.message || t('common.error'));

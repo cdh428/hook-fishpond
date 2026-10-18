@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { generatePromptPayQR, getPromptPayId, getMerchantName, maskPromptPayId } from "@/lib/promptpay";
+import { sumCollected, round2 } from "@/lib/payment-records";
 
 export async function POST(request: NextRequest) {
   try {
@@ -26,19 +27,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // 收款码只收「需付」= 总应付 − 已付（流水实收）。
+    // 首次下单 prepaid=0 时等价于全额；部分付款后自动变成补差额。
+    // 与 /api/admin/orders/[id]/settle 的 create 分支保持同一口径，避免两条路径金额打架。
+    const prepaid = Math.min(await sumCollected(prisma, orderId), order.totalPrice);
+    const remaining = round2(Math.max(0, order.totalPrice - prepaid));
+
     // Check if a payment already exists for this order
     const existing = await prisma.payment.findUnique({
       where: { orderId },
     });
 
     if (existing && existing.status !== "FAILED") {
-      // Return existing pending/processing payment
+      // Return existing pending/processing payment（金额统一为需付差额）
       const promptPayId = getPromptPayId();
-      const qrString = generatePromptPayQR(promptPayId, order.totalPrice);
+      const qrString =
+        remaining > 0 ? generatePromptPayQR(promptPayId, remaining) : "";
       return NextResponse.json({
         paymentId: existing.id,
         qrString,
-        amount: order.totalPrice,
+        amount: remaining,
+        prepaid,
+        totalDue: order.totalPrice,
         status: existing.status,
         merchantName: getMerchantName(),
         maskedPromptPayId: maskPromptPayId(promptPayId),
@@ -46,9 +56,10 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Generate PromptPay QR（金额取订单应付净额，含渔获、已扣折扣）
+    // Generate PromptPay QR（需付差额；0 元已付清则不出码）
     const promptPayId = getPromptPayId();
-    const qrString = generatePromptPayQR(promptPayId, order.totalPrice);
+    const qrString =
+      remaining > 0 ? generatePromptPayQR(promptPayId, remaining) : "";
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
 
     // Create (or refresh) the payment record for this order.
@@ -59,26 +70,38 @@ export async function POST(request: NextRequest) {
       create: {
         orderId,
         method: method || "PROMPTPAY",
-        amount: order.totalPrice,
+        amount: remaining,
         currency: "THB",
         status: "PENDING",
         expiresAt,
-        metadata: { qrString, merchantName: getMerchantName() },
+        metadata: {
+          ...(qrString ? { qrString } : {}),
+          merchantName: getMerchantName(),
+          prepaid,
+          totalDue: order.totalPrice,
+        },
       },
       update: {
         method: method || "PROMPTPAY",
-        amount: order.totalPrice,
+        amount: remaining,
         status: "PENDING",
         paidAt: null,
         expiresAt,
-        metadata: { qrString, merchantName: getMerchantName() },
+        metadata: {
+          ...(qrString ? { qrString } : {}),
+          merchantName: getMerchantName(),
+          prepaid,
+          totalDue: order.totalPrice,
+        },
       },
     });
 
     return NextResponse.json({
       paymentId: payment.id,
       qrString,
-      amount: order.totalPrice,
+      amount: remaining,
+      prepaid,
+      totalDue: order.totalPrice,
       status: "PENDING",
       merchantName: getMerchantName(),
       maskedPromptPayId: maskPromptPayId(promptPayId),
