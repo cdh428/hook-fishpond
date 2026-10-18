@@ -151,6 +151,25 @@
 逐条判断（路由/前端/报表/schema），**别改一处就推**。特别留意"字面不重名但同笔钱"的报表统计。
 （跨项目版见 skill `impact-analysis-before-edit`。）
 
+### 3.8 「需付」= totalPrice − 已付，不是 subtotal，也不是 totalPrice
+
+**现象**：FP-20261018-003 订单（小计 275 + 渔获费 96 = 总应付 371，已付定金 75），
+后台订单列表的「小计 275」和「完结应付 275」被客户当成「需付」，但真需付是 **296**（371−75）。
+
+**根因**（两处，都在 `admin/orders/page.tsx`）：
+1. 卡片/完结弹窗把 `subtotal`（菜价小计）渲染在「主金额/应付」位，客户以为就是需付；
+2. 完结弹窗 `SettleSheet` 的 `receivable = current.totalPrice`（371）**没减已付 75**，
+   而服务端 `settle` 的 `res.amount` 却是 296（算对了）——**弹窗主金额与收款码不一致**。
+
+**正确口径**（三层必须统一为同一公式）：
+- **需付 = max(0, totalPrice − 已付流水/`prepaidAmount`)**（本例 = 371−75 = 296）
+- `subtotal` 只是「菜价明细」，永远不能当需付；`fishCharge` 已含在 `totalPrice` 里。
+- 任何界面展示「需付/应付/收款码金额」，都必须用 `totalPrice − prepaid`，
+  并与服务端 `/settle` 的 `res.amount` 同口径（`scan:impact "PaymentRecord"` 可核对涉及点）。
+
+**防再犯**：改订单页任何金额显示前，先确认那个数是不是 `subtotal`；
+「应付类」金额一律减已付；改完跑 `node scripts/check-dashboard.cjs` 对照线上 stats 同口径。
+
 ---
 
 ## 四、本机 / 工具链
