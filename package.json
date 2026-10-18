@@ -9,6 +9,7 @@
     "lint": "next lint",
     "check:i18n": "node scripts/check-i18n.mjs",
     "check:i18n:live": "node scripts/check-i18n.mjs --live",
+    "scan:impact": "node scripts/scan-impact.mjs",
     "postinstall": "prisma generate",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
