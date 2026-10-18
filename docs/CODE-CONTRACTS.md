@@ -77,6 +77,31 @@ PENDING → PREPARING → READY → SERVED → SETTLED
 - 保留 `PAID` 仅为兼容历史数据，新流程不再产生。
 - 结算方式：`PREPAID`（打包默认）/ `POSTPAID`（堂食默认）。
 
+## 7.5 删除订单：先看外键行为，别直接 `order.delete()`
+
+`Order` 的下游外键**行为不一致**（Prisma 默认 `onDelete: Restrict`，部分表显式改过），
+直接删订单可能报 `violates RESTRICT ... _orderId_fkey`。逐个确认过的真实行为：
+
+| 表 | 指向 Order 的外键 | 删订单时 |
+|---|---|---|
+| `OrderItem` | `order Order`（**默认 Restrict**） | **会拦**，需先删 |
+| `Weighing` | `onDelete: Cascade` | 自动删 |
+| `Payment` | `order Order`（**默认 Restrict**） | **会拦**，需先删 |
+| `PaymentRecord` | `onDelete: Cascade` | 自动删 |
+| `Booking`（可空 `order Order?`） | **SetNull** | 自动置空，不影响预订 |
+
+**安全的删除顺序**（只显式处理两个会拦的，其余交给级联/置空）：
+
+```js
+await prisma.orderItem.deleteMany({ where: { orderId } });
+await prisma.payment.deleteMany({ where: { orderId } });
+await prisma.order.delete({ where: { id: orderId } });
+// Weighing / PaymentRecord 级联自动清，Booking 自动 SetNull，无需手动
+```
+
+业务上订单正常是**结清不删除**（Restrict 正是有意保留审计痕迹），
+所以这段只在「测试清理 / 误建单回滚」时用。
+
 ## 8. 菜单大类
 
 - 只有三种：`FOOD | DRINK | TOOL`，**单一真相 `src/lib/menu-types.ts`**。
