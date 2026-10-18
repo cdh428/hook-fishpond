@@ -107,6 +107,32 @@
   分录（判断是否真回补过库存）→ ③ 查 `reservedQty` 是否被清零。
 - 若「无任何流水 + `reservedQty` 全 0」= 下单只预占、未扣减，恢复时**不用回补**，只需重建预占。
 
+### 3.6 「算钱」的字段有多条路由时，全库先数有几条再改
+
+**现象**：顾客端扫到「总额」码、后台扫到「差额」码，同一张单两个金额。
+
+**根因**：PromptPay 收款码有**三条**路由各自生成、金额口径不一致——
+`POST /api/payments`（顾客下单）用 `order.totalPrice`（总额）；
+`GET /api/payments/[id]`（顾客支付页轮询）跟着前者；
+`POST /api/admin/orders/[id]/settle`（后台收银）才用 `remaining`（需付差额，对）。
+三条各算各的，就必然打架。
+
+**改之前必做**：
+1. `grep -rn "generatePromptPayQR\|<算钱函数>" src/app/api` 数清**有几条**路由在算这个钱；
+2. 逐条看它取的是「总额」还是「差额」，确认哪条是基准（通常是带 `sumCollected`/`prepaid` 的那条）；
+3. 把所有入口统一成**同一个 lib 函数**（本项目基准是 `remaining = max(0, totalPrice − sumCollected)`），
+   别让每条路由各写一份 `totalPrice − prepaid` 的算术——将来口径一改就漏。
+
+**别做的**：
+- **别物理删路由「收敛成一条」**——先分清鉴权边界：顾客端 `POST/GET /api/payments` 是**公开无鉴权**接口，
+  后台 `settle` 是 `requireAdmin`。权限模型不同，删了顾客端就瘫。要收敛的是**算法**，不是**入口数**。
+- 改完必查：库存会不会双扣（本项目 `consumeReservation` 有 `stockConsumedAt` 幂等，不会）；
+  日报/对账营收口径是不是 `SUM(Order.totalPrice)`（是则不受差额改动影响，但 `Payment.amount` 会变差额）。
+
+**通用教训（跨项目）**：凡是「金额/库存/数量」这类要跨页面一致的字段，
+多入口（多路由/多组件）最容易各算各的。改动前先**全库搜一遍有几条入口**，统一到一个函数，
+别假设「应该只有一处」。
+
 ---
 
 ## 四、本机 / 工具链
