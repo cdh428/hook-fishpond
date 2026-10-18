@@ -80,7 +80,7 @@ export function toReceiptOrder(raw: any, locale: string): ReceiptOrder {
   }));
 
   const tableName = raw.table
-    ? `${raw.table.code} ${pickName(raw.table, locale)}`.trim()
+    ? pickName(raw.table, locale).trim()
     : null;
 
   return {

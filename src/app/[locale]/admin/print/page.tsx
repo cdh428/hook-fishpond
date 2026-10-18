@@ -23,6 +23,7 @@ import {
   DEFAULT_PREFERENCES,
   clearBridgeCache,
   getBridgeUrl,
+  getBridgeKey,
   getPreferences,
   getPrintMode,
   loadPreferences,
@@ -32,6 +33,7 @@ import {
   savePreferences,
   setPreferences as cachePreferences,
   setBridgeUrl,
+  setBridgeKey,
   setPrintMode,
   targetId,
   type BridgeHealth,
@@ -58,7 +60,7 @@ function demoOrder(locale: string): ReceiptOrder {
   return {
     orderNumber: 'TEST-0001',
     createdAt: new Date().toISOString(),
-    tableName: pick('A3 桌', 'Table A3', 'โต๊ะ A3'),
+    tableName: pick('茅草屋 01', 'Cottage 01', 'กระท่อม 01'),
     orderType: 'DINE_IN',
     customerName: null,
     settlementMode: 'POSTPAID',
@@ -91,6 +93,7 @@ export default function AdminPrintPage() {
   const [targets, setTargets] = useState<BridgeTarget[]>([]);
   const [mode, setMode] = useState<PrintMode>('bridge');
   const [bridgeAddr, setBridgeAddr] = useState('');
+  const [bridgeKey, setBridgeKeyState] = useState('');
   const [prefs, setPrefs] = useState<PrintPreferences>(DEFAULT_PREFERENCES);
   const [prefsSaving, setPrefsSaving] = useState(false);
   const [prefsSaved, setPrefsSaved] = useState('');
@@ -123,6 +126,7 @@ export default function AdminPrintPage() {
   useEffect(() => {
     setMode(getPrintMode());
     setBridgeAddr(getBridgeUrl());
+    setBridgeKeyState(getBridgeKey());
     setPrefs(getPreferences());
     void loadPreferences(true).then(setPrefs);
     void refresh();
@@ -506,6 +510,30 @@ export default function AdminPrintPage() {
           </button>
         </div>
         <p className="mt-2 text-xs leading-relaxed text-neutral-400">{t('adminPrint.bridgeUrlHint')}</p>
+
+        <label className="mt-3 mb-1 block text-xs font-medium text-neutral-600">
+          通信访问密钥 / Auth Key (可选)
+        </label>
+        <div className="flex gap-2">
+          <input
+            type="password"
+            value={bridgeKey}
+            placeholder="若目标打印机配置了 authToken 则填写"
+            onChange={(e) => setBridgeKeyState(e.target.value)}
+            className="min-w-0 flex-1 rounded-xl border border-neutral-200 px-3 py-2.5 font-mono text-xs"
+          />
+          <button
+            onClick={() => {
+              setBridgeKey(bridgeKey);
+              setMessage('密钥已保存至本机');
+              setTimeout(() => setMessage(''), 2000);
+            }}
+            className="shrink-0 rounded-xl bg-neutral-100 px-3 py-2.5 text-xs font-medium text-neutral-600 hover:bg-neutral-200"
+          >
+            {t('common.save')}
+          </button>
+        </div>
+        <p className="mt-2 text-xs leading-relaxed text-neutral-400">仅保存在当前浏览器的 localStorage，发送打印时带上 X-Print-Key 头。</p>
 
         {health?.lanUrls && health.lanUrls.length > 0 && (
           <div className="mt-3 rounded-xl bg-primary-50 p-3">

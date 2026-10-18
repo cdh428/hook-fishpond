@@ -85,10 +85,7 @@ export default function TablePicker({
                     : 'border-neutral-200 bg-white hover:border-primary-300'
                 }`}
               >
-                <p className="text-sm font-bold text-neutral-900">{tb.code}</p>
-                <p className="mt-0.5 truncate text-[10px] text-neutral-500">
-                  {tableName(tb)}
-                </p>
+                <p className="text-sm font-bold text-neutral-900">{tableName(tb)}</p>
               </button>
             );
           })}

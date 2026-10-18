@@ -345,7 +345,7 @@
     "loginPassword": "รหัสผ่าน",
     "loginFailed": "เข้าสู่ระบบล้มเหลว ตรวจสอบชื่อผู้ใช้และรหัสผ่าน",
     "todayBookings": "การจองวันนี้",
-    "todayRevenue": "รายได้วันนี้",
+    "todayRevenue": "ยอชำระ",
     "pendingOrders": "คำสั่งซื้อรอดำเนินการ",
     "activeSpots": "จุดที่ใช้งาน",
     "recentOrders": "คำสั่งซื้อล่าสุด",
@@ -380,8 +380,8 @@
     "editTable": "แก้ไขโต๊ะ",
     "downloadQR": "ดาวน์โหลด QR",
     "printAllQR": "พิมพ์ QR ทั้งหมด",
-    "areaHut": "โซนซุ้ม",
-    "areaCafe": "โซนคาเฟ่",
+    "areaHut": "กระท่อม / Cottage / 茅草屋",
+    "areaCafe": "โต๊ะ / Table / 大厅桌位",
     "tableCodePlaceholder": "รหัสโต๊ะ เช่น A11",
     "qrPointsTo": "คิวอาร์โค้ดชี้ไปที่",
     "activate": "เปิดใช้งาน",
@@ -462,7 +462,10 @@
     "paymentHistory": "ประวัติการรับชำระ",
     "noPaymentHistory": "ยังไม่มีประวัติการรับชำระ",
     "undoPayment": "ยกเลิก",
-    "undoPaymentConfirm": "ยืนยันยกเลิกรายการรับชำระนี้? เมื่อยกเลิกแล้วจะไม่นับเป็นยอดรับจริง"
+    "undoPaymentConfirm": "ยืนยันยกเลิกรายการรับชำระนี้? เมื่อยกเลิกแล้วจะไม่นับเป็นยอดรับจริง",
+    "openOutstanding": "รอชำระเงิน",
+    "openOutstandingCount": "คำสั่งซื้อรอดำเนินการ",
+    "todayProjected": "ยอรวม"
   },
   "adminBulk": {
     "title": "จัดการแบบกลุ่ม",

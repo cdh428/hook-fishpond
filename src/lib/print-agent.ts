@@ -94,7 +94,17 @@ export interface PrintOutcome {
 const DEFAULT_BRIDGE_URL = 'http://127.0.0.1:17777';
 
 const LS_BRIDGE_URL = 'hf.print.bridgeUrl';
+const LS_BRIDGE_KEY = 'hf.print.bridgeKey';
 const LS_PREFS_CACHE = 'hf.print.prefs.cache';
+
+export function getBridgeKey(): string {
+  const ls = safeLocalStorage();
+  return (ls?.getItem(LS_BRIDGE_KEY) || '').trim();
+}
+
+export function setBridgeKey(key: string): void {
+  safeLocalStorage()?.setItem(LS_BRIDGE_KEY, key.trim());
+}
 
 /** 远端（数据库）配置的本地缓存，避免每次打印都多一次网络往返 */
 let prefsCache: PrintPreferences | null = null;
@@ -330,13 +340,17 @@ export async function printViaBridge(
   opts?: { copies?: number; cut?: boolean; feedLines?: number; cutMode?: string },
 ): Promise<{ ok: boolean; width?: number; height?: number; bytes?: number; ms?: number; transport?: string; error?: string }> {
   try {
+    const key = getBridgeKey();
     const res = await fetchWithTimeout(
       `${getBridgeUrl()}/print`,
       {
         method: 'POST',
         cache: 'no-store',
         mode: 'cors',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(key ? { 'X-Print-Key': key } : {}),
+        },
         body: JSON.stringify({
           printer: target,
           html,

@@ -68,6 +68,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "cutMode": "full",      # full=全切(默认,兼容最好) / partial=半切 / none=不切
     "feedLines": 6,         # 切纸前走纸行数（一行≈4mm）；走不够会切在字上或切不断
     "baudRate": 9600,       # 仅蓝牙串口用；SPP 是虚拟链路，此值对吞吐无影响
+    "authToken": "",        # 安全通信秘钥（为空时不校验，配上后必须 Header 带 X-Print-Key）
 }
 
 # 一次只渲染/打印一份，避免并发把打印机和 Chrome 打爆
@@ -82,7 +83,7 @@ _PRINT_LOCK = threading.Lock()
 CORS_HEADERS = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Headers": "Content-Type, X-Print-Key",
     "Access-Control-Allow-Private-Network": "true",
     "Access-Control-Max-Age": "86400",
 }
@@ -315,7 +316,21 @@ class Handler(BaseHTTPRequestHandler):
             log(f"GET {path} 失败：{exc}")
             self._send(500, {"ok": False, "error": str(exc)})
 
+    def _check_auth(self) -> bool:
+        expected = (CONFIG.get("authToken") or "").strip()
+        if not expected:
+            return True
+        key = self.headers.get("X-Print-Key", "").strip()
+        if not key:
+            auth = self.headers.get("Authorization", "").strip()
+            if auth.lower().startswith("bearer "):
+                key = auth[7:].strip()
+        return key == expected
+
     def do_POST(self) -> None:  # noqa: N802
+        if not self._check_auth():
+            self._send(401, {"ok": False, "error": "未授权：无效或缺失 X-Print-Key"})
+            return
         path = self.path.split("?")[0].rstrip("/") or "/"
         if path != "/print":
             self._send(404, {"ok": False, "error": f"未知路径 {path}（只支持 POST /print）"})

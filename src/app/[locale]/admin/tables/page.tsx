@@ -115,19 +115,20 @@ export default function AdminTablesPage() {
     if (editing) return;
     const num = parseInt(code.replace(/^[A-Z]+/i, ''), 10);
     if (Number.isNaN(num)) return;
+    const pad = String(num).padStart(2, '0');
     if (area === 'HUT') {
       setForm((f) => ({
         ...f,
-        name_zh: `茅草屋 ${num}号桌`,
-        name_en: `Hut Table ${num}`,
-        name_th: `ซุ้ม ${num}`,
+        name_zh: `茅草屋 ${pad}`,
+        name_en: `Cottage ${pad}`,
+        name_th: `กระท่อม ${pad}`,
       }));
     } else {
       setForm((f) => ({
         ...f,
-        name_zh: `咖啡厅 ${num}号桌`,
-        name_en: `Cafe Table ${num}`,
-        name_th: `คาเฟ่ ${num}`,
+        name_zh: `${num}号桌`,
+        name_en: `Table ${pad}`,
+        name_th: `โต๊ะที่ ${num}`,
       }));
     }
   };
@@ -180,10 +181,11 @@ export default function AdminTablesPage() {
     }
   };
 
-  // Render a printable QR sticker: QR code + table label underneath
+  // Render a printable QR sticker: QR code + table label underneath (Trilingual: ZH, EN, TH)
   const buildStickerDataUrl = async (row: TableRow): Promise<string> => {
-    const size = 600;
-    const qrSize = 480;
+    const width = 600;
+    const height = 690;
+    const qrSize = 460;
     const qrDataUrl = await QRCode.toDataURL(tableOrderUrl(row.code), {
       width: qrSize,
       margin: 1,
@@ -198,23 +200,33 @@ export default function AdminTablesPage() {
     });
 
     const canvas = document.createElement('canvas');
-    canvas.width = size;
-    canvas.height = size;
+    canvas.width = width;
+    canvas.height = height;
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('Canvas unavailable');
 
     ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, size, size);
+    ctx.fillRect(0, 0, width, height);
 
-    const qrX = (size - qrSize) / 2;
-    const qrY = 40;
+    const qrX = (width - qrSize) / 2;
+    const qrY = 30;
     ctx.drawImage(img, qrX, qrY, qrSize, qrSize);
 
-    // Table name label
+    // 优雅的中英泰三语标签（纯名称，不带多余的桌号代码标签）
     ctx.fillStyle = '#000000';
     ctx.textAlign = 'center';
-    ctx.font = 'bold 40px sans-serif';
-    ctx.fillText(`${row.name_zh}  ${row.code}`, size / 2, qrY + qrSize + 52);
+
+    // 1. 中文名 (大字加粗)
+    ctx.font = 'bold 36px "Microsoft YaHei", sans-serif';
+    ctx.fillText(row.name_zh, width / 2, qrY + qrSize + 48);
+
+    // 2. 英文名 (加粗居中)
+    ctx.font = 'bold 30px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+    ctx.fillText(row.name_en, width / 2, qrY + qrSize + 92);
+
+    // 3. 泰文名 (Leelawadee UI 原生高清加粗)
+    ctx.font = 'bold 34px "Leelawadee UI", "Noto Sans Thai", Tahoma, sans-serif';
+    ctx.fillText(row.name_th, width / 2, qrY + qrSize + 138);
 
     return canvas.toDataURL('image/png');
   };

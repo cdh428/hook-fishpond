@@ -222,15 +222,20 @@ async function main() {
 
   for (const t of tables) {
     const isHut = t.area === "HUT";
+    const pad = String(t.n).padStart(2, "0");
     await prisma.diningTable.upsert({
       where: { code: t.code },
-      update: {},
+      update: {
+        name_zh: isHut ? `茅草屋 ${pad}` : `${t.n}号桌`,
+        name_en: isHut ? `Cottage ${pad}` : `Table ${pad}`,
+        name_th: isHut ? `กระท่อม ${pad}` : `โต๊ะที่ ${t.n}`,
+      },
       create: {
         code: t.code,
         area: t.area,
-        name_zh: isHut ? `茅草屋 ${t.n}号桌` : `咖啡厅 ${t.n}号桌`,
-        name_en: isHut ? `Hut Table ${t.n}` : `Cafe Table ${t.n}`,
-        name_th: isHut ? `ซุ้ม ${t.n}` : `คาเฟ่ ${t.n}`,
+        name_zh: isHut ? `茅草屋 ${pad}` : `${t.n}号桌`,
+        name_en: isHut ? `Cottage ${pad}` : `Table ${pad}`,
+        name_th: isHut ? `กระท่อม ${pad}` : `โต๊ะที่ ${t.n}`,
         isActive: true,
       },
     });

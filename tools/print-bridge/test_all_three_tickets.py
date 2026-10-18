@@ -66,24 +66,27 @@ kitchen_body = """
   </div>
   <div class="dashed"></div>
   <div class="meta">
-    <div class="row"><span class="k">钓位 / โต๊ะ:</span><span class="v">ซุ้ม A08 / 休闲塘 A08</span></div>
-    <div class="row"><span class="k">时间 / เวลา:</span><span class="v">2026-10-17 17:30</span></div>
+    <div class="row"><span class="k">桌位 / โต๊ะ:</span><span class="v">กระท่อม 01 / 茅草屋 01</span></div>
+    <div class="row"><span class="k">时间 / เวลา:</span><span class="v">2026-10-18 15:30</span></div>
   </div>
   <div class="dashed"></div>
   <div class="big">
-    <div class="item"><span class="n">ปลานิลเผาเกลือ (炭烤罗非鱼)</span><span class="q">× 1</span></div>
+    <div class="item"><span class="n item-th">ปลานิลเผาเกลือ</span><span class="q">× 1</span></div>
+    <div class="item-zh">炭烤罗非鱼</div>
     <div class="item-note">› รสจัดจ้าน / 香辣中辣</div>
-    <div class="item"><span class="n">ผัดกะเพราหมูสับ (打抛猪肉盖饭)</span><span class="q">× 2</span></div>
+    <div class="item"><span class="n item-th">ผัดกะเพราหมูสับ</span><span class="q">× 2</span></div>
+    <div class="item-zh">打抛猪肉碎盖饭</div>
     <div class="item-note">› ไข่ดาวไม่สุก / 溏心蛋</div>
-    <div class="item"><span class="n">ต้มยำกุ้งน้ำข้น (冬阴功鲜虾浓汤)</span><span class="q">× 1</span></div>
+    <div class="item"><span class="n item-th">ต้มยำกุ้งน้ำข้น</span><span class="q">× 1</span></div>
+    <div class="item-zh">冬阴功鲜虾浓汤</div>
   </div>
   <div class="dashed"></div>
-  <div class="meta"><b>备注 / หมายเหตุ:</b> ไม่ใส่ผักชี, หนังปลากรอบๆ (不加香菜，鱼皮烤香脆)</div>
+  <div class="meta"><b>备注 / หมายเหตุ:</b> 不加香菜，鱼皮烤香脆</div>
   <div class="solid"></div>
   <div class="foot">后厨单 · ORD-20261017-001</div>
 """
 
-# 2. 预结单 HTML
+# 2. 预结单 HTML (泰中双语分行：泰文大字加粗在上，中文在下，金额整齐对齐)
 bill_body = """
   <div class="center">
     <div class="brand">Hook Fishpond</div>
@@ -93,28 +96,46 @@ bill_body = """
   </div>
   <div class="dashed"></div>
   <div class="meta">
-    <div class="row"><span class="k">钓位 / โต๊ะ:</span><span class="v">ซุ้ม A08 / 休闲塘 A08</span></div>
-    <div class="row"><span class="k">时间 / เวลา:</span><span class="v">2026-10-17 17:30</span></div>
+    <div class="row"><span class="k">桌位 / โต๊ะ:</span><span class="v">1号桌 / โต๊ะที่ 1 (Table 01)</span></div>
+    <div class="row"><span class="k">时间 / เวลา:</span><span class="v">2026-10-18 15:30</span></div>
     <div class="row"><span class="k">模式 / วิธีชำระ:</span><span class="v">先享后付 (Postpaid)</span></div>
   </div>
   <div class="dashed"></div>
   <div class="items">
-    <div class="item"><span class="n">ปลานิลเผาเกลือ (炭烤罗非鱼)</span><span class="q">× 1</span><span class="q" style="min-width:16mm;text-align:right">฿220</span></div>
+    <div class="item">
+      <span class="n item-th">ปลานิลเผาเกลือ</span>
+      <span class="q">× 1</span>
+      <span class="q" style="min-width:16mm;text-align:right">฿220</span>
+    </div>
+    <div class="item-zh">炭烤罗非鱼</div>
     <div class="item-note">› รสจัดจ้าน / 香辣中辣</div>
-    <div class="item"><span class="n">ผัดกะเพราหมูสับ (打抛猪肉盖饭)</span><span class="q">× 2</span><span class="q" style="min-width:16mm;text-align:right">฿160</span></div>
-    <div class="item"><span class="n">ต้มยำกุ้งน้ำข้น (冬阴功汤)</span><span class="q">× 1</span><span class="q" style="min-width:16mm;text-align:right">฿180</span></div>
+
+    <div class="item">
+      <span class="n item-th">ผัดกะเพราหมูสับราดข้าว</span>
+      <span class="q">× 2</span>
+      <span class="q" style="min-width:16mm;text-align:right">฿160</span>
+    </div>
+    <div class="item-zh">打抛猪肉碎盖饭</div>
+    <div class="item-note">› ไข่ดาวไม่สุก / 溏心蛋</div>
+
+    <div class="item">
+      <span class="n item-th">ต้มยำกุ้งน้ำข้น</span>
+      <span class="q">× 1</span>
+      <span class="q" style="min-width:16mm;text-align:right">฿180</span>
+    </div>
+    <div class="item-zh">冬阴功鲜虾浓汤</div>
   </div>
   <div class="solid"></div>
-  <div class="row"><span class="k">菜品小计:</span><span class="v">฿560</span></div>
-  <div class="row"><span class="k">渔获加工 (2.5 kg):</span><span class="v">฿150</span></div>
-  <div class="row"><span class="k">优惠折扣:</span><span class="v">−฿30</span></div>
+  <div class="row"><span class="k">菜品小计 / รวมค่าอาหาร:</span><span class="v">฿560</span></div>
+  <div class="row"><span class="k">渔获加工 / ค่าปลา (2.5 kg):</span><span class="v">฿150</span></div>
+  <div class="row"><span class="k">优惠折扣 / ส่วนลด:</span><span class="v">−฿30</span></div>
   <div class="solid"></div>
-  <div class="total-row"><span>应付总计 / ยอดรวม:</span><span class="grand">฿680</span></div>
+  <div class="total-row"><span>应付总计 / ยอดรวมทั้งสิ้น:</span><span class="grand">฿680</span></div>
   <div class="dashed"></div>
-  <div class="foot">感谢光临 Hook Fishpond<br/>ขอบคุณที่ใช้บริการ</div>
+  <div class="foot">感谢光临 Hook Fishpond<br/>ขอบคุณที่ใช้บริการค่ะ</div>
 """
 
-# 3. 收据 HTML
+# 3. 收据 HTML (泰中双语分行)
 receipt_body = """
   <div class="center">
     <div class="brand">Hook Fishpond</div>
@@ -125,17 +146,22 @@ receipt_body = """
   </div>
   <div class="dashed"></div>
   <div class="meta">
-    <div class="row"><span class="k">钓位 / โต๊ะ:</span><span class="v">ซุ้ม A08 / 休闲塘 A08</span></div>
-    <div class="row"><span class="k">结清时间:</span><span class="v">2026-10-17 18:05</span></div>
+    <div class="row"><span class="k">桌位 / โต๊ะ:</span><span class="v">1号桌 / โต๊ะที่ 1</span></div>
+    <div class="row"><span class="k">结清时间 / เวลาชำระ:</span><span class="v">2026-10-18 15:45</span></div>
   </div>
   <div class="dashed"></div>
   <div class="items">
-    <div class="item"><span class="n">餐饮与渔获总计</span><span class="q">× 1</span><span class="q" style="min-width:16mm;text-align:right">฿680</span></div>
+    <div class="item">
+      <span class="n item-th">ค่าอาหารและเครื่องดื่ม</span>
+      <span class="q">× 1</span>
+      <span class="q" style="min-width:16mm;text-align:right">฿680</span>
+    </div>
+    <div class="item-zh">餐饮与渔获结清款项</div>
   </div>
   <div class="solid"></div>
   <div class="total-row"><span>实收金额 / ได้รับเงิน:</span><span class="grand">฿680</span></div>
   <div class="dashed"></div>
-  <div class="row"><span class="k">支付方式:</span><span class="v">PromptPay 扫码支付</span></div>
+  <div class="row"><span class="k">支付方式 / วิธีชำระ:</span><span class="v">PromptPay 扫码支付</span></div>
   <div class="dashed"></div>
   <div class="foot">感谢光临 Hook Fishpond · 祝您生活愉快！<br/>ขอบคุณที่ใช้บริการ ขอให้มีความสุขค่ะ</div>
 """

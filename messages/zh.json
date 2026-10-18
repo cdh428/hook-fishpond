@@ -345,7 +345,7 @@
     "loginPassword": "密码",
     "loginFailed": "登录失败，请检查用户名和密码",
     "todayBookings": "今日预约",
-    "todayRevenue": "今日收入",
+    "todayRevenue": "今日进入收款",
     "pendingOrders": "待处理订单",
     "activeSpots": "活跃钓位",
     "recentOrders": "近期订单",
@@ -380,8 +380,8 @@
     "editTable": "编辑餐桌",
     "downloadQR": "下载二维码",
     "printAllQR": "打印全部二维码",
-    "areaHut": "茅草屋",
-    "areaCafe": "咖啡厅",
+    "areaHut": "茅草屋 / Cottage / กระท่อม",
+    "areaCafe": "大厅桌位 / Table / โต๊ะ",
     "tableCodePlaceholder": "桌号，如 A11",
     "qrPointsTo": "二维码指向",
     "activate": "启用",
@@ -462,7 +462,10 @@
     "paymentHistory": "收款记录",
     "noPaymentHistory": "暂无收款记录",
     "undoPayment": "作废",
-    "undoPaymentConfirm": "确认作废这条收款记录？作废后不再计入实收。"
+    "undoPaymentConfirm": "确认作废这条收款记录？作废后不再计入实收。",
+    "openOutstanding": "进行中待收",
+    "openOutstandingCount": "进行中单数",
+    "todayProjected": "今日预计收入"
   },
   "adminBulk": {
     "title": "批量管理",

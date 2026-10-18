@@ -345,7 +345,7 @@
     "loginPassword": "Password",
     "loginFailed": "Login failed, check your credentials",
     "todayBookings": "Today Bookings",
-    "todayRevenue": "Today Revenue",
+    "todayRevenue": "Collected Today",
     "pendingOrders": "Pending Orders",
     "activeSpots": "Active Spots",
     "recentOrders": "Recent Orders",
@@ -380,8 +380,8 @@
     "editTable": "Edit Table",
     "downloadQR": "Download QR",
     "printAllQR": "Print All QRs",
-    "areaHut": "Thatched Hut Area",
-    "areaCafe": "Café Area",
+    "areaHut": "Cottage / กระท่อม / 茅草屋",
+    "areaCafe": "Table / โต๊ะ / 大厅桌位",
     "tableCodePlaceholder": "Table code, e.g. A11",
     "qrPointsTo": "QR points to",
     "activate": "Activate",
@@ -462,7 +462,10 @@
     "paymentHistory": "Payment history",
     "noPaymentHistory": "No payments recorded",
     "undoPayment": "Void",
-    "undoPaymentConfirm": "Void this payment record? It will no longer count as collected."
+    "undoPaymentConfirm": "Void this payment record? It will no longer count as collected.",
+    "openOutstanding": "Open to Collect",
+    "openOutstandingCount": "Open Orders",
+    "todayProjected": "Projected Today"
   },
   "adminBulk": {
     "title": "Bulk Management",

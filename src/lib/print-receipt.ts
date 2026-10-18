@@ -124,13 +124,16 @@ const BASE_CSS = `
   .order-no { font-size: 28px; font-weight: 900; letter-spacing: 1px; line-height: 1.15; }
   .meta { font-size: 13px; line-height: 1.6; }
   .items { margin-top: 4px; }
-  .item { display: flex; justify-content: space-between; gap: 6px; font-size: 14px; line-height: 1.6; }
-  .item .n { flex: 1 1 auto; word-break: break-word; font-weight: 600; }
+  .item { display: flex; justify-content: space-between; gap: 6px; line-height: 1.4; margin-top: 4px; }
+  .item .n { flex: 1 1 auto; word-break: break-word; }
+  .item-th { font-size: 16px; font-weight: 800; color: #000; line-height: 1.35; }
+  .item-zh { font-size: 12px; color: #444; line-height: 1.3; margin-top: 1px; padding-left: 2px; }
   .item .q { flex: 0 0 auto; font-weight: 800; padding-right: 1mm; font-size: 15px; }
-  .item-note { font-size: 12px; padding-left: 6px; line-height: 1.5; }
-  /* 后厨单泰文大字与规格按 78mm 比例进一步放大 */
-  .big .item { font-size: 20px; line-height: 1.8; }
-  .big .item .n { font-weight: 900; font-size: 20px; }
+  .item-note { font-size: 12px; padding-left: 6px; line-height: 1.5; color: #333; }
+  /* 后厨单泰文大字与规格放大 */
+  .big .item { margin-top: 6px; }
+  .big .item-th { font-size: 20px; font-weight: 900; line-height: 1.4; }
+  .big .item-zh { font-size: 14px; font-weight: 500; color: #333; margin-top: 2px; }
   .big .item .q { font-size: 22px; font-weight: 900; }
   .big .item-note { font-size: 15px; font-weight: 700; line-height: 1.6; padding-left: 8px; }
   .total-row { display: flex; justify-content: space-between; font-size: 18px; font-weight: 800; }
@@ -189,10 +192,21 @@ function orderMeta(order: ReceiptOrder, labels: PrintLabels): string {
     </div>`;
 }
 
+/** 智能拆分泰中双语名称，支持 "泰文 (中文)"、"泰文 / 中文" */
+function splitBilingual(raw: string): { th: string; zh: string } {
+  const str = (raw || '').trim();
+  const m1 = str.match(/^(.+?)\s*[\(（](.+?)[\)）]$/);
+  if (m1) return { th: m1[1].trim(), zh: m1[2].trim() };
+  const m2 = str.match(/^(.+?)\s*[\/／]\s*(.+)$/);
+  if (m2) return { th: m2[1].trim(), zh: m2[2].trim() };
+  return { th: str, zh: '' };
+}
+
 /**
- * 菜品行。规格 / 面型 / 加料紧跟菜名下方逐行打出 ——
- * 后厨单尤其重要：不打出「加大／蛋面／加煎蛋」就等于没下单。
- * 用 .item-note 的样式（10px，左缩进），后厨单走 .big 放大也不会抢主行。
+ * 菜品行：泰中双语分行打印 ——
+ * 第一行（主位）：泰文大字加粗，右侧挂数量与金额；
+ * 第二行（辅助）：中文菜名小字跟随；
+ * 第三行：规格 / 备注选项。
  */
 function itemsBlock(order: ReceiptOrder, labels: PrintLabels, withPrices: boolean): string {
   return `
@@ -201,12 +215,14 @@ function itemsBlock(order: ReceiptOrder, labels: PrintLabels, withPrices: boolea
       ${order.items
         .map((it) => {
           const opts = Array.isArray(it.optionLines) ? it.optionLines : [];
+          const { th, zh } = splitBilingual(it.name);
           return `
         <div class="item">
-          <span class="n">${esc(it.name)}</span>
+          <span class="n item-th">${esc(th)}</span>
           <span class="q">× ${esc(it.quantity)}</span>
           ${withPrices ? `<span class="q" style="min-width:16mm;text-align:right">${esc(money(it.totalPrice))}</span>` : ''}
         </div>
+        ${zh ? `<div class="item-zh">${esc(zh)}</div>` : ''}
         ${opts.map((o) => `<div class="item-note">› ${esc(o)}</div>`).join('')}
         ${it.note ? `<div class="item-note">※ ${esc(it.note)}</div>` : ''}`;
         })

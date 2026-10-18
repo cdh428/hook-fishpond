@@ -51,6 +51,9 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState({
     todayBookings: 0,
     todayRevenue: 0,
+    openOutstanding: 0,
+    openOutstandingCount: 0,
+    todayProjected: 0,
     pendingOrders: 0,
     activeSpots: 0,
     awaitingSettlementCount: 0,
@@ -80,6 +83,9 @@ export default function AdminDashboard() {
       setStats({
         todayBookings: statsRes.todayBookings ?? 0,
         todayRevenue: statsRes.todayRevenue ?? 0,
+        openOutstanding: statsRes.openOutstanding ?? 0,
+        openOutstandingCount: statsRes.openOutstandingCount ?? 0,
+        todayProjected: statsRes.todayProjected ?? 0,
         pendingOrders: statsRes.pendingOrders ?? 0,
         activeSpots: statsRes.activeSpots ?? 0,
         awaitingSettlementCount: statsRes.awaitingSettlementCount ?? 0,
@@ -131,6 +137,17 @@ export default function AdminDashboard() {
       color: 'bg-success-50 text-success-600',
     },
     {
+      labelKey: 'admin.todayProjected',
+      value: `฿${stats.todayProjected.toLocaleString()}`,
+      sub: `+ ฿${stats.openOutstanding.toLocaleString()} (${stats.openOutstandingCount})`,
+      icon: (
+        <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0l-4 4-4-4m4 4V3M5 7h8m-4-4v4M3 3l4 4" transform="translate(0 6)" />
+        </svg>
+      ),
+      color: 'bg-success-50 text-success-600',
+    },
+    {
       labelKey: 'admin.pendingOrders',
       value: String(stats.pendingOrders),
       icon: (
@@ -175,6 +192,9 @@ export default function AdminDashboard() {
                 <div className="mb-2">{stat.icon}</div>
                 <p className="text-xs opacity-70">{t(stat.labelKey)}</p>
                 <p className="mt-1 text-2xl font-bold">{stat.value}</p>
+                {stat.sub && (
+                  <p className="mt-0.5 text-[11px] font-medium opacity-70">{stat.sub}</p>
+                )}
               </div>
             ))}
           </div>

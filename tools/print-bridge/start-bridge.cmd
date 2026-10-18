@@ -35,9 +35,9 @@ echo Available print targets:
 echo.
 python bridge.py --list
 echo.
-echo Starting bridge on http://127.0.0.1:17777
+echo Starting bridge on http://0.0.0.0:17777 (Local + Tailscale)
 echo Keep this window open while printing. Press Ctrl+C to stop.
 echo.
 
-python bridge.py
+python bridge.py --host 0.0.0.0 --printer POS80
 pause

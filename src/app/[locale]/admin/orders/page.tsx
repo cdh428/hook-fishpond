@@ -644,7 +644,7 @@ function OrderCard({
             >
               {order.orderType === 'TAKEAWAY' || !order.table
                 ? `🥡 ${t('orderType.takeaway')}`
-                : `🪑 ${order.table.code}`}
+                : `🪑 ${pickName(order.table, locale) || order.table.code}`}
             </button>
             {order.pickupAt && (
               <span className="rounded bg-primary-50 px-1.5 py-0.5 font-medium text-primary-700">
