@@ -674,19 +674,38 @@ function OrderCard({
           </div>
         </div>
         <div className="shrink-0 text-right">
-          <p className="text-base font-bold text-accent-600">฿{order.totalPrice}</p>
-          {/* 已收 / 需付：一单可分多次付款，这里给出汇总，明细见下方收款记录 */}
-          {(order.prepaidAmount || 0) > 0 && (
-            <p className="text-[10px] text-success-600">
-              {t('adminOrders.prepaid')} ฿{order.prepaidAmount}
-            </p>
-          )}
-          {(order.prepaidAmount || 0) > 0 && order.status !== 'SETTLED' && (
-            <p className="text-[10px] font-bold text-error-600">
-              {t('admin.needPay')} ฿
-              {Math.max(0, Math.round(((order.totalPrice || 0) - order.prepaidAmount) * 100) / 100)}
-            </p>
-          )}
+          {(() => {
+            const total = order.totalPrice || 0;
+            const prepaid = order.prepaidAmount || 0;
+            const needPay = Math.max(0, Math.round((total - prepaid) * 100) / 100);
+            const open = order.status !== 'SETTLED' && order.status !== 'CANCELLED';
+            // 未结清：主金额突出「需付」（总应付−已付），总应付作拆解小字；
+            // 已结清/取消：主金额回到「实收/总额」。
+            return (
+              <>
+                {open ? (
+                  <>
+                    <p className="text-base font-bold text-accent-600">
+                      {t('admin.needPay')} ฿{needPay}
+                    </p>
+                    <p className="text-[10px] text-neutral-400">
+                      {t('payment.total')} ฿{total}
+                      {prepaid > 0 && ` · ${t('adminOrders.prepaid')} ฿${prepaid}`}
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-base font-bold text-neutral-900">฿{total}</p>
+                    {prepaid > 0 && (
+                      <p className="text-[10px] text-success-600">
+                        {t('adminOrders.prepaid')} ฿{prepaid}
+                      </p>
+                    )}
+                  </>
+                )}
+              </>
+            );
+          })()}
         </div>
       </div>
 
@@ -765,7 +784,7 @@ function OrderCard({
         {order.subtotal !== order.totalPrice && (
           <div className="mt-0.5 flex justify-between border-t border-neutral-200 pt-0.5 text-[11px] text-neutral-400">
             <span>{t('adminOrders.subtotal')}</span>
-            <span>฿{order.subtotal}</span>
+            <span>฿{order.subtotal}{order.fishCharge > 0 && ` + ${t('adminOrders.fishCharge')} ฿${order.fishCharge}`}</span>
           </div>
         )}
         {order.note && (
@@ -1617,7 +1636,11 @@ function SettleModal({
   const [qr, setQr] = useState<{ dataUrl: string; amount: number; qrString: string } | null>(null);
   const [current, setCurrent] = useState<any>(order);
 
-  const receivable = current.totalPrice;
+  // 需付 = 总应付 − 已付（与服务端 settle 的 res.amount 同口径，避免弹窗主金额与收款码/实收不一致）
+  const receivable = Math.max(
+    0,
+    Math.round(((current.totalPrice || 0) - (current.prepaidAmount || 0)) * 100) / 100,
+  );
 
   const genQr = async () => {
     setBusy(true);
