@@ -385,6 +385,7 @@
     "areaCafe": "大厅桌位 / Table / โต๊ะ",
     "tableCodePlaceholder": "桌号，如 A11",
     "qrPointsTo": "二维码指向",
+    "tableQrOrderHint": "扫码点餐",
     "activate": "启用",
     "deactivate": "停用",
     "popupBlocked": "浏览器阻止了弹窗，请允许弹窗后重试",

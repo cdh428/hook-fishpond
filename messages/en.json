@@ -385,6 +385,7 @@
     "areaCafe": "Table / โต๊ะ / 大厅桌位",
     "tableCodePlaceholder": "Table code, e.g. A11",
     "qrPointsTo": "QR points to",
+    "tableQrOrderHint": "Scan to order",
     "activate": "Activate",
     "deactivate": "Deactivate",
     "popupBlocked": "Your browser blocked the popup. Please allow popups and try again.",

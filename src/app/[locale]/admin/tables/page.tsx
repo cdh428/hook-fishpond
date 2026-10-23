@@ -8,9 +8,11 @@ import {
   createTable,
   updateTable,
   deleteTable,
-  tableOrderUrl,
+  tableOrderUrlByLocale,
   type TableArea,
 } from '@/lib/api-client';
+import { esc, makeQrDataUrl } from '@/lib/print-receipt';
+import { submitPrint, describeOutcome } from '@/lib/print-agent';
 
 interface TableRow {
   id: string;
@@ -25,6 +27,7 @@ interface TableRow {
 
 export default function AdminTablesPage() {
   const t = useTranslations();
+  const locale = useLocale();
 
   const [tables, setTables] = useState<TableRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -34,6 +37,8 @@ export default function AdminTablesPage() {
   const [editing, setEditing] = useState<TableRow | null>(null);
   const [qrPreview, setQrPreview] = useState<Record<string, string>>({});
   const [downloading, setDownloading] = useState<string | null>(null);
+  const [printing, setPrinting] = useState<string | null>(null);
+  const [toast, setToast] = useState('');
   const [form, setForm] = useState({
     code: '',
     name_zh: '',
@@ -53,11 +58,14 @@ export default function AdminTablesPage() {
       const previews: Record<string, string> = {};
       for (const row of rows || []) {
         try {
-          previews[row.id] = await QRCode.toDataURL(tableOrderUrl(row.code), {
-            width: 160,
-            margin: 1,
-            color: { dark: '#155E75', light: '#ffffff' },
-          });
+          previews[row.id] = await QRCode.toDataURL(
+            tableOrderUrlByLocale(row.code, locale),
+            {
+              width: 160,
+              margin: 1,
+              color: { dark: '#155E75', light: '#ffffff' },
+            },
+          );
         } catch {
           // skip preview on failure
         }
@@ -68,7 +76,7 @@ export default function AdminTablesPage() {
     } finally {
       setLoading(false);
     }
-  }, [t]);
+  }, [t, locale]);
 
   useEffect(() => {
     loadData();
@@ -179,11 +187,14 @@ export default function AdminTablesPage() {
     const width = 600;
     const height = 690;
     const qrSize = 460;
-    const qrDataUrl = await QRCode.toDataURL(tableOrderUrl(row.code), {
-      width: qrSize,
-      margin: 1,
-      color: { dark: '#000000', light: '#ffffff' },
-    });
+    const qrDataUrl = await QRCode.toDataURL(
+      tableOrderUrlByLocale(row.code, locale),
+      {
+        width: qrSize,
+        margin: 1,
+        color: { dark: '#000000', light: '#ffffff' },
+      },
+    );
 
     const img = new Image();
     await new Promise<void>((resolve, reject) => {
@@ -238,6 +249,62 @@ export default function AdminTablesPage() {
       setError(err?.message || t('common.error'));
     } finally {
       setDownloading(null);
+    }
+  };
+
+  const flash = (msg: string) => {
+    setToast(msg);
+    window.setTimeout(() => setToast(''), 3200);
+  };
+
+  /**
+   * 单桌 QR 码直连 POS80 打印：
+   * 80mm 小票版式（纯黑白二维码 + 三语桌名 + 扫码点餐提示），
+   * 经打印桥 GDI/USB 通道出纸，固定 2 行走纸后全切。
+   */
+  const printTableQr = async (row: TableRow) => {
+    setPrinting(row.id);
+    setError('');
+    try {
+      // 纯黑白、M 级容错的二维码（黑块足够大，热敏 1-bit 打印不会糊）
+      // 按当前界面语言锁定，扫码即进入对应语言的点单页
+      const qrDataUrl = await makeQrDataUrl(tableOrderUrlByLocale(row.code, locale));
+      const brand = t('common.siteName');
+      const hint = t('admin.tableQrOrderHint');
+      const code = row.code;
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>QR ${esc(code)}</title>
+<style>
+  * { box-sizing: border-box; }
+  @page { size: 80mm auto; margin: 0; }
+  html, body { margin: 0; padding: 0; width: 80mm; background: #fff; color: #000;
+    font-family: 'Leelawadee UI', 'Noto Sans Thai', 'Noto Sans SC', -apple-system, 'Segoe UI', sans-serif; }
+  .ticket { width: 70mm; margin: 0 auto; padding: 4mm 1mm 2mm; text-align: center; }
+  .brand { font-size: 16px; font-weight: 800; letter-spacing: .5px; }
+  .code { font-size: 26px; font-weight: 900; margin-top: 2mm; letter-spacing: 1px; }
+  .names { margin-top: 2mm; }
+  .n-zh { font-size: 22px; font-weight: 800; line-height: 1.3; }
+  .n-en { font-size: 15px; font-weight: 700; line-height: 1.3; }
+  .n-th { font-size: 18px; font-weight: 800; line-height: 1.3; }
+  .qr { margin: 2mm auto; }
+  .qr img { width: 35mm; height: 35mm; image-rendering: pixelated; }
+  .hint { font-size: 14px; font-weight: 700; border-top: 2px dashed #000; padding-top: 2mm; }
+</style></head><body><div class="ticket">
+  <div class="brand">${esc(brand)}</div>
+  <div class="code">${esc(code)}</div>
+  <div class="names">
+    <div class="n-zh">${esc(row.name_zh)}</div>
+    <div class="n-en">${esc(row.name_en)}</div>
+    <div class="n-th">${esc(row.name_th)}</div>
+  </div>
+  <div class="qr"><img src="${qrDataUrl}" alt="QR ${esc(code)}" /></div>
+  <div class="hint">${esc(hint)}</div>
+</div></body></html>`;
+      const outcome = await submitPrint(html, 'bill', { feedLines: 2, cut: true, cutMode: 'full' });
+      flash(describeOutcome(outcome, t));
+    } catch (err: any) {
+      setError(err?.message || t('common.error'));
+    } finally {
+      setPrinting(null);
     }
   };
 
@@ -321,6 +388,13 @@ export default function AdminTablesPage() {
                 {downloading === row.id ? t('common.saving') : t('admin.downloadQR')}
               </button>
               <button
+                onClick={() => printTableQr(row)}
+                disabled={printing === row.id}
+                className="rounded px-2 py-1 text-[11px] font-medium text-success-600 hover:bg-success-50 disabled:opacity-50"
+              >
+                {printing === row.id ? t('common.loading') : `🖨 ${t('admin.printQR')}`}
+              </button>
+              <button
                 onClick={() => openForm(row)}
                 className="rounded px-2 py-1 text-[11px] font-medium text-neutral-600 hover:bg-neutral-100"
               >
@@ -352,6 +426,11 @@ export default function AdminTablesPage() {
 
   return (
     <>
+      {toast && (
+        <div className="mb-4 rounded-xl bg-success-50 px-4 py-2 text-sm text-success-700">
+          {toast}
+        </div>
+      )}
       {error && (
         <div className="mb-4 rounded-xl bg-error-50 px-4 py-2 text-sm text-error-600">
           {error}
@@ -455,7 +534,7 @@ export default function AdminTablesPage() {
               <div className="rounded-lg bg-neutral-50 px-3 py-2">
                 <p className="text-[10px] text-neutral-400">{t('admin.qrPointsTo')}</p>
                 <p className="break-all font-mono text-[11px] text-neutral-600">
-                  {tableOrderUrl(form.code || 'A01')}
+                  {tableOrderUrlByLocale(form.code || 'A01', locale)}
                 </p>
               </div>
 

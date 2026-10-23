@@ -382,7 +382,7 @@ export async function printViaBridge(
 export async function submitPrint(
   html: string,
   purpose: PrintPurpose,
-  opts?: { copies?: number },
+  opts?: { copies?: number; feedLines?: number; cutMode?: string; cut?: boolean },
 ): Promise<PrintOutcome> {
   const started = Date.now();
 
@@ -405,7 +405,12 @@ export async function submitPrint(
     return { via: 'browser', fallbackReason: 'no-target', ms: Date.now() - started };
   }
 
-  const cutOpts = { copies: opts?.copies ?? 1, cutMode: prefs.cutMode, feedLines: prefs.feedLines };
+  const cutOpts = {
+    copies: opts?.copies ?? 1,
+    cut: opts?.cut,
+    cutMode: opts?.cutMode ?? prefs.cutMode,
+    feedLines: opts?.feedLines ?? prefs.feedLines,
+  };
   const r = await printViaBridge(html, target, cutOpts);
   if (r.ok) {
     return {

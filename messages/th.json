@@ -385,6 +385,7 @@
     "areaCafe": "โต๊ะ / Table / 大厅桌位",
     "tableCodePlaceholder": "รหัสโต๊ะ เช่น A11",
     "qrPointsTo": "คิวอาร์โค้ดชี้ไปที่",
+    "tableQrOrderHint": "สแกนเพื่่อสั่่งอาหาร",
     "activate": "เปิดใช้งาน",
     "deactivate": "ปิดใช้งาน",
     "popupBlocked": "เบราว์เซอร์บล็อกป็อปอัป กรุณาอนุญาตแล้วลองใหม่",

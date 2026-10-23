@@ -1,19 +1,21 @@
 /**
  * 自动出单器（收银台侧）
  * ======================
- * 挂在后台订单页：每当订单列表里出现「新订单」或「追加了菜品的既有单」，
- * 自动在收银台这台机器上：
- *   1. 打印「客户票」（buildBillHtml，带价格 + 桌号续点单 QR）
- *   2. 打印「后厨票」（buildKitchenTicketHtml，不带 QR）
+ * 挂在后台订单页：每当「新订单」出现在列表里（服务端标记 `autoPrintFired === false`），
+ * 收银台这台机器**立刻自动打一次**：
+ *   1. 客户票（buildBillHtml，带价格 + 桌号续点单 QR）
+ *   2. 后厨票（buildKitchenTicketHtml，不带 QR）
  *   3. 泰+中双语语音播报（收银机喇叭）
+ * 打完立刻调 `markOrderAutoPrinted` 把服务端标记置 true。
  *
- * 设计要点：
- *  - 顾客端（手机）只是下单，**不**负责打印/播报（手机够不到 POS80，也没喇叭）。
- *  - 本 hook 只在收银机浏览器跑；打印走本地打印桥（POS80），桥不在则静默回退浏览器。
- *  - 用「订单 id + 菜品指纹」去重：同一张单、同样菜品只打一次；**追加了新菜**才再打。
- *  - 去重表存 sessionStorage，刷新不重复、跨标签页共享。
+ * 去重铁律（用户明确要求「只打一次，之后只靠手动」）：
+ *   - **服务端持久化**：靠 `Order.autoPrintFired` 字段，不是浏览器 sessionStorage。
+ *     标签页关了 / 换台收银机 / 刷新，同一张新单都**不会**再自动出纸。
+ *   - **新订单打一次**：`autoPrintFired === false` → 自动打 + 置位。
+ *   - **之后不再自动打**：加菜、改菜、改折扣……`autoPrintFired` 已是 true，
+ *     一律不触发，要再打只能手动按「打印」键。
  *
- * ⚠️ 自动出单是「增强」不是「依赖」：打印/语音任何一步失败都**不能**阻塞后台订单页，
+ * ⚠️ 自动出单是「增强」不是「依赖」：打印/语音/置位任何一步失败都**不能**阻塞后台订单页，
  * 所有副作用都包在 try/catch 里静默吞掉。
  */
 import { useEffect, useRef } from 'react';
@@ -25,39 +27,12 @@ import {
   type PrintLabels,
   type ReceiptOrder,
 } from '@/lib/print-receipt';
-import { toReceiptOrder } from '@/lib/order-view';import { tableOrderUrl } from '@/lib/api-client';
+import { toReceiptOrder } from '@/lib/order-view';
+import { tableOrderUrl, markOrderAutoPrinted } from '@/lib/api-client';
 import { announceOrder } from '@/lib/speech';
 
-/** 把一条订单的菜品算成一个「指纹」：同单加菜/改菜才会变，用来判断要不要再打 */
-function itemsFingerprint(order: any): string {
-  const lines = (Array.isArray(order.items) ? order.items : [])
-    .map((it: any) => {
-      const opts = it.options ? JSON.stringify(it.options) : '';
-      return `${it.menuItemId}|${it.quantity}|${opts}|${it.note ?? ''}`;
-    })
-    .join(',');
-  return `${lines}#${order.discountType ?? ''}#${order.discountValue ?? ''}`;
-}
-
-const SS_KEY = 'hf.autoPrint.seen.v1';
-
-function loadSeen(): Record<string, string> {
-  try {
-    return JSON.parse(sessionStorage.getItem(SS_KEY) || '{}');
-  } catch {
-    return {};
-  }
-}
-function saveSeen(m: Record<string, string>): void {
-  try {
-    sessionStorage.setItem(SS_KEY, JSON.stringify(m));
-  } catch {
-    /* 存储不可用就去重失效，宁重复打不丢单 */
-  }
-}
-
 export interface AutoPrintDeps {
-  /** 当前待处理的订单（后台订单页过滤后的列表） */
+  /** 当前订单列表（后台订单页过滤后的列表） */
   orders: any[];
   locale: string;
   labels: PrintLabels;
@@ -70,10 +45,8 @@ export interface AutoPrintDeps {
 }
 
 /**
- * 扫描 orders，找出「需要出票」的：
- *  - 新订单（sessionStorage 没见过这个 id）
- *  - 既有订单但菜品指纹变了（追加了菜）
- * 只对堂食单（有桌号）打客户票（带桌号 QR）；外带单也打但不带桌号 QR。
+ * 扫描 orders，只对「服务端还没自动出过单」的新订单（`autoPrintFired === false`）
+ * 打一次并立刻置位；已置位的单（含加菜后）一律不动。
  */
 export function useAutoPrinter({
   orders,
@@ -89,29 +62,24 @@ export function useAutoPrinter({
     if (!enabled) return;
     if (typeof window === 'undefined') return;
     if (busyRef.current) return; // 一次只处理一批，避免并发重复打
+
+    // 只挑「未自动出过单 + 未结清 + 未取消」的单 —— 服务端标记 + 状态是去重凭证。
+    // 已结清（SETTLED）走结清流程、已取消（CANCELLED）作废，都不该再自动出票。
+    const toPrint = orders.filter(
+      (o: any) =>
+        o &&
+        !o.autoPrintFired &&
+        o.status !== 'CANCELLED' &&
+        o.status !== 'SETTLED',
+    );
+    if (toPrint.length === 0) return;
+
     busyRef.current = true;
 
     (async () => {
-      try {
-        const seen = loadSeen();
-        const toPrint: { order: any; kind: 'new' | 'added' }[] = [];
-
-        for (const o of orders) {
-          const fp = itemsFingerprint(o);
-          const prev = seen[o.id];
-          if (prev === undefined) {
-            // 全新订单 → 出票
-            toPrint.push({ order: o, kind: 'new' });
-          } else if (prev !== fp) {
-            // 既有订单、菜品变了（追加/改菜）→ 再出一张
-            toPrint.push({ order: o, kind: 'added' });
-          }
-        }
-        if (toPrint.length === 0) return;
-
-        const qrUrlFn = buildTableUrl || ((c: string) => tableOrderUrl(c));
-
-        for (const { order, kind } of toPrint) {
+      const qrUrlFn = buildTableUrl || ((c: string) => tableOrderUrl(c));
+      for (const order of toPrint) {
+        try {
           const receipt = toReceiptOrder(order, locale) as ReceiptOrder;
           const tableCode = order.table?.code || '';
 
@@ -132,7 +100,7 @@ export function useAutoPrinter({
               ? labels.scanMoreFood ?? 'Scan to add more items'
               : null,
           });
-          const billOutcome = await submitPrint(billHtml, 'bill');
+          await submitPrint(billHtml, 'bill');
 
           // ② 后厨票：不带 QR（后厨只需看菜品）
           const kitchenHtml = buildKitchenTicketHtml(
@@ -146,19 +114,23 @@ export function useAutoPrinter({
           announceOrder({
             orderNumber: receipt.orderNumber,
             tableCode: tableCode || undefined,
-            kind,
+            kind: 'new',
           });
 
-          // 记下指纹，避免下次再打
-          const next = loadSeen();
-          next[order.id] = itemsFingerprint(order);
-          saveSeen(next);
+          // ④ 立刻置服务端标记：同一张单从此不再自动打（加菜后也靠手动）
+          try {
+            await markOrderAutoPrinted(order.id);
+          } catch {
+            /* 置位失败也不阻断：下轮轮询会再看到 false 再试一次（最终一致） */
+          }
 
-          onEvent?.(`已出票 ${receipt.orderNumber}（${kind === 'new' ? '新单' : '加菜'}）`);
+          onEvent?.(`已出票 ${receipt.orderNumber}`);
+        } catch {
+          /* 打印/播报任一失败静默吞掉，绝不阻塞后台订单页 */
         }
-      } finally {
-        busyRef.current = false;
       }
-    })();
+    })().finally(() => {
+      busyRef.current = false;
+    });
   }, [orders, locale, labels, buildTableUrl, enabled, onEvent]);
 }

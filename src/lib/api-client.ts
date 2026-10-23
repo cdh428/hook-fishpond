@@ -528,6 +528,18 @@ export async function updateAdminOrderStatus(
 }
 
 /**
+ * Admin — 标记某订单「自动出单已完成」。
+ * 收银台自动打印新订单的客户票+后厨票+播报后调本函数，服务端把
+ * `Order.autoPrintFired` 置 true，保证同一张单**只自动打一次**（加菜后不再自动重打）。
+ * 幂等：已置过再调无副作用。
+ */
+export async function markOrderAutoPrinted(orderId: string): Promise<{ autoPrintFired: boolean }> {
+  return request<{ autoPrintFired: boolean }>(`/api/admin/orders/${orderId}/auto-print`, {
+    method: 'POST',
+  });
+}
+
+/**
  * Admin — 改单：传入改后的完整菜品行；减量会自动把库存加回去。
  *
  * 每一行必须能唯一定位到「菜品 + 规格」：
@@ -926,6 +938,29 @@ export function tableOrderUrl(code: string, baseUrl?: string): string {
     baseUrl ||
     (typeof window !== 'undefined' ? window.location.origin : '');
   return `${base}/t/${code}`;
+}
+
+/**
+ * Build a **locale-pinned** ordering URL for a table's QR code.
+ *
+ * Instead of the language-agnostic landing page `/t/{code}` (which auto-detects
+ * the scanning customer's language), this points straight at a specific
+ * language's menu page with the table preset: `/{locale}/menu?table={code}`.
+ *
+ * Used by the admin tables page so the QR always opens in the language the
+ * admin is currently viewing the page in — Chinese UI → Chinese ordering page,
+ * English UI → English, Thai UI → Thai.
+ */
+export function tableOrderUrlByLocale(
+  code: string,
+  locale: string,
+  baseUrl?: string,
+): string {
+  const base =
+    baseUrl ||
+    (typeof window !== 'undefined' ? window.location.origin : '');
+  const l = locale && locale.length > 0 ? locale : 'zh';
+  return `${base}/${l}/menu?table=${encodeURIComponent(code)}`;
 }
 
 // ---------- Closed days (休息日 / 法定假日) ----------
