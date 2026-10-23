@@ -1,6 +1,7 @@
 'use client';
 
 import { useTranslations, useLocale } from 'next-intl';
+import { Link } from '@/i18n/routing';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   fetchAdminReport,
@@ -1270,6 +1271,16 @@ export default function AdminReportsPage() {
                   </button>
                 ))}
               </div>
+
+              {data.margins.filter((m) => m.costPrice == null).length > 0 && (
+                <Link
+                  href="/admin/menu"
+                  className="mb-3 flex w-full items-center gap-2 rounded-xl bg-accent-50 px-4 py-2.5 text-left text-xs text-accent-700 hover:bg-accent-100"
+                >
+                  <span className="font-semibold">{t('adminReports.batchCost')}</span>
+                  <span className="text-accent-600/80">{t('adminReports.costImportHint')}</span>
+                </Link>
+              )}
 
               {marginRows.length === 0 ? (
                 <div className="py-14 text-center text-sm text-neutral-400">

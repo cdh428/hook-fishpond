@@ -308,8 +308,10 @@ async function fetchPeriodRevenue(
   const bookingRevenue = bookingAgg?.revenue ?? 0;
   const orderCount = orderAgg?.orders ?? 0;
   const bookingCount = bookingAgg?.bookings ?? 0;
-  const coveredRevenue = salesAgg?.covered ?? 0;
-  const cogs = salesAgg?.cost ?? 0;
+  // 方案 C：未设成本价的菜品按「售价全计毛利」（成本按 0 处理，不再剔除）。
+  // 这样毛利/毛利率始终基于总营收口径，不因漏录成本而虚高/归零。
+  const coveredRevenue = orderRevenue; // 分母统一用点餐总营收
+  const cogs = salesAgg?.cost ?? 0; // 成本合计（未设成本=0，不影响）
   const grossProfit = coveredRevenue - cogs;
 
   return {
@@ -323,7 +325,8 @@ async function fetchPeriodRevenue(
     coveredRevenue,
     cogs,
     grossProfit,
-    marginRate: coveredRevenue > 0 ? grossProfit / coveredRevenue : null,
+    // 毛利率 = 总毛利 ÷ 点餐总营收（与合计行「毛利/总营收」自洽；预约无成本，不计毛利）
+    marginRate: orderRevenue > 0 ? grossProfit / orderRevenue : null,
     wasteCost: wasteAgg?.cost ?? 0,
     itemsSold: salesAgg?.qty ?? 0,
     fishRevenue: orderAgg?.fish ?? 0,
@@ -413,9 +416,10 @@ async function fetchTrend(
   for (const r of bookingRows) {
     bookingMap.set(toDayKey(r.day), r.revenue ?? 0);
   }
-  const profitMap = new Map<string, number>();
+  // 方案 C：每段毛利 = 点餐总营收 − 成本合计（未设成本=0，不再剔除）
+  const costMap = new Map<string, number>();
   for (const r of profitRows) {
-    profitMap.set(toDayKey(r.day), (r.covered ?? 0) - (r.cost ?? 0));
+    costMap.set(toDayKey(r.day), r.cost ?? 0);
   }
 
   // 逐日遍历，按 grain 归并成桶（保证没有数据的日期也占位，图表不塌）
@@ -432,7 +436,8 @@ async function fetchTrend(
     b.orderRevenue += o?.revenue ?? 0;
     b.orders += o?.orders ?? 0;
     b.bookingRevenue += bookingMap.get(dayKey) ?? 0;
-    b.profit += profitMap.get(dayKey) ?? 0;
+    // 方案 C：每段毛利 = 点餐营收 − 成本合计（未设成本=0，含全部菜品）
+    b.profit += (o?.revenue ?? 0) - (costMap.get(dayKey) ?? 0);
   }
   for (const b of buckets.values()) b.revenue = b.orderRevenue + b.bookingRevenue;
 
@@ -481,10 +486,12 @@ async function fetchItemStats(period: ResolvedPeriod): Promise<ReportItemStat[]>
   `);
 
   return rows.map((r) => {
+    // 方案 C：未设成本价 → 成本按 0，毛利=售价全计（不再剔除/归 null），
+    // 避免漏录成本导致该菜品毛利率被抹掉。
     const hasCost = r.hasCost === true && r.costPrice != null;
-    const profit = hasCost ? r.coveredRevenue - r.cost : null;
-    const marginRate =
-      hasCost && r.coveredRevenue > 0 ? (r.coveredRevenue - r.cost) / r.coveredRevenue : null;
+    const cost = hasCost ? r.cost : 0;
+    const profit = r.revenue - cost;
+    const marginRate = r.revenue > 0 ? profit / r.revenue : null;
     const effectiveTarget =
       r.targetMargin != null ? r.targetMargin : DEFAULT_TARGET_MARGIN;
     return {
@@ -532,9 +539,10 @@ async function fetchAllMargins(): Promise<ReportItemStat[]> {
   `);
 
   return rows.map((r) => {
-    const hasCost = r.costPrice != null;
-    const profit = hasCost ? r.price - (r.costPrice as number) : null;
-    const marginRate = hasCost && r.price > 0 ? ((r.price - (r.costPrice as number)) / r.price) : null;
+    // 方案 C：未设成本价 → 成本按 0，毛利=售价全计（不再归 null）
+    const cost = r.costPrice != null ? (r.costPrice as number) : 0;
+    const profit = r.price - cost;
+    const marginRate = r.price > 0 ? profit / r.price : null;
     const effectiveTarget =
       r.targetMargin != null ? r.targetMargin : DEFAULT_TARGET_MARGIN;
     return {

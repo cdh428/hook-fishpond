@@ -842,7 +842,11 @@
     "orderWeighing": "称重",
     "orderTable": "桌号",
     "orderPayment": "收款记录",
-    "viewDetail": "点订单号看详情"
+    "viewDetail": "点订单号看详情",
+    "costImportHint": "点这里下载成本表，填好成本价后上传，一次补齐所有菜品成本",
+    "costDownload": "⬇ 下载成本表",
+    "costUpload": "⬆ 上传成本表",
+    "batchCost": "批量补录成本"
   },
   "lineCard": {
     "title": "LINE 官方账号",

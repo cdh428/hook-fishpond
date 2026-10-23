@@ -842,7 +842,11 @@
     "orderWeighing": "Weighing",
     "orderTable": "Table",
     "orderPayment": "Payments",
-    "viewDetail": "Tap order # for details"
+    "viewDetail": "Tap order # for details",
+    "costImportHint": "Download the cost sheet, fill in costs, then upload to set costs for all items at once.",
+    "costDownload": "⬇ Download cost sheet",
+    "costUpload": "⬆ Upload cost sheet",
+    "batchCost": "Bulk cost entry"
   },
   "lineCard": {
     "title": "LINE Official Account",
