@@ -379,6 +379,7 @@
     "addTable": "เพิ่มโต๊ะ",
     "editTable": "แก้ไขโต๊ะ",
     "downloadQR": "ดาวน์โหลด QR",
+    "printQR": "พิมพ์ QR",
     "printAllQR": "พิมพ์ QR ทั้งหมด",
     "areaHut": "กระท่อม / Cottage / 茅草屋",
     "areaCafe": "โต๊ะ / Table / 大厅桌位",
@@ -959,7 +960,8 @@
     "qty": "จำนวน",
     "thanks": "ขอบคุณที่ใช้บริการ ยินดีต้อนรับอีกครั้ง",
     "fishCharge": "ปลา",
-    "discount": "ส่วนลด"
+    "discount": "ส่วนลด",
+    "scanMoreFood": "ส่องเพิ่มรายการ"
   },
   "printAgent": {
     "sentTo": "🖨️ ส่งไปที่ {target} แล้ว",
@@ -1186,5 +1188,16 @@
     "copyId": "คัดลอก LINE ID",
     "copied": "คัดลอกแล้ว",
     "hoursNote": "ปกติตอบกลับ 09:00–18:00"
+  },
+  "printAuto": {
+    "autoPrintOn": "เปิดออเดอร์อัตโนมัติ",
+    "autoPrintOff": "ปิดออเดอร์อัตโนมัติ",
+    "autoPrintToast": "พิมพ์ใบลูกค้า+ครัวแล้ว",
+    "voice": {
+      "newOrder": "รายการใหม่ {order} {table}",
+      "addedItems": "เพิ่มรายการใน {order}",
+      "thNewOrder": "รายการใหม่ {order} {table}",
+      "thAddedItems": "เพิ่มรายการใน {order}"
+    }
   }
 }

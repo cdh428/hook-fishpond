@@ -379,6 +379,7 @@
     "addTable": "新增餐桌",
     "editTable": "编辑餐桌",
     "downloadQR": "下载二维码",
+    "printQR": "打印二维码",
     "printAllQR": "打印全部二维码",
     "areaHut": "茅草屋 / Cottage / กระท่อม",
     "areaCafe": "大厅桌位 / Table / โต๊ะ",
@@ -959,7 +960,8 @@
     "qty": "数量",
     "thanks": "谢谢光临，欢迎再来",
     "fishCharge": "渔获",
-    "discount": "折扣"
+    "discount": "折扣",
+    "scanMoreFood": "扫此码继续加菜"
   },
   "printAgent": {
     "sentTo": "🖨️ 已发送到 {target}",
@@ -1186,5 +1188,16 @@
     "copyId": "复制 LINE ID",
     "copied": "已复制",
     "hoursNote": "一般 09:00–18:00 内回复"
+  },
+  "printAuto": {
+    "autoPrintOn": "自动出单已开启",
+    "autoPrintOff": "自动出单已关闭",
+    "autoPrintToast": "已自动打印客户单+后厨单",
+    "voice": {
+      "newOrder": "新订单 {order} {table}",
+      "addedItems": "{order} 已加菜",
+      "thNewOrder": "新订单 {order} {table}",
+      "thAddedItems": "{order} 已加菜"
+    }
   }
 }

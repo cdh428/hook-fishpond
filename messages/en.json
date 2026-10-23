@@ -379,6 +379,7 @@
     "addTable": "Add Table",
     "editTable": "Edit Table",
     "downloadQR": "Download QR",
+    "printQR": "Print QR",
     "printAllQR": "Print All QRs",
     "areaHut": "Cottage / กระท่อม / 茅草屋",
     "areaCafe": "Table / โต๊ะ / 大厅桌位",
@@ -959,7 +960,8 @@
     "qty": "Qty",
     "thanks": "Thank you, please come again",
     "fishCharge": "Fish",
-    "discount": "Discount"
+    "discount": "Discount",
+    "scanMoreFood": "Scan to add more items"
   },
   "printAgent": {
     "sentTo": "🖨️ Sent to {target}",
@@ -1186,5 +1188,16 @@
     "copyId": "Copy LINE ID",
     "copied": "Copied",
     "hoursNote": "We usually reply 09:00–18:00"
+  },
+  "printAuto": {
+    "autoPrintOn": "Auto-print ON",
+    "autoPrintOff": "Auto-print OFF",
+    "autoPrintToast": "Auto-printed customer + kitchen ticket",
+    "voice": {
+      "newOrder": "New order {order} {table}",
+      "addedItems": "Items added to {order}",
+      "thNewOrder": "New order {order} {table}",
+      "thAddedItems": "Items added to {order}"
+    }
   }
 }

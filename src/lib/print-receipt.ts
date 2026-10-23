@@ -48,6 +48,8 @@ export interface PrintLabels {
   pickupAt?: string;
   thanks: string;
   poweredBy?: string;
+  /** 桌号续点单二维码的说明（「扫此码继续加菜」） */
+  scanMoreFood?: string;
 }
 
 export interface ReceiptItem {
@@ -261,12 +263,18 @@ export function buildKitchenTicketHtml(
   return shell(order.orderNumber, inner, labels);
 }
 
-/** 预结算单（顾客看着付钱）：菜品 + 渔获 + 折扣 + 应付 + 收款二维码 */
+/** 预结算单（顾客看着付钱）：菜品 + 渔获 + 折扣 + 应付 + 收款二维码 + 桌号续点单 QR */
 export function buildBillHtml(
   order: ReceiptOrder,
-  opts: { qrDataUrl?: string | null; amountText?: string | null; labels: PrintLabels },
+  opts: {
+    qrDataUrl?: string | null;
+    amountText?: string | null;
+    tableQrDataUrl?: string | null;
+    tableQrLabel?: string | null;
+    labels: PrintLabels;
+  },
 ): string {
-  const { labels, qrDataUrl } = opts;
+  const { labels, qrDataUrl, tableQrDataUrl } = opts;
   const inner = `
     ${header(labels.bill, labels)}
     ${orderMeta(order, labels)}
@@ -296,6 +304,19 @@ export function buildBillHtml(
              <img src="${qrDataUrl}" alt="PromptPay" />
              <div class="qr-cap">${esc(labels.scanToPay)}</div>
              <div class="qr-amt">${esc(opts.amountText || money(order.totalPrice))}</div>
+           </div>`
+        : ''
+    }
+    ${
+      tableQrDataUrl
+        ? `<div class="dashed"></div>
+           <div class="qr">
+             <img src="${tableQrDataUrl}" alt="table" style="width:30mm;height:30mm" />
+             ${
+               opts.tableQrLabel
+                 ? `<div class="qr-cap">${esc(opts.tableQrLabel)}</div>`
+                 : ''
+             }
            </div>`
         : ''
     }
