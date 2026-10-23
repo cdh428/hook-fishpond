@@ -165,7 +165,60 @@
 逐条判断（路由/前端/报表/schema），**别改一处就推**。特别留意"字面不重名但同笔钱"的报表统计。
 （跨项目版见 skill `impact-analysis-before-edit`。）
 
-### 3.8 「需付」= totalPrice − 已付，不是 subtotal，也不是 totalPrice
+### 3.8 「待结算订单」不能按结算方式过滤，要按「有没有未付余额」
+
+**现象**：顾客预付了一部分（现金 160），但还没称重、没结清，订单 **从收款台消失了**。
+店员看不到这张单，就永远收不到尾款。用户原话：「待结算订单只有完全没付款的单子，没有已经预付部分款的」。
+
+**根因**：`GET /api/admin/orders?scope=awaiting` 写的是
+`where.settlementMode = "POSTPAID"` —— **只取后付单**。
+先付（`PREPAID`）单一旦付过一部分，既不在"待收款"，也没结清，就掉进了逻辑缝里。
+
+**正确口径**：
+- **待结算 = 所有「未结清」的单**（`status notIn [SETTLED, CANCELLED]`），**不分先付后付**。
+- 前端再按「有没有已收」分组：**已付未结清** 排前面（这些收过钱、最容易被忘），**未付款** 排后面。
+- 看板顶部「待收金额」必须按 **Σ 需付差额** 算，不能按 `Σ totalPrice` —— 否则已付部分被重复统计。
+- 另需单独给出「已收合计」，让店长一眼看到"手上已经收了多少钱还没结单"。
+
+**防再犯**：凡是「未结清/待收款/挂账」类查询，**先问一句「按什么过滤」**：
+按状态（对）还是按结算方式（错）？结算方式是"怎么付"，不是"付完没有"。
+
+### 3.9 一单多次点单、多次付款 —— 列表必须按「最近变动」排序
+
+**现象**：顾客又加了一道菜、或店员记了一笔定金，这张单在后台列表里**不动**，
+被压在几个小时前的老单下面，店员找不到刚动过的那张。
+
+**根因**：列表 `orderBy: { createdAt: "desc" }` —— 按**开单时间**排。
+单子后续的所有动作（加菜、收款、改折扣、称重）都不影响它的位置。
+
+**正确口径**（财务/收银场景通用）：
+- 列表按 **`activityAt` 倒序**，`activityAt = max(updatedAt, settledAt, 最近流水 paidAt, 最近菜行 createdAt)`。
+  `updatedAt` 由 `@updatedAt` 自动维护，加菜/改价都会推高它。
+- **两种排序方向是故意的，不要统一**：
+  - **列表用倒序** —— 让人先看到"刚发生的事"；
+  - **单据内流水用正序**（`paidAt asc`）—— 像账本一样从早到晚读。
+  混用会让人读错时间轴。
+
+### 3.10 收款必须是**流水表**，不能是订单上的一个覆盖字段
+
+**踩过**：第一版把已付存成 `Order.prepaidAmount`，每次 `record-prepaid` 就 `+amount` 写回去。
+看似能算「需付」，但**做不了对账**：回答不了「几点、谁、用什么方式、收了多少」，
+两个人同时操作还会互相覆盖。
+
+**正确做法**（见 `docs/playbooks/finance-rules-cashier.md` 全文）：
+- 独立表 `PaymentRecord`：`orderId + amount + method + kind + operator + paidAt + note + voidedAt`。
+- **只追加不覆盖**：记错就标 `voidedAt` 作废，或追加一条负数 `REFUND`。
+- `Order.prepaidAmount` 降级为**派生存量**，永远由 `syncPrepaidFromRecords()` 重算
+  （`Σ 未作废流水`），**不许手工加减**，否则显示口径和账必然对不上。
+- `kind`：`DEPOSIT`（首笔定金）/ `PARTIAL`（中途补款）/ `FINAL`（结清补差）/ `REFUND`（负数）。
+- **结清补差 > 0 才落 `FINAL` 流水**，避免 0 元流水污染账本。
+- 迁移时**必须回填存量** `prepaidAmount > 0` 的单，否则新逻辑从流水求和会把已付清零
+  （见 `prisma/migrations/add_payment_record/migration.sql` 最后那条 INSERT）。
+
+> ⚠️ Prisma schema 里 enum 写在 `prisma/migrations/*.sql` 时，**手写 SQL 要先 `CREATE TYPE`**，
+> 否则 `type "PaymentKind" does not exist`。`IF NOT EXISTS` 要写成 `DO $$ ... pg_type ... END $$`。
+
+### 3.11 「需付」= totalPrice − 已付，不是 subtotal，也不是 totalPrice
 
 **现象**：FP-20261018-003 订单（小计 275 + 渔获费 96 = 总应付 371，已付定金 75），
 后台订单列表的「小计 275」和「完结应付 275」被客户当成「需付」，但真需付是 **296**（371−75）。
@@ -223,7 +276,14 @@
   或写 node/python 脚本断言 `includes()`。
   Bash 只用来判断「行数 / 字节数 / 是否存在」这类与文字无关的事。
 
-### 4.5 git 只 `add` 明确路径
+### 4.5 项目真实路径是 `C:\Users\dnlct\WorkBuddy\hook-fishpond`
+
+- **别提**：会话工作区（`2026-10-11-17-50-46` 之类）**不是**项目所在目录，里面只有 `.workbuddy/`。
+  跑去那里 `ls` / `git` 会得到空结果，白浪费时间。
+- **别去 D 盘找**：`D:/github` 已退役且为空，用户明确要求**不扫描**。
+- PATH 里的 `git` 已可用，不必再拼 GitHubDesktop 的绝对路径（旧笔记里的做法已过时）。
+
+### 4.6 git 只 `add` 明确路径
 
 - **背景**：本仓库可能同时有别的会话 / 未完成的产物目录。
 - **铁律**：`git add <具体文件>`，**绝不** `git add -A` / `git add .` / `git commit -a`。
@@ -243,7 +303,21 @@
 - 生效的是 **`hook-fishpond-xi15`** → https://www.hookfishpond.com
 - `hook-fishpond` / `hook-fishpond-1eyy` / `hookfishpond1` 是**僵尸项目，别去动**。
 
-### 5.3 验证部署看「内容」，别看 chunk hash
+### 5.3 Vercel 会**静默漏部署**某次 push——补一个空提交即可
+
+- **现象**：`git log origin/main` 已是最新提交，本地 / 远端都对，但线上页面死活是旧文案，
+  `X-Vercel-Cache: MISS`（说明抓的确实是新构建，只是内容没变）。**看不到任何构建失败**。
+- **已排除**：JSON 非法、`check:i18n` 不对齐、远端缺提交、代码里混着半成品 —— 全查过，都不是。
+- **解决**：`git commit --allow-empty -m "chore: 触发重新部署"` → `bash scripts/push-main.sh`，
+  约 90 秒后内容就更新了。**比去 Vercel 面板翻日志快得多**。
+- **判定顺序**（别一上来就怀疑代码）：
+  1. 抓线上搜新文案，确认真的没更新；
+  2. `git log origin/main -1` 确认远端有此提交；
+  3. 本地 `next build` 能过 → 说明代码没问题，是漏部署；
+  4. 直接补空提交重推。
+- **注意**：补空提交前先 `git status`，确认没有把别人会话的半成品带进去（空提交本身不带你工作区的东西，安全）。
+
+### 5.4 验证部署看「内容」，别看 chunk hash
 
 - chunk 结构改过，`/_next/static/chunks/app/layout-*.js` 的 hash 已不可靠。
 - **正确做法**：抓页面 HTML，搜一个本次新增的 i18n key 或新文案，出现即为新版本已上线。
@@ -343,7 +417,10 @@
 
 - [ ] 涉及泰文？→ 用的是原文吗？人工看过吗？
 - [ ] 动了图片渲染？→ 有没有把可见性交给 `onLoad`？
-- [ ] 动了订单查询？→ 未结清单据还会被日期过滤吗？
+- [ ] 动了订单查询？→ 未结清单据还会被日期过滤吗？「待收款」是不是误按 `settlementMode` 过滤了？
+- [ ] 动了金额显示？→ 那个数是 `subtotal` 还是 `totalPrice`？减了已付没有？
+- [ ] 动了收款/退款？→ 走的是 `PaymentRecord` 流水还是改了 `prepaidAmount` 覆盖字段？
+- [ ] 动了列表排序？→ 是按开单时间还是最近变动？加菜/收款会让它跳上来吗？
 - [ ] 改了 `messages/*.json`？→ 跑 `node scripts/check-i18n.mjs`
 - [ ] 改完构建？→ `CODEBUDDY_SAFE_DELETE_ENABLED=0 npx next build`
 - [ ] 提交前？→ `git diff --cached --stat` 逐个确认，没用 `git add -A`

@@ -82,3 +82,11 @@ hook_fishpond_deploy*
 
 # 数据库冷备导出（含真实业务数据，绝不入库）
 backups/
+
+# 一次性调试脚本（用完即删，不入户）。规则见 tools/tmp-scripts/README.md
+_tmp_*.cjs
+_tmp_*.mjs
+_tmp_*.py
+_tmp_*.ts
+tmp_*.cjs
+scratch/

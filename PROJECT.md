@@ -7,6 +7,7 @@
 > - 账号与密钥在哪 → [`docs/CREDENTIALS.md`](docs/CREDENTIALS.md)
 > - 改完怎么发上去 → [`docs/playbooks/push-checklist.md`](docs/playbooks/push-checklist.md)
 > - **踩过的坑，别再踩** → [`docs/playbooks/gotchas.md`](docs/playbooks/gotchas.md)
+> - **收银 / 收款 / 对账的财务口径** → [`docs/playbooks/finance-rules-cashier.md`](docs/playbooks/finance-rules-cashier.md)
 > - 环境和命令 → [`README.md`](README.md) · [`docs/SETUP_GUIDE.md`](docs/SETUP_GUIDE.md)
 > - AI 运营团队 / 社媒发布 → [`docs/AGENT-TEAM.md`](docs/AGENT-TEAM.md) · [`docs/playbooks/social-publishing.md`](docs/playbooks/social-publishing.md)
 
