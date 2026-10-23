@@ -217,6 +217,19 @@ export default function HomePage() {
                   </p>
                 </div>
               </div>
+              {/* 嘉年华海报图（仅当该语言配了图才显示，如泰语 notice-th） */}
+              {t.has('home.notice.carnival.img') ? (
+                <div className="mt-4 overflow-hidden rounded-xl border border-accent-200 bg-white">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={t('home.notice.carnival.img')}
+                    alt={t('home.notice.carnival.title')}
+                    className="block w-full"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                </div>
+              ) : null}
             </div>
           </div>
         </section>
