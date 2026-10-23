@@ -198,6 +198,25 @@ export default function HomePage() {
                   decoding="async"
                 />
               </div>
+              {/* 垂钓嘉年华：公告海报下方的新增条目（三语各自翻译） */}
+              <div className="mt-4 flex items-start gap-3 rounded-xl border border-accent-200 bg-gradient-to-br from-accent-50 to-white px-4 py-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent-500/10 text-xl">
+                  🎣
+                </div>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-bold text-neutral-900">
+                      {t('home.notice.carnival.title')}
+                    </span>
+                    <span className="rounded-full bg-accent-500 px-2 py-0.5 text-xs font-bold text-white">
+                      {t('home.notice.carnival.price')}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs leading-relaxed text-neutral-600">
+                    {t('home.notice.carnival.desc')}
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         </section>

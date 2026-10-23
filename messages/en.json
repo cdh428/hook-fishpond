@@ -102,7 +102,12 @@
       "title": "📌 Price & Service Adjustment",
       "img": "/media/notice-en.jpg",
       "alt": "Price and Service Adjustment Announcement (English)",
-      "caption": "New prices effective from October 16, 2026"
+      "caption": "New prices effective from October 16, 2026",
+      "carnival": {
+        "title": "🎣 Fishing Carnival",
+        "price": "400 THB",
+        "desc": "Fish all you can for 400 THB — keep every fish that's hooked"
+      }
     },
     "foodWall": {
       "title": "From the pond to the table",
