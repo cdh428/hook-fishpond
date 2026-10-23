@@ -286,7 +286,7 @@ export default function AdminTablesPage() {
   .n-en { font-size: 15px; font-weight: 700; line-height: 1.3; }
   .n-th { font-size: 18px; font-weight: 800; line-height: 1.3; }
   .qr { margin: 2mm auto; }
-  .qr img { width: 35mm; height: 35mm; image-rendering: pixelated; }
+  .qr img { width: 52.5mm; height: 52.5mm; image-rendering: pixelated; }
   .hint { font-size: 14px; font-weight: 700; border-top: 2px dashed #000; padding-top: 2mm; }
 </style></head><body><div class="ticket">
   <div class="brand">${esc(brand)}</div>
