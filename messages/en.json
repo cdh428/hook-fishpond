@@ -828,7 +828,15 @@
     "fishWeight": "Total catch",
     "fishRevenue": "Catch charge",
     "discountTotal": "Discounts given",
-    "fishFootnote": "Catch charges are included in order revenue; discounts are already deducted."
+    "fishFootnote": "Catch charges are included in order revenue; discounts are already deducted.",
+    "segTransaction": "Transactions",
+    "transactionTitle": "Payment Ledger",
+    "orderDetailTitle": "Order Details",
+    "orderItems": "Items",
+    "orderWeighing": "Weighing",
+    "orderTable": "Table",
+    "orderPayment": "Payments",
+    "viewDetail": "Tap order # for details"
   },
   "lineCard": {
     "title": "LINE Official Account",

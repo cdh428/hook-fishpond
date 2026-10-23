@@ -828,7 +828,15 @@
     "fishWeight": "น้ำหนักรวม",
     "fishRevenue": "ค่าปลา",
     "discountTotal": "ส่วนลดรวม",
-    "fishFootnote": "ค่าปลารวมอยู่ในรายได้ออเดอร์แล้ว และหักส่วนลดออกแล้ว"
+    "fishFootnote": "ค่าปลารวมอยู่ในรายได้ออเดอร์แล้ว และหักส่วนลดออกแล้ว",
+    "segTransaction": "รายการ",
+    "transactionTitle": "รายการรับเงิน",
+    "orderDetailTitle": "รายละเอียดออเดอร์",
+    "orderItems": "เมนู",
+    "orderWeighing": "น้ำหนักปลา",
+    "orderTable": "โต๊ะ",
+    "orderPayment": "ประวัติการชำระเงิน",
+    "viewDetail": "แตะเลขออเดอร์ดูรายละเอียด"
   },
   "lineCard": {
     "title": "บัญชีทางการ LINE",

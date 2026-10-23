@@ -469,6 +469,11 @@ export async function fetchAdminTransactions(params?: {
   return request<any>(`/api/admin/transactions${query}`);
 }
 
+/** Admin — 取单张订单的完整详情（流水弹窗用：菜品行/称重/收款/桌号/状态） */
+export async function fetchAdminOrder(orderId: string): Promise<any> {
+  return request<any>(`/api/admin/orders/${orderId}`);
+}
+
 export interface AdminOrderSummary {
   open: number;
   awaitingCount: number;

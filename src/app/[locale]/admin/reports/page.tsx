@@ -4,6 +4,8 @@ import { useTranslations, useLocale } from 'next-intl';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   fetchAdminReport,
+  fetchAdminTransactions,
+  fetchAdminOrder,
   fetchLineTargets,
   reportExportUrl,
   sendLineReport,
@@ -25,7 +27,8 @@ type Segment =
   | 'structure'
   | 'margin'
   | 'export'
-  | 'line';
+  | 'line'
+  | 'transaction';
 type TopSort = 'qty' | 'revenue' | 'profit';
 type MarginFilter = 'all' | 'below' | 'noCost' | 'top';
 
@@ -61,6 +64,319 @@ function pctText(r: number | null): string {
   return r == null ? '—' : `${(r * 100).toFixed(1)}%`;
 }
 
+const TX_METHOD_I18N: Record<string, string> = {
+  PROMPTPAY: 'payment.promptpay',
+  TRUEMONEY: 'payment.truemoney',
+  BANK_TRANSFER: 'payment.bankTransfer',
+  CREDIT_CARD: 'payment.creditCard',
+  ALIPAY: 'payment.alipay',
+  WECHAT_PAY: 'payment.wechatPay',
+  CASH: 'payment.cash',
+};
+const TX_STATUS_COLOR: Record<string, string> = {
+  SUCCESSFUL: 'bg-success-100 text-success-600',
+  PENDING: 'bg-warning-100 text-warning-600',
+  REFUNDED: 'bg-error-100 text-error-600',
+};
+
+interface LedgerProps {
+  t: (key: string) => string;
+  txData: any;
+  txLoading: boolean;
+  txError: string;
+  txStart: string;
+  txEnd: string;
+  onFilter: (s: string, e: string) => void;
+  onRetry: () => void;
+  onOpenDetail: (
+    orderId: string,
+    fallback: {
+      orderNumber?: string;
+      customerName?: string;
+      amount?: number;
+      method?: string;
+      status?: string;
+      paidAt?: string;
+    },
+  ) => void;
+  detailOrder: any;
+  detailLoading: boolean;
+  onCloseDetail: () => void;
+  itemName: (it: any) => string;
+}
+
+function TransactionLedger(props: LedgerProps) {
+  const { t, txData, txLoading, txError, txStart, txEnd, onFilter, onRetry, onOpenDetail, detailOrder, detailLoading, onCloseDetail, itemName } = props;
+
+  const transactions = txData?.transactions || [];
+  const totalRevenue = txData?.totalRevenue || 0;
+  const bookingRevenue = txData?.bookingRevenue || 0;
+  const orderRevenue = txData?.orderRevenue || 0;
+  const transactionCount = txData?.transactionCount || 0;
+
+  // 按日期过滤（前端二次过滤，与 KPI 卡片一致口径）
+  const filtered = transactions.filter((tx: any) => {
+    const txDate = (tx.paidAt || '').slice(0, 10);
+    if (txStart && txDate < txStart) return false;
+    if (txEnd && txDate > txEnd) return false;
+    return true;
+  });
+  const successCount = filtered.filter((tx: any) => tx.status === 'SUCCESSFUL').length;
+  const methodRevenue: Record<string, number> = {};
+  filtered
+    .filter((tx: any) => tx.status === 'SUCCESSFUL')
+    .forEach((tx: any) => {
+      methodRevenue[tx.method] = (methodRevenue[tx.method] || 0) + tx.amount;
+    });
+
+  return (
+    <>
+      {/* 日期过滤 */}
+      <div className="mb-4 flex gap-2">
+        <div className="flex-1">
+          <label className="mb-1 block text-xs text-neutral-500">{t('admin.startDate')}</label>
+          <input type="date" value={txStart} onChange={(e) => onFilter(e.target.value, txEnd)}
+            className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm" />
+        </div>
+        <div className="flex-1">
+          <label className="mb-1 block text-xs text-neutral-500">{t('admin.endDate')}</label>
+          <input type="date" value={txEnd} onChange={(e) => onFilter(txStart, e.target.value)}
+            className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm" />
+        </div>
+        <button onClick={onRetry}
+          className="self-end rounded-xl bg-primary-700 px-3 py-2 text-xs font-medium text-white hover:bg-primary-800">
+          {t('common.filter')}
+        </button>
+      </div>
+
+      {txLoading ? (
+        <div className="py-20 text-center text-sm text-neutral-400">{t('common.loading')}</div>
+      ) : txError ? (
+        <div className="py-20 text-center">
+          <p className="text-sm text-error-600">{txError}</p>
+          <button onClick={onRetry} className="mt-3 rounded-lg bg-primary-700 px-4 py-2 text-xs font-medium text-white">{t('common.retry')}</button>
+        </div>
+      ) : (
+        <>
+          {/* KPI 卡片 */}
+          <div className="mb-4 grid grid-cols-2 gap-3">
+            <div className="rounded-xl bg-success-50 p-4">
+              <p className="text-xs text-success-600 opacity-70">{t('admin.totalRevenue')}</p>
+              <p className="mt-1 text-2xl font-bold text-success-700">฿{totalRevenue.toLocaleString()}</p>
+            </div>
+            <div className="rounded-xl bg-primary-50 p-4">
+              <p className="text-xs text-primary-600 opacity-70">{t('admin.totalOrders')}</p>
+              <p className="mt-1 text-2xl font-bold text-primary-700">{successCount}/{transactionCount}</p>
+            </div>
+            <div className="rounded-xl bg-accent-50 p-4">
+              <p className="text-xs text-accent-600 opacity-70">{t('admin.bookings')}</p>
+              <p className="mt-1 text-xl font-bold text-accent-700">฿{bookingRevenue.toLocaleString()}</p>
+            </div>
+            <div className="rounded-xl bg-neutral-100 p-4">
+              <p className="text-xs text-neutral-600 opacity-70">{t('menu.food')} &amp; {t('menu.drinks')}</p>
+              <p className="mt-1 text-xl font-bold text-neutral-700">฿{orderRevenue.toLocaleString()}</p>
+            </div>
+          </div>
+
+          {/* 按支付方式 */}
+          <div className="mb-4 rounded-xl bg-white p-4 shadow-md">
+            <h3 className="mb-3 font-semibold text-neutral-900">{t('admin.revenueByMethod')}</h3>
+            {Object.keys(methodRevenue).length === 0 ? (
+              <p className="text-sm text-neutral-400">{t('common.noData')}</p>
+            ) : (
+              <div className="space-y-2">
+                {Object.entries(methodRevenue).map(([method, amount]) => (
+                  <div key={method} className="flex items-center justify-between rounded-lg bg-neutral-50 px-3 py-2">
+                    <span className="text-sm font-medium text-neutral-700">{t(TX_METHOD_I18N[method] || method)}</span>
+                    <span className="text-sm font-bold text-neutral-900">฿{amount.toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 流水明细（订单号可点 → 详情） */}
+          <div className="rounded-xl bg-white p-4 shadow-md">
+            <div className="mb-2 flex items-center justify-between">
+              <h3 className="font-semibold text-neutral-900">{t('admin.recentOrders')}</h3>
+              <span className="text-[11px] text-neutral-400">{t('adminReports.viewDetail')}</span>
+            </div>
+            {filtered.length === 0 ? (
+              <p className="py-4 text-center text-sm text-neutral-400">{t('common.noData')}</p>
+            ) : (
+              <div className="space-y-2">
+                {filtered.map((tx: any) => (
+                  <div key={tx.id} className="flex items-center justify-between rounded-lg bg-neutral-50 px-3 py-2">
+                    <button
+                      onClick={() =>
+                        tx.orderId
+                          ? onOpenDetail(tx.orderId, {
+                              orderNumber: tx.orderNumber,
+                              customerName: tx.customerName,
+                              amount: tx.amount,
+                              method: tx.method,
+                              status: tx.status,
+                              paidAt: tx.paidAt,
+                            })
+                          : undefined
+                      }
+                      className={
+                        tx.orderId
+                          ? 'min-w-0 flex-1 text-left'
+                          : 'min-w-0 flex-1 text-left cursor-default'
+                      }
+                    >
+                      <p className="text-sm font-medium text-neutral-900">
+                        {tx.orderNumber || tx.orderId || tx.id}{' '}
+                        <span className="text-neutral-400">—</span> {tx.customerName || '—'}
+                      </p>
+                      <p className="text-xs text-neutral-500">
+                        {(tx.paidAt || '').slice(0, 10)} | {t(TX_METHOD_I18N[tx.method] || tx.method)}
+                      </p>
+                    </button>
+                    <div className="ml-2 shrink-0 text-right">
+                      <p className="text-sm font-bold text-neutral-900">฿{tx.amount?.toLocaleString()}</p>
+                      <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${TX_STATUS_COLOR[tx.status] || 'bg-neutral-100 text-neutral-600'}`}>
+                        {tx.status === 'SUCCESSFUL' ? t('orders.successful') : tx.status === 'PENDING' ? t('orders.pending') : t('orders.refunded')}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* 订单详情 Sheet（点订单号弹出） */}
+      {detailOrder && (
+        <div className="fixed inset-0 z-50 flex items-end bg-black/30" onClick={onCloseDetail}>
+          <div
+            className="max-h-[80vh] w-full overflow-auto rounded-t-2xl bg-white p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <div className="text-sm font-bold text-neutral-900">{t('adminReports.orderDetailTitle')}</div>
+              <button onClick={onCloseDetail} className="rounded-lg px-2 py-1 text-sm text-neutral-400">✕</button>
+            </div>
+
+            {detailLoading ? (
+              <div className="py-10 text-center text-sm text-neutral-400">{t('common.loading')}</div>
+            ) : (
+              <OrderDetailCard order={detailOrder} t={t} itemName={itemName} />
+            )}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function OrderDetailCard({
+  order,
+  t,
+  itemName,
+}: {
+  order: any;
+  t: (key: string) => string;
+  itemName: (it: any) => string;
+}) {
+  if (!order) return null;
+  const o = order?.order ?? order; // 兼容 {order:...} 包装
+  const items: any[] = o?.items || [];
+  const weighings: any[] = o?.weighings || [];
+  const payments: any[] = o?.paymentRecords || [o?.payment].filter(Boolean) || [];
+  const prepaid = o?.prepaidAmount || 0;
+  const total = o?.totalPrice || 0;
+  const needPay = Math.max(0, total - prepaid);
+
+  return (
+    <div className="space-y-4 text-sm">
+      {/* 抬头 */}
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="font-bold text-neutral-900">{o?.orderNumber || order?.orderNumber || '—'}</div>
+          <div className="text-xs text-neutral-500">{o?.customerName || order?.customerName || '—'}</div>
+        </div>
+        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${o?.status === 'SETTLED' ? 'bg-success-100 text-success-600' : o?.status === 'CANCELLED' ? 'bg-error-100 text-error-600' : 'bg-warning-100 text-warning-600'}`}>
+          {o?.status || '—'}
+        </span>
+      </div>
+
+      {/* 桌号 */}
+      {(o?.table?.code || o?.table) && (
+        <div className="flex justify-between rounded-lg bg-neutral-50 px-3 py-2 text-xs">
+          <span className="text-neutral-500">{t('adminReports.orderTable')}</span>
+          <b>{o.table?.code || String(o.table)}</b>
+        </div>
+      )}
+
+      {/* 菜品 */}
+      {items.length > 0 && (
+        <div>
+          <div className="mb-1 text-xs font-semibold text-neutral-500">{t('adminReports.orderItems')}</div>
+          <div className="space-y-1">
+            {items.map((it: any, i: number) => (
+              <div key={i} className="flex justify-between text-xs">
+                <span className="text-neutral-700">{itemName(it?.menuItem) || it?.name || '—'} × {it?.quantity}</span>
+                <span className="text-neutral-900">฿{(it?.totalPrice ?? 0).toLocaleString()}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 称重 */}
+      {weighings.length > 0 && (
+        <div>
+          <div className="mb-1 text-xs font-semibold text-neutral-500">{t('adminReports.orderWeighing')}</div>
+          <div className="space-y-1">
+            {weighings.map((w: any, i: number) => (
+              <div key={i} className="flex justify-between text-xs">
+                <span className="text-neutral-700">{w?.weightKg ?? w?.fishTier}kg</span>
+                <span className="text-neutral-900">฿{(w?.amount ?? w?.total ?? 0).toLocaleString()}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 金额汇总 */}
+      <div className="space-y-1 rounded-lg bg-neutral-50 p-3 text-xs">
+        <div className="flex justify-between"><span className="text-neutral-500">{t('adminOrders.subtotal')}</span><span>฿{(o?.subtotal ?? 0).toLocaleString()}</span></div>
+        {(o?.fishCharge || 0) > 0 && (
+          <div className="flex justify-between"><span className="text-neutral-500">{t('adminOrders.fishCharge')}</span><span>฿{(o?.fishCharge ?? 0).toLocaleString()}</span></div>
+        )}
+        {prepaid > 0 && (
+          <div className="flex justify-between"><span className="text-success-600">{t('adminOrders.prepaid')}</span><span className="text-success-600">−฿{prepaid.toLocaleString()}</span></div>
+        )}
+        <div className="mt-1 flex justify-between border-t border-neutral-200 pt-1 text-sm font-bold text-neutral-900">
+          <span>{t('payment.total')}</span><span>฿{needPay.toLocaleString()}</span>
+        </div>
+      </div>
+
+      {/* 收款记录 */}
+      {payments.length > 0 && (
+        <div>
+          <div className="mb-1 text-xs font-semibold text-neutral-500">{t('adminReports.orderPayment')}</div>
+          <div className="space-y-1">
+            {payments.map((p: any, i: number) => (
+              <div key={i} className="flex justify-between text-xs text-neutral-600">
+                <span>{p?.method} {p?.voidedAt ? '· 作废' : ''}</span>
+                <span>฿{(p?.amount ?? 0).toLocaleString()}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {order?._failed && (
+        <p className="text-xs text-error-500">⚠ {t('common.error')}</p>
+      )}
+    </div>
+  );
+}
+
 export default function AdminReportsPage() {
   const t = useTranslations();
   const locale = useLocale();
@@ -94,6 +410,53 @@ export default function AdminReportsPage() {
   const [lineConfig, setLineConfig] = useState<LineConfigStatus | null>(null);
   const [lineBusy, setLineBusy] = useState(false);
   const [lineResult, setLineResult] = useState<LineSendOutcome | null>(null);
+
+  // 收款流水（并入本段）
+  const [txData, setTxData] = useState<any>(null);
+  const [txLoading, setTxLoading] = useState(false);
+  const [txError, setTxError] = useState('');
+  const [txStart, setTxStart] = useState('');
+  const [txEnd, setTxEnd] = useState('');
+  // 订单详情弹窗（点订单号查看）
+  const [detailOrder, setDetailOrder] = useState<any>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+
+  const loadTransactions = useCallback(async () => {
+    setTxLoading(true);
+    setTxError('');
+    try {
+      const params: { startDate?: string; endDate?: string } = {};
+      if (txStart) params.startDate = txStart;
+      if (txEnd) params.endDate = txEnd;
+      const res = await fetchAdminTransactions(params);
+      setTxData(res);
+    } catch (err: any) {
+      setTxError(err?.message || t('common.error'));
+    } finally {
+      setTxLoading(false);
+    }
+  }, [txStart, txEnd, t]);
+
+  useEffect(() => {
+    if (segment === 'transaction' && !txData) loadTransactions();
+  }, [segment, txData, loadTransactions]);
+
+  const openOrderDetail = useCallback(
+    async (orderId: string, fallback: { orderNumber?: string; customerName?: string; amount?: number; method?: string; status?: string; paidAt?: string }) => {
+      setDetailLoading(true);
+      // 先用流水行数据占位，接口返回后覆盖为完整详情
+      setDetailOrder({ ...fallback, _loading: true });
+      try {
+        const o = await fetchAdminOrder(orderId);
+        setDetailOrder(o?.order ?? o ?? { ...fallback });
+      } catch {
+        setDetailOrder({ ...fallback, _failed: true });
+      } finally {
+        setDetailLoading(false);
+      }
+    },
+    [],
+  );
 
   const loadLine = useCallback(async () => {
     try {
@@ -269,6 +632,7 @@ export default function AdminReportsPage() {
             ['margin', 'adminReports.segMargin'],
             ['export', 'adminReports.segExport'],
             ['line', 'adminReports.segLine'],
+            ['transaction', 'adminReports.segTransaction'],
           ] as [Segment, string][]
         ).map(([key, labelKey]) => (
           <button
@@ -316,7 +680,24 @@ export default function AdminReportsPage() {
         </div>
       )}
 
-      {loading ? (
+      {segment === 'transaction' ? (
+        <TransactionLedger
+          t={t}
+          txData={txData}
+          txLoading={txLoading}
+          txError={txError}
+          txStart={txStart}
+          txEnd={txEnd}
+          onFilter={(s, e) => { setTxStart(s); setTxEnd(e); }}
+          onRetry={loadTransactions}
+          onOpenDetail={openOrderDetail}
+          detailOrder={detailOrder}
+          detailLoading={detailLoading}
+          onCloseDetail={() => setDetailOrder(null)}
+          itemName={(it: any) =>
+            locale === 'en' ? it?.name_en : locale === 'th' ? it?.name_th : it?.name_zh}
+        />
+      ) : loading ? (
         <div className="py-20 text-center text-sm text-neutral-400">
           {t('common.loading')}
         </div>

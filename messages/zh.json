@@ -102,7 +102,12 @@
       "title": "📌 价格与服务调整",
       "img": "/media/notice-zh.jpg",
       "alt": "价格与服务调整公告（中文）",
-      "caption": "自 2026 年 10 月 16 日起执行新价格"
+      "caption": "自 2026 年 10 月 16 日起执行新价格",
+      "carnival": {
+        "title": "🎣 垂钓嘉年华",
+        "price": "400 泰铢",
+        "desc": "400 泰铢随便钓，上钩的都拿走"
+      }
     },
     "foodWall": {
       "title": "钓上来，就能吃上",
@@ -828,7 +833,15 @@
     "fishWeight": "渔获总重",
     "fishRevenue": "渔获费",
     "discountTotal": "折扣合计",
-    "fishFootnote": "渔获费已计入点餐营收，折扣已从营收中扣除。"
+    "fishFootnote": "渔获费已计入点餐营收，折扣已从营收中扣除。",
+    "segTransaction": "流水",
+    "transactionTitle": "收款流水",
+    "orderDetailTitle": "订单详情",
+    "orderItems": "菜品",
+    "orderWeighing": "称重",
+    "orderTable": "桌号",
+    "orderPayment": "收款记录",
+    "viewDetail": "点订单号看详情"
   },
   "lineCard": {
     "title": "LINE 官方账号",

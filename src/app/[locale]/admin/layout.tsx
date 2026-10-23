@@ -34,7 +34,6 @@ const adminTabs = [
   { href: '/admin/tables', labelKey: 'admin.tables', icon: '🪑' },
   { href: '/admin/rest-days', labelKey: 'admin.restDays', icon: '🗓️' },
   { href: '/admin/bookings', labelKey: 'admin.bookings', icon: '📅' },
-  { href: '/admin/transactions', labelKey: 'admin.transactions', icon: '💰' },
 ];
 
 export default function AdminLayout({
