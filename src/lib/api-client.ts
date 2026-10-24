@@ -533,18 +533,6 @@ export async function updateAdminOrderStatus(
 }
 
 /**
- * Admin — 标记某订单「自动出单已完成」。
- * 收银台自动打印新订单的客户票+后厨票+播报后调本函数，服务端把
- * `Order.autoPrintFired` 置 true，保证同一张单**只自动打一次**（加菜后不再自动重打）。
- * 幂等：已置过再调无副作用。
- */
-export async function markOrderAutoPrinted(orderId: string): Promise<{ autoPrintFired: boolean }> {
-  return request<{ autoPrintFired: boolean }>(`/api/admin/orders/${orderId}/auto-print`, {
-    method: 'POST',
-  });
-}
-
-/**
  * Admin — 改单：传入改后的完整菜品行；减量会自动把库存加回去。
  *
  * 每一行必须能唯一定位到「菜品 + 规格」：
