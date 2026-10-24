@@ -802,6 +802,11 @@ export async function fetchAdminMenuItems(params?: {
     imageUrl: i.imageUrl ?? undefined,
     imageThumbUrl: i.imageThumbUrl ?? undefined,
     isActive: i.isActive,
+    stockType: i.stockType,
+    dailyLimit: i.dailyLimit ?? null,
+    lowStockAlert: i.lowStockAlert ?? null,
+    costPrice: i.costPrice ?? null,
+    targetMargin: i.targetMargin ?? null,
   }));
 }
 
