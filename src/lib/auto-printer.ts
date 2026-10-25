@@ -57,6 +57,9 @@ export function useAutoPrinter({
   onEvent,
 }: AutoPrintDeps): void {
   const busyRef = useRef(false);
+  // 本会话已处理过的订单 id。服务端置位可能失败（网络断一下），
+  // 单靠 autoPrintFired 会在下一轮轮询里重打一次 —— 这个集合兜住同一台机器内的重复。
+  const doneRef = useRef<Set<string>>(new Set());
   // 本机页面「开始值守」的时刻。只有这之后进来的单才自动打 ——
   // 否则页面关闭一夜再打开，会把历史上一批 autoPrintFired=false 的单全翻出来重打。
   // 踩过：14 张未结单全是 false，一开页面就是 28 张纸。
@@ -74,10 +77,11 @@ export function useAutoPrinter({
     }
     const from = watchFromRef.current;
 
-    // 四重凭证：服务端标记 + 状态 + 值守时刻。
+    // 四重凭证：服务端标记 + 状态 + 值守时刻 + 本机已处理集合。
     // 已结清（SETTLED）走结清流程、已取消（CANCELLED）作废，都不该再自动出票。
     const toPrint = orders.filter((o: any) => {
       if (!o || o.autoPrintFired) return false;
+      if (doneRef.current.has(o.id)) return false;
       if (o.status === 'CANCELLED' || o.status === 'SETTLED') return false;
       const born = new Date(o.createdAt || 0).getTime();
       if (!Number.isFinite(born)) return false;
@@ -90,6 +94,8 @@ export function useAutoPrinter({
     (async () => {
       const qrUrlFn = buildTableUrl || ((c: string) => tableOrderUrl(c));
       for (const order of toPrint) {
+        // 先占位再打：打印途中若又来一轮轮询，这张单不会被重复挑中
+        doneRef.current.add(order.id);
         try {
           const receipt = toReceiptOrder(order, locale) as ReceiptOrder;
           const tableCode = order.table?.code || '';

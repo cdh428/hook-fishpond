@@ -111,9 +111,12 @@ export default function AdminOrdersPage() {
   const [calls, setCalls] = useState<ServiceCallRow[]>([]);
   const [callBusy, setCallBusy] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError('');
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
+    // silent=true 用于轮询：不闪 loading、不清错误，失败也静默（网络抖一下不该整页变灰）
+    if (!opts?.silent) {
+      setLoading(true);
+      setError('');
+    }
     try {
       // 「进行中 / 待收款」不受「只看今天」限制：跨天未结的桌必须一直可见，
       // 否则隔天就在后台消失，钱收不到也结不掉。已结算 / 已取消才按日期筛。
@@ -142,14 +145,28 @@ export default function AdminOrdersPage() {
       );
       setSummary(res.summary);
     } catch (e: any) {
+      if (opts?.silent) return;
       setError(e?.message || t('common.error'));
     } finally {
-      setLoading(false);
+      if (!opts?.silent) setLoading(false);
     }
   }, [tab, todayOnly, t]);
 
   useEffect(() => {
     load();
+  }, [load]);
+
+  // 订单列表静默轮询（12 秒）。
+  // **自动出单靠它**：新单在服务端产生后，本机要先把列表拉下来才会触发
+  // useAutoPrinter 打票+播报。没有轮询 = 自动出单只在手动刷新时才生效（形同虚设）。
+  // 静默：不闪 loading、失败不弹错，避免收银台页面在网络抖动时整页抖动。
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      // 标签页在后台时降低频率无意义，直接跳过（Chrome 本身也会节流到 1 分钟）
+      if (document.visibilityState !== 'visible') return;
+      void load({ silent: true });
+    }, 12000);
+    return () => window.clearInterval(id);
   }, [load]);
 
   const loadCalls = useCallback(async () => {
@@ -497,7 +514,7 @@ export default function AdminOrdersPage() {
           </span>
         )}
         <button
-          onClick={load}
+          onClick={() => load()}
           className="shrink-0 rounded-lg bg-neutral-100 px-2.5 py-2 text-xs font-medium text-neutral-600"
         >
           ↻
