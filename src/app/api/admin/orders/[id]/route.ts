@@ -370,13 +370,22 @@ export async function PATCH(
       }
       const updated = await runTx(async (tx) => {
         await releaseOrderStock(tx, id, { adminName: admin.username });
-        return tx.order.update({
+        // 取消订单 → 已收的钱一并作废：只标 voidedAt（流水仍只追加不覆盖），
+        // 否则这笔钱会继续按 paidAt 落日计入营收报表，账实不符。
+        // 真实世界的退钱（现金/扫码原路退回）由店员线下处理。
+        const voided = await tx.paymentRecord.updateMany({
+          where: { orderId: id, voidedAt: null },
+          data: { voidedAt: new Date() },
+        });
+        await syncPrepaidFromRecords(tx, id);
+        const row = await tx.order.update({
           where: { id },
           data: { status: "CANCELLED" },
           include: ORDER_INCLUDE,
         });
+        return { order: row, voidedRecords: voided.count };
       });
-      return NextResponse.json(updated);
+      return NextResponse.json(updated.order);
     }
 
     // ---------- 6) 恢复误取消的订单 ----------

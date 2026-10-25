@@ -946,7 +946,7 @@
     "itemsSaved": "Order updated",
     "itemsSavedRestored": "Order updated — {n} item(s) returned to stock",
     "cancelOrder": "Cancel",
-    "cancelConfirm": "Cancel order {order}? Reserved stock will be released.",
+    "cancelConfirm": "Cancel order {order}? Reserved stock will be released, and any money already collected will be voided (excluded from revenue; refund the customer offline).",
     "cancelledToast": "Order cancelled",
     "restoreOrder": "Restore",
     "restoreConfirm": "Restore order {order}? Stock will be reserved again and status set to Pending.",

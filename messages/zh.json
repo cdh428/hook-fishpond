@@ -946,7 +946,7 @@
     "itemsSaved": "已保存改单",
     "itemsSavedRestored": "已保存改单，回补库存 {n} 件",
     "cancelOrder": "取消",
-    "cancelConfirm": "确认取消订单 {order}？对应的库存预占会被释放。",
+    "cancelConfirm": "确认取消订单 {order}？对应的库存预占会被释放；已收到的款项会一并作废（不再计入营收，退款请线下处理）。",
     "cancelledToast": "订单已取消",
     "restoreOrder": "恢复订单",
     "restoreConfirm": "确认恢复订单 {order}？会重新占用库存，并调整为「待处理」。",
