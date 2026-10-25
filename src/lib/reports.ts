@@ -246,23 +246,37 @@ async function fetchPeriodRevenue(
   fromDate: string,
   toDate: string,
 ): Promise<PeriodRevenue> {
+  // ===== 营收口径：实收现金流（finance-rules §3/§7）=====
+  // 营业收入 = 期间全部有效收款流水之和，按 PaymentRecord.paidAt 落日。
+  // 不再按 Order.totalPrice / createdAt 汇总（跨天单会把「今天收的钱」记到昨天）。
+  const [collectedAgg] = await prisma.$queryRaw<
+    { collected: number; refunds: number; orders: number }[]
+  >(Prisma.sql`
+    SELECT
+      COALESCE(SUM(CASE WHEN "amount" > 0 THEN "amount" ELSE 0 END), 0)::float8 AS collected,
+      COALESCE(SUM(CASE WHEN "amount" < 0 THEN ABS("amount") ELSE 0 END), 0)::float8 AS refunds,
+      COUNT(DISTINCT "orderId")::int AS orders
+    FROM "PaymentRecord"
+    WHERE "voidedAt" IS NULL
+      AND "paidAt" >= ${from} AND "paidAt" < ${to}
+  `);
+
+  // 订单渔获费/折扣/渔获重：仍按订单统计（用于展示拆解），但**营收主口径=实收**
   const [orderAgg] = await prisma.$queryRaw<
     {
-      orders: number;
-      revenue: number;
       fish: number;
       fishkg: number;
       discount: number;
+      cancelled: number;
     }[]
   >(Prisma.sql`
-    SELECT COUNT(*)::int AS orders,
-           COALESCE(SUM("totalPrice"), 0)::float8 AS revenue,
-           COALESCE(SUM("fishCharge"), 0)::float8 AS fish,
-           COALESCE(SUM("fishWeightKg"), 0)::float8 AS fishkg,
-           COALESCE(SUM("discountAmount"), 0)::float8 AS discount
+    SELECT
+      COALESCE(SUM("fishCharge"), 0)::float8 AS fish,
+      COALESCE(SUM("fishWeightKg"), 0)::float8 AS fishkg,
+      COALESCE(SUM("discountAmount"), 0)::float8 AS discount,
+      COUNT(*) FILTER (WHERE "status" = 'CANCELLED')::int AS cancelled
     FROM "Order"
-    WHERE "status" <> 'CANCELLED'
-      AND "createdAt" >= ${from} AND "createdAt" < ${to}
+    WHERE "createdAt" >= ${from} AND "createdAt" < ${to}
   `);
 
   const [bookingAgg] = await prisma.$queryRaw<
@@ -275,17 +289,10 @@ async function fetchPeriodRevenue(
       AND "date" >= ${fromDate}::date AND "date" <= ${toDate}::date
   `);
 
-  const [cancelledAgg] = await prisma.$queryRaw<{ n: number }[]>(Prisma.sql`
-    SELECT COUNT(*)::int AS n FROM "Order"
-    WHERE "status" = 'CANCELLED'
-      AND "createdAt" >= ${from} AND "createdAt" < ${to}
-  `);
-
   const [salesAgg] = await prisma.$queryRaw<
-    { covered: number; cost: number; qty: number }[]
+    { cost: number; qty: number }[]
   >(Prisma.sql`
     SELECT
-      COALESCE(SUM(CASE WHEN mi."costPrice" IS NOT NULL THEN oi."totalPrice" ELSE 0 END), 0)::float8 AS covered,
       COALESCE(SUM(CASE WHEN mi."costPrice" IS NOT NULL THEN oi."quantity" * mi."costPrice" ELSE 0 END), 0)::float8 AS cost,
       COALESCE(SUM(oi."quantity"), 0)::int AS qty
     FROM "OrderItem" oi
@@ -304,29 +311,33 @@ async function fetchPeriodRevenue(
       AND sm."createdAt" >= ${from} AND sm."createdAt" < ${to}
   `);
 
-  const orderRevenue = orderAgg?.revenue ?? 0;
-  const bookingRevenue = bookingAgg?.revenue ?? 0;
-  const orderCount = orderAgg?.orders ?? 0;
+  // ===== 组装：营收=实收现金流，毛利随营收口径 =====
+  const collected = collectedAgg?.collected ?? 0;        // 实收（正流水）
+  const refunds = collectedAgg?.refunds ?? 0;            // 退款（负流水绝对值）
+  const orderCount = collectedAgg?.orders ?? 0;           // 实收覆盖的订单数（按流水归属）
   const bookingCount = bookingAgg?.bookings ?? 0;
-  // 方案 C：未设成本价的菜品按「售价全计毛利」（成本按 0 处理，不再剔除）。
-  // 这样毛利/毛利率始终基于总营收口径，不因漏录成本而虚高/归零。
-  const coveredRevenue = orderRevenue; // 分母统一用点餐总营收
-  const cogs = salesAgg?.cost ?? 0; // 成本合计（未设成本=0，不影响）
-  const grossProfit = coveredRevenue - cogs;
+  const bookingRevenue = bookingAgg?.revenue ?? 0;        // 预约无流水，保留订单口径
+  const orderRevenue = collected;                          // 点餐营收 = 实收流水
+  const totalRevenue = orderRevenue + bookingRevenue;
+
+  // 毛利 = 实收营收 − 成本合计（未设成本菜按售价全计，成本=0）
+  const cogs = salesAgg?.cost ?? 0;
+  const grossProfit = totalRevenue - cogs;
+  // 毛利率分母用总营收（实收 + 预约）
+  const marginRate = totalRevenue > 0 ? grossProfit / totalRevenue : null;
 
   return {
     orderRevenue,
     bookingRevenue,
-    totalRevenue: orderRevenue + bookingRevenue,
+    totalRevenue,
     orderCount,
     bookingCount,
-    cancelledOrders: cancelledAgg?.n ?? 0,
+    cancelledOrders: orderAgg?.cancelled ?? 0,
     avgTicket: orderCount > 0 ? orderRevenue / orderCount : 0,
-    coveredRevenue,
+    coveredRevenue: totalRevenue,
     cogs,
     grossProfit,
-    // 毛利率 = 总毛利 ÷ 点餐总营收（与合计行「毛利/总营收」自洽；预约无成本，不计毛利）
-    marginRate: orderRevenue > 0 ? grossProfit / orderRevenue : null,
+    marginRate,
     wasteCost: wasteAgg?.cost ?? 0,
     itemsSold: salesAgg?.qty ?? 0,
     fishRevenue: orderAgg?.fish ?? 0,
@@ -373,13 +384,17 @@ async function fetchTrend(
   period: ResolvedPeriod,
   grain: TrendGrain,
 ): Promise<TrendPoint[]> {
-  const orderRows = await prisma.$queryRaw<DayRow[]>(Prisma.sql`
-    SELECT ((o."createdAt" + interval '7 hours')::date) AS day,
-           COUNT(*)::int AS orders,
-           COALESCE(SUM(o."totalPrice"), 0)::float8 AS revenue
-    FROM "Order" o
-    WHERE o."status" <> 'CANCELLED'
-      AND o."createdAt" >= ${period.from} AND o."createdAt" < ${period.to}
+  // 营收趋势口径：实收现金流（finance-rules §3/§7）
+  // 营收 = PaymentRecord 有效流水按 paidAt 落日（不再按 Order.totalPrice/createdAt）
+  const collectedRows = await prisma.$queryRaw<
+    { day: string | Date; collected: number; orders: number }[]
+  >(Prisma.sql`
+    SELECT ((pr."paidAt" + interval '7 hours')::date) AS day,
+           COALESCE(SUM(pr."amount"), 0)::float8 AS collected,
+           COUNT(DISTINCT pr."orderId")::int AS orders
+    FROM "PaymentRecord" pr
+    WHERE pr."voidedAt" IS NULL
+      AND pr."paidAt" >= ${period.from} AND pr."paidAt" < ${period.to}
     GROUP BY 1
   `);
 
@@ -393,11 +408,10 @@ async function fetchTrend(
     GROUP BY 1
   `);
 
-  const profitRows = await prisma.$queryRaw<
-    { day: string | Date; covered: number; cost: number }[]
+  const costRows = await prisma.$queryRaw<
+    { day: string | Date; cost: number }[]
   >(Prisma.sql`
     SELECT ((o."createdAt" + interval '7 hours')::date) AS day,
-           COALESCE(SUM(CASE WHEN mi."costPrice" IS NOT NULL THEN oi."totalPrice" ELSE 0 END), 0)::float8 AS covered,
            COALESCE(SUM(CASE WHEN mi."costPrice" IS NOT NULL THEN oi."quantity" * mi."costPrice" ELSE 0 END), 0)::float8 AS cost
     FROM "OrderItem" oi
     JOIN "Order" o ON o."id" = oi."orderId"
@@ -407,18 +421,17 @@ async function fetchTrend(
     GROUP BY 1
   `);
 
-  const orderMap = new Map<string, { revenue: number; orders: number }>();
-  for (const r of orderRows) {
+  const collectedMap = new Map<string, { revenue: number; orders: number }>();
+  for (const r of collectedRows) {
     const k = toDayKey(r.day);
-    orderMap.set(k, { revenue: r.revenue ?? 0, orders: r.orders ?? 0 });
+    collectedMap.set(k, { revenue: r.collected ?? 0, orders: r.orders ?? 0 });
   }
   const bookingMap = new Map<string, number>();
   for (const r of bookingRows) {
     bookingMap.set(toDayKey(r.day), r.revenue ?? 0);
   }
-  // 方案 C：每段毛利 = 点餐总营收 − 成本合计（未设成本=0，不再剔除）
   const costMap = new Map<string, number>();
-  for (const r of profitRows) {
+  for (const r of costRows) {
     costMap.set(toDayKey(r.day), r.cost ?? 0);
   }
 
@@ -432,12 +445,12 @@ async function fetchTrend(
       b = { key, orderRevenue: 0, bookingRevenue: 0, revenue: 0, profit: 0, orders: 0 };
       buckets.set(key, b);
     }
-    const o = orderMap.get(dayKey);
-    b.orderRevenue += o?.revenue ?? 0;
-    b.orders += o?.orders ?? 0;
+    const c = collectedMap.get(dayKey);
+    b.orderRevenue += c?.revenue ?? 0;
+    b.orders += c?.orders ?? 0;
     b.bookingRevenue += bookingMap.get(dayKey) ?? 0;
-    // 方案 C：每段毛利 = 点餐营收 − 成本合计（未设成本=0，含全部菜品）
-    b.profit += (o?.revenue ?? 0) - (costMap.get(dayKey) ?? 0);
+    // 实收营收 − 成本合计（未设成本菜=0，含全部菜品）
+    b.profit += (c?.revenue ?? 0) - (costMap.get(dayKey) ?? 0);
   }
   for (const b of buckets.values()) b.revenue = b.orderRevenue + b.bookingRevenue;
 
