@@ -1697,7 +1697,8 @@ function CreateOrderModal({
   const [query, setQuery] = useState('');
   const [sheetItem, setSheetItem] = useState<any | null>(null);
   const [orderType, setOrderType] = useState<'DINE_IN' | 'TAKEAWAY'>('DINE_IN');
-  const [settlementMode, setSettlementMode] = useState<'PREPAID' | 'POSTPAID'>('POSTPAID');
+  const [settlementMode, setSettlementMode] = useState<'PREPAID' | 'POSTPAID' | 'PAID_NOW'>('POSTPAID');
+  const [payMethod, setPayMethod] = useState<'CASH' | 'PROMPTPAY'>('PROMPTPAY');
   const [tableCode, setTableCode] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [backdate, setBackdate] = useState(false);
@@ -1774,17 +1775,20 @@ function CreateOrderModal({
       setPickerOpen(true);
       return;
     }
+    const paidNow = orderType === 'TAKEAWAY' && settlementMode === 'PAID_NOW';
     setBusy(true);
     try {
       await createAdminOrder({
         items: items as any,
         orderType,
-        settlementMode,
+        settlementMode: settlementMode === 'PAID_NOW' ? 'PREPAID' : settlementMode,
         tableCode: orderType === 'DINE_IN' ? tableCode! : undefined,
         orderDate:
           backdate && orderLocal
             ? new Date(orderLocal).toISOString()
             : undefined,
+        paidNow,
+        method: paidNow ? payMethod : undefined,
       });
       onCreated();
     } catch (e: any) {
@@ -1848,6 +1852,8 @@ function CreateOrderModal({
           onClick={() => {
             setOrderType('TAKEAWAY');
             setTableCode(null);
+            // 外带默认「已当场收款」，一键卖完即收
+            setSettlementMode((m) => (m === 'POSTPAID' ? 'PAID_NOW' : m));
           }}
           className={`rounded-xl border-2 py-2 text-sm font-semibold transition ${
             orderType === 'TAKEAWAY'
@@ -1870,8 +1876,8 @@ function CreateOrderModal({
         </button>
       )}
 
-      {/* 结算方式 */}
-      <div className="mb-3 grid grid-cols-2 gap-2">
+      {/* 结算方式：堂食两选一；外带多一个「已当场收款」一键结清 */}
+      <div className={`mb-3 grid gap-2 ${orderType === 'TAKEAWAY' ? 'grid-cols-3' : 'grid-cols-2'}`}>
         <button
           onClick={() => setSettlementMode('POSTPAID')}
           className={`rounded-xl border-2 py-2 text-sm font-semibold transition ${
@@ -1892,7 +1898,43 @@ function CreateOrderModal({
         >
           {t('adminOrders.prepaid')}
         </button>
+        {orderType === 'TAKEAWAY' && (
+          <button
+            onClick={() => setSettlementMode('PAID_NOW')}
+            className={`rounded-xl border-2 py-2 text-sm font-semibold transition ${
+              settlementMode === 'PAID_NOW'
+                ? 'border-success-600 bg-success-50 text-success-700'
+                : 'border-neutral-200 bg-white text-neutral-500'
+            }`}
+          >
+            {t('adminOrders.paidNow')}
+          </button>
+        )}
       </div>
+      {settlementMode === 'PAID_NOW' && (
+        <div className="mb-3 grid grid-cols-2 gap-2">
+          <button
+            onClick={() => setPayMethod('PROMPTPAY')}
+            className={`rounded-xl border-2 py-2 text-sm font-semibold transition ${
+              payMethod === 'PROMPTPAY'
+                ? 'border-primary-600 bg-primary-50 text-primary-700'
+                : 'border-neutral-200 bg-white text-neutral-500'
+            }`}
+          >
+            🔵 {t('payment.promptpay')}
+          </button>
+          <button
+            onClick={() => setPayMethod('CASH')}
+            className={`rounded-xl border-2 py-2 text-sm font-semibold transition ${
+              payMethod === 'CASH'
+                ? 'border-primary-600 bg-primary-50 text-primary-700'
+                : 'border-neutral-200 bg-white text-neutral-500'
+            }`}
+          >
+            💵 {t('payment.cash')}
+          </button>
+        </div>
+      )}
 
       {/* 菜品行 */}
       <div className="space-y-2">

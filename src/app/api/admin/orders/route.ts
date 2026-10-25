@@ -6,6 +6,10 @@ import { runTx } from "@/lib/tx";
 import { OPEN_ORDER_STATUSES, generateOrderNumber, recalcOrderTotals } from "@/lib/orders";
 import { bangkokDayRange, reserveStock, InsufficientStockError } from "@/lib/stock";
 import { resolveOrderLines, OptionError } from "@/lib/menu-options-server";
+import {
+  addPaymentRecord,
+  syncPrepaidFromRecords,
+} from "@/lib/payment-records";
 
 /**
  * GET /api/admin/orders
@@ -164,6 +168,11 @@ export async function POST(request: NextRequest) {
     const mode: "PREPAID" | "POSTPAID" =
       settlementMode === "PREPAID" ? "PREPAID" : "POSTPAID";
 
+    // 「已当场收款」一键模式：建单 + 记 FINAL 流水 + 直接结清，一个事务完成。
+    // 只对外带（无桌）场景设计，堂食走正常结算页。
+    const paidNow = body.paidNow === true && type === "TAKEAWAY";
+    const payMethod: "CASH" | "PROMPTPAY" = body.method === "CASH" ? "CASH" : "PROMPTPAY";
+
     // 补录日期：可选；只能是过去（60 秒容差），不能是未来
     let createdAtOverride: Date | null = null;
     if (orderDate) {
@@ -261,6 +270,28 @@ export async function POST(request: NextRequest) {
           );
 
           await recalcOrderTotals(tx, newOrder.id);
+
+          // 一键收款：记 FINAL 流水（按补录日落账）→ 对齐预付 → 直接结清
+          if (paidNow) {
+            const cur = await tx.order.findUnique({
+              where: { id: newOrder.id },
+              select: { totalPrice: true },
+            });
+            const paidAt = createdAtOverride ?? new Date();
+            await addPaymentRecord(tx, {
+              orderId: newOrder.id,
+              amount: cur?.totalPrice ?? subtotal,
+              method: payMethod,
+              kind: "FINAL",
+              operator: admin.username,
+              paidAt,
+            });
+            await syncPrepaidFromRecords(tx, newOrder.id);
+            await tx.order.update({
+              where: { id: newOrder.id },
+              data: { status: "SETTLED", settledAt: paidAt },
+            });
+          }
 
           return newOrder;
         });

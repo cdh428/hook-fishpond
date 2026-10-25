@@ -973,6 +973,7 @@
     "orderDateBack": "Backdate to a past time",
     "createdToast": "Order created",
     "needItems": "Add at least 1 item first",
+    "paidNow": "Collected on the spot",
     "reopenOrder": "Reopen (unsettle)",
     "reopenConfirm": "Reopen order {order}? Collected amounts and payment records stay unchanged; you can keep adding items and collect the difference later.",
     "reopenedToast": "Reopened as unsettled (collected amount unchanged)"

@@ -704,6 +704,10 @@ export async function createAdminOrder(input: {
   customerPhone?: string;
   note?: string;
   orderDate?: string;
+  /** 一键「已当场收款」（仅外带）：建单同时记 FINAL 流水并直接结清 */
+  paidNow?: boolean;
+  /** paidNow 用：收款方式，默认 PROMPTPAY */
+  method?: 'CASH' | 'PROMPTPAY';
 }): Promise<any> {
   return request<any>('/api/admin/orders', {
     method: 'POST',
