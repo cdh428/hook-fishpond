@@ -964,7 +964,9 @@
     "settledAt": "结清时间",
     "newLine": "新增行（选好规格后加入）",
     "addItem": "加菜",
-    "lineWillBeRemoved": "数量为 0，保存后将移除此行"
+    "lineWillBeRemoved": "数量为 0，保存后将移除此行",
+    "backdate": "补录（收款实际发生时间）",
+    "backdateHint": "宕机手写销售 / 过营业时间未结，第二天补记时勾选。报表会把这笔钱记到所选日期，不能选未来。"
   },
   "printLabels": {
     "brandSub": "泰国 · 垂钓 · 美食",

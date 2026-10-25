@@ -1652,6 +1652,17 @@ function SettleModal({
   const [busy, setBusy] = useState(false);
   const [qr, setQr] = useState<{ dataUrl: string; amount: number; qrString: string } | null>(null);
   const [current, setCurrent] = useState<any>(order);
+  // 补录：收款实际发生时间（宕机手写 / 过营业时间未结，第二天补记）
+  const [backdate, setBackdate] = useState(false);
+  const [paidLocal, setPaidLocal] = useState<string>(() => {
+    const d = new Date();
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    return d.toISOString().slice(0, 16);
+  });
+  const nowLocal = new Date(Date.now() - new Date().getTimezoneOffset()).toISOString().slice(0, 16);
+  // 勾了补录才带 paidAt；时间非法/未来由服务端兜底拒绝
+  const paidAtIso = (): string | undefined =>
+    backdate && paidLocal ? new Date(paidLocal).toISOString() : undefined;
 
   // 需付 = 总应付 − 已付（与服务端 settle 的 res.amount 同口径，避免弹窗主金额与收款码/实收不一致）
   const receivable = Math.max(
@@ -1678,7 +1689,7 @@ function SettleModal({
   const markPaid = async (m: 'CASH' | 'PROMPTPAY') => {
     setBusy(true);
     try {
-      const res = await settleAdminOrder(current.id, { action: 'mark-paid', method: m });
+      const res = await settleAdminOrder(current.id, { action: 'mark-paid', method: m, paidAt: paidAtIso() });
       if (res.order) {
         setCurrent(res.order);
         await submitPrint(
@@ -1697,7 +1708,7 @@ function SettleModal({
   const confirmPaid = async () => {
     setBusy(true);
     try {
-      const res = await settleAdminOrder(current.id, { action: 'confirm', method });
+      const res = await settleAdminOrder(current.id, { action: 'confirm', method, paidAt: paidAtIso() });
       if (res.order) {
         setCurrent(res.order);
         await submitPrint(
@@ -1769,6 +1780,31 @@ function SettleModal({
             {m === 'CASH' ? `💵 ${t('payment.cash')}` : `🔵 ${t('payment.promptpay')}`}
           </button>
         ))}
+      </div>
+
+      {/* 补录：收款实际发生时间（默认关） */}
+      <div className="mb-3 rounded-xl bg-neutral-50 p-2.5 text-xs">
+        <label className="flex items-center gap-2 font-medium text-neutral-700">
+          <input
+            type="checkbox"
+            checked={backdate}
+            onChange={(e) => setBackdate(e.target.checked)}
+            className="h-4 w-4 accent-primary-600"
+          />
+          🕙 {t('adminOrders.backdate')}
+        </label>
+        {backdate && (
+          <div className="mt-2">
+            <input
+              type="datetime-local"
+              value={paidLocal}
+              max={nowLocal}
+              onChange={(e) => setPaidLocal(e.target.value)}
+              className="w-full rounded-lg border border-neutral-200 px-2 py-1.5 text-xs"
+            />
+            <p className="mt-1 text-[10px] text-neutral-400">{t('adminOrders.backdateHint')}</p>
+          </div>
+        )}
       </div>
 
       {method === 'CASH' ? (

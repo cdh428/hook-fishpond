@@ -659,6 +659,12 @@ export async function settleAdminOrder(
     amount?: number;
     /** record-prepaid 用：收款备注（什么方式 / 谁收的） */
     note?: string;
+    /**
+     * 补录：历史收款时间（ISO 字符串）。宕机手写销售 / 过点未结，第二天补记时
+     * 传实际发生时间 —— 报表按 paidAt 落日。不传 = 当前时间。
+     * 服务端护栏：未来日期返回 400 FUTURE_DATE_REJECTED。
+     */
+    paidAt?: string;
   },
 ): Promise<SettleResult & {
   ok?: boolean;

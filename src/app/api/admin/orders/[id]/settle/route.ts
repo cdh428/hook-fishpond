@@ -58,6 +58,26 @@ export async function POST(
     const action = String(body?.action || "create");
     const method = String(body?.method || "PROMPTPAY") === "CASH" ? "CASH" : "PROMPTPAY";
 
+    // ---------- 补录：可选历史收款时间（paidAt）----------
+    // 场景：宕机手写销售 / 过营业时间未结，第二天 admin 补记 —— 钱要落到
+    // 实际发生日（paidAt），不能落到补录操作日，否则报表（按 paidAt 落日）错位。
+    // 护栏：不允许未来日期（允许 60s 时钟偏差）。
+    let paidAtOverride: Date | null = null;
+    if (body?.paidAt) {
+      const d = new Date(String(body.paidAt));
+      if (Number.isNaN(d.getTime())) {
+        return NextResponse.json({ error: "INVALID_PAIDAT", msg: "paidAt 不是合法时间" }, { status: 400 });
+      }
+      if (d.getTime() > Date.now() + 60_000) {
+        return NextResponse.json(
+          { error: "FUTURE_DATE_REJECTED", msg: "补录时间不能是未来" },
+          { status: 400 },
+        );
+      }
+      paidAtOverride = d;
+    }
+    const paidAtFinal = () => paidAtOverride ?? new Date();
+
     const order = await prisma.order.findUnique({
       where: { id },
       select: { status: true },
@@ -104,6 +124,7 @@ export async function POST(
           kind: kind as any,
           operator: admin.username,
           note,
+          paidAt: paidAtFinal(),
         });
         const newPrepaid = await syncPrepaidFromRecords(tx, id);
         await tx.order.update({ where: { id }, data: { prepaidNote: note } });
@@ -182,6 +203,7 @@ export async function POST(
             kind: "FINAL" as any,
             operator: admin.username,
             note: action === "mark-paid" ? "结清·直接标记已收" : "结清·补差",
+            paidAt: paidAtFinal(),
           });
           await syncPrepaidFromRecords(tx, id);
         }
@@ -195,7 +217,7 @@ export async function POST(
             amount: remaining,
             currency: "THB",
             status: "SUCCESSFUL",
-            paidAt: new Date(),
+            paidAt: paidAtFinal(),
             metadata: {
               merchantName: getMerchantName(),
               settledBy: admin.username,
@@ -207,7 +229,7 @@ export async function POST(
             method: method as any,
             amount: remaining,
             status: "SUCCESSFUL",
-            paidAt: new Date(),
+            paidAt: paidAtFinal(),
             metadata: {
               ...(existingMeta ?? {}),
               prepaid: totals.totalPrice - remaining,

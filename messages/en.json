@@ -964,7 +964,9 @@
     "settledAt": "Settled at",
     "newLine": "New line (pick options)",
     "addItem": "Add item",
-    "lineWillBeRemoved": "Quantity 0 — line removed on save"
+    "lineWillBeRemoved": "Quantity 0 — line removed on save",
+    "backdate": "Backdate (actual payment time)",
+    "backdateHint": "For sales written on paper during downtime / unsettled after closing. The report records this payment on the selected date. Future dates are not allowed."
   },
   "printLabels": {
     "brandSub": "Thailand · Fishing · Dining",
