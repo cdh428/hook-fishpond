@@ -317,7 +317,8 @@ async function fetchPeriodRevenue(
   const orderCount = collectedAgg?.orders ?? 0;           // 实收覆盖的订单数（按流水归属）
   const bookingCount = bookingAgg?.bookings ?? 0;
   const bookingRevenue = bookingAgg?.revenue ?? 0;        // 预约无流水，保留订单口径
-  const orderRevenue = collected;                          // 点餐营收 = 实收流水
+  // 点餐营收 = 净实收（含退款为负），与趋势图、支付方式拆分同口径
+  const orderRevenue = collected - refunds;
   const totalRevenue = orderRevenue + bookingRevenue;
 
   // 毛利 = 实收营收 − 成本合计（未设成本菜按售价全计，成本=0）
@@ -595,12 +596,14 @@ async function fetchStructure(period: ResolvedPeriod): Promise<ReportStructure> 
   const paymentRows = await prisma.$queryRaw<
     { method: string; count: number; amount: number }[]
   >(Prisma.sql`
-    SELECT p."method" AS method,
+    -- 支付方式拆分与总营收同源：PaymentRecord 有效流水按 paidAt 落日。
+    -- 退款是负数流水，直接归入各自 method 净额，保证 Σ(各方式) = 点餐营收。
+    SELECT pr."method" AS method,
            COUNT(*)::int AS count,
-           COALESCE(SUM(p."amount"), 0)::float8 AS amount
-    FROM "Payment" p
-    WHERE p."status" <> 'FAILED'
-      AND p."createdAt" >= ${period.from} AND p."createdAt" < ${period.to}
+           COALESCE(SUM(pr."amount"), 0)::float8 AS amount
+    FROM "PaymentRecord" pr
+    WHERE pr."voidedAt" IS NULL
+      AND pr."paidAt" >= ${period.from} AND pr."paidAt" < ${period.to}
     GROUP BY 1 ORDER BY amount DESC
   `);
 
