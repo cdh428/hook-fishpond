@@ -411,6 +411,47 @@
   表现为「日志说已就绪，但端口拒绝连接」。
 - 要长期在跑，只能放 **Startup 文件夹**（explorer 登录时拉起），不要靠 Agent 后台任务。
 
+### 6.7 「自动出单没反应」先查三件事，别急着改代码
+
+自动出单（新单 → 客户票 + 后厨票 + 语音播报）依赖三处同时成立，缺一处就"静默失效"：
+
+1. **打印桥在跑**：`curl 127.0.0.1:17777/health` 要回 `{"ok":true,...}`。
+   回 `upstream connect failed` 说明**没进程在听**（不是桥报错，是连接被拒）。
+2. **订单列表在轮询**：`useAutoPrinter` 只在拿到新 `orders` 时才判断。
+   页面若只在切换标签时 `load()`，新单永远进不来 —— **必须 12s 静默轮询**。
+   这条曾导致「功能代码都在、就是不触发」。
+3. **`Order.autoPrintFired` 是 false 且下单时间晚于本机值守时刻**。
+   只按 flag 判断会踩大坑：曾经 14 张未结单全是 `false`，一开页面就**连打 28 张纸**。
+
+**恢复/重开这个功能时必做**：
+```js
+// 把存量未结清单一次性置位，只保留"从此刻起的新单"会触发
+prisma.order.updateMany({
+  where: { status: { notIn: ['SETTLED','CANCELLED'] }, autoPrintFired: false,
+           createdAt: { lt: new Date(Date.now() - 10*60*1000) } },
+  data: { autoPrintFired: true },
+});
+```
+
+**语音播报**：`src/lib/speech.ts` 走浏览器 `speechSynthesis`。
+- 本机实测**没有泰语音色**（只有 David/Zira/Huihui）→ 泰文只能退化播中文。
+  代码已做兜底：无泰语音色就只播中文，不硬读乱码音。
+  要真正双语，得在 Windows 里装泰语语音包（设置 → 时间和语言 → 添加泰语 → 语音）。
+- Chrome 的 voices 是**异步就绪**，不预热首次 `pickVoice` 常返回 null → `announceOrder` 入口调 `primeVoices()`。
+- 浏览器要求页面有过用户交互才允许发声；收银台页面**先点一下屏幕**再等单。
+
+### 6.8 ⚠️ 桥的 `/exec` 接口是重大安全风险（本地未提交版本才有）
+
+某会话给 `bridge.py` 加了 `POST /exec`（`shell=True` 执行任意命令）、`GET /files`（列目录）、`/speak`。
+配合两个默认值就是**内网任意人可控制收银机**：
+
+- `config.json` 里 `authToken: ""` → **为空表示完全不校验**
+- 桥默认 `--host 0.0.0.0` → 同 Wi-Fi 任何设备都能访问
+
+**处置**：确认不用就把 `/exec` 去掉；必须保留时**两件事一起做** ——
+配非空 `authToken`（前端要带 `X-Print-Key`）+ 只绑 `127.0.0.1`。
+临时缓解：`python bridge.py --host 127.0.0.1`（手机走桥打印会失效，但收银机本机正常）。
+
 ---
 
 ## 七、改动前的自检清单
