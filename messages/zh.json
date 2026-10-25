@@ -966,7 +966,13 @@
     "addItem": "加菜",
     "lineWillBeRemoved": "数量为 0，保存后将移除此行",
     "backdate": "补录（收款实际发生时间）",
-    "backdateHint": "宕机手写销售 / 过营业时间未结，第二天补记时勾选。报表会把这笔钱记到所选日期，不能选未来。"
+    "backdateHint": "宕机手写销售 / 过营业时间未结，第二天补记时勾选。报表会把这笔钱记到所选日期，不能选未来。",
+    "createOrder": "新建订单",
+    "createOrderHint": "后台补录新单：可选下单时间与桌号，不能选未来。新单会自动出单（打票 + 播报），收款在订单卡片里进行。",
+    "orderDateLabel": "下单时间",
+    "orderDateBack": "补录到过去的时间",
+    "createdToast": "订单已创建",
+    "needItems": "请先至少加 1 个菜品"
   },
   "printLabels": {
     "brandSub": "泰国 · 垂钓 · 美食",

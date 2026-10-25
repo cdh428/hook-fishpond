@@ -966,7 +966,13 @@
     "addItem": "Add item",
     "lineWillBeRemoved": "Quantity 0 — line removed on save",
     "backdate": "Backdate (actual payment time)",
-    "backdateHint": "For sales written on paper during downtime / unsettled after closing. The report records this payment on the selected date. Future dates are not allowed."
+    "backdateHint": "For sales written on paper during downtime / unsettled after closing. The report records this payment on the selected date. Future dates are not allowed.",
+    "createOrder": "New order",
+    "createOrderHint": "Create a new order at the counter: pick the order time and table (future dates are not allowed). A new order triggers the automatic kitchen ticket + voice announcement; collect payment from the order card.",
+    "orderDateLabel": "Order time",
+    "orderDateBack": "Backdate to a past time",
+    "createdToast": "Order created",
+    "needItems": "Add at least 1 item first"
   },
   "printLabels": {
     "brandSub": "Thailand · Fishing · Dining",

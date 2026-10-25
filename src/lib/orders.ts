@@ -266,18 +266,21 @@ export function checkStaffChange(
   return { gross: g, ratio, needsAdmin: ratio > limitRatio + 1e-9 };
 }
 
-/** 按曼谷日期生成订单号（调用前需保证在事务内，重试由调用方负责） */
+/** 按曼谷日期生成订单号（调用前需保证在事务内，重试由调用方负责）
+ *  `day` 可选：admin 补录历史订单时传该订单的发生时间，序号按那一天已有单数计。 */
 export async function generateOrderNumber(
   tx: Tx,
   attempt = 0,
+  day?: Date,
 ): Promise<string> {
-  const { start, end } = bangkokDayRange();
+  const { start, end } = bangkokDayRange(day);
   const count = await tx.order.count({
     where: { createdAt: { gte: start, lt: end } },
   });
-  const day = bangkokDateString().replace(/-/g, "");
+  const dayStr = bangkokDateString(day);
+  const dayTag = dayStr.replace(/-/g, "");
   const seq = String(count + 1 + attempt).padStart(3, "0");
-  return `FP-${day}-${seq}`;
+  return `FP-${dayTag}-${seq}`;
 }
 
 /** 订单是否还允许改动菜品（未结清、未取消） */

@@ -680,6 +680,26 @@ export async function settleAdminOrder(
   });
 }
 
+/**
+ * 后台手动新建订单（补录）。orderDate 可选（ISO），只能过去，不能未来。
+ * 新单 autoPrintFired=false → 会触发自动出单（POS80 打票 + 播报）。
+ */
+export async function createAdminOrder(input: {
+  items: { menuItemId: string; quantity: number; options?: any; note?: string }[];
+  orderType?: 'DINE_IN' | 'TAKEAWAY';
+  settlementMode?: 'PREPAID' | 'POSTPAID';
+  tableCode?: string;
+  customerName?: string;
+  customerPhone?: string;
+  note?: string;
+  orderDate?: string;
+}): Promise<any> {
+  return request<any>('/api/admin/orders', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
 // ---------- Booking status (admin) ----------
 
 export async function updateBookingStatus(

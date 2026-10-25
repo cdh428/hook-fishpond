@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
-import { OPEN_ORDER_STATUSES } from "@/lib/orders";
-import { bangkokDayRange } from "@/lib/stock";
+import { runTx } from "@/lib/tx";
+import { OPEN_ORDER_STATUSES, generateOrderNumber, recalcOrderTotals } from "@/lib/orders";
+import { bangkokDayRange, reserveStock, InsufficientStockError } from "@/lib/stock";
+import { resolveOrderLines, OptionError } from "@/lib/menu-options-server";
 
 /**
  * GET /api/admin/orders
@@ -125,6 +128,179 @@ export async function GET(request: NextRequest) {
     console.error("Admin list orders error:", error);
     return NextResponse.json(
       { error: "Failed to list orders" },
+      { status: 500 },
+    );
+  }
+}
+
+/**
+ * POST /api/admin/orders —— 后台手动新建订单（补录）
+ *
+ * 与顾客端 POST /api/orders 的区别：
+ *  - 无需顾客身份（userId 可空），customerName 默认「补录」；
+ *  - 可选 orderDate：把订单 createdAt 落到过去的某个时刻（不能是未来日期），
+ *    订单号序号按所选曼谷日的已有单数重新计算 → 历史日报表自动正确；
+ *  - autoPrintFired 保持默认 false → 补录单会触发自动出单（POS80 打票 + 播报）。
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const admin = await requireAdmin(request);
+    if (!admin) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const { items, note, tableCode, orderDate, orderType, settlementMode } = body;
+
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return NextResponse.json(
+        { error: "Missing required field: items[]" },
+        { status: 400 },
+      );
+    }
+
+    const type: "DINE_IN" | "TAKEAWAY" =
+      orderType === "TAKEAWAY" ? "TAKEAWAY" : "DINE_IN";
+    const mode: "PREPAID" | "POSTPAID" =
+      settlementMode === "PREPAID" ? "PREPAID" : "POSTPAID";
+
+    // 补录日期：可选；只能是过去（60 秒容差），不能是未来
+    let createdAtOverride: Date | null = null;
+    if (orderDate) {
+      const d = new Date(String(orderDate));
+      if (Number.isNaN(d.getTime())) {
+        return NextResponse.json({ error: "Invalid orderDate", code: "INVALID_DATE" }, { status: 400 });
+      }
+      if (d.getTime() > Date.now() + 60_000) {
+        return NextResponse.json(
+          { error: "Order date cannot be in the future", code: "FUTURE_DATE_REJECTED" },
+          { status: 400 },
+        );
+      }
+      createdAtOverride = d;
+    }
+
+    // 桌号解析：堂食必填有效启用中的桌；外带不挂桌
+    let tableId: string | null = null;
+    if (type === "DINE_IN") {
+      if (!tableCode) {
+        return NextResponse.json(
+          { error: "Dine-in orders require a tableCode", code: "TABLE_REQUIRED" },
+          { status: 400 },
+        );
+      }
+      const table = await prisma.diningTable.findUnique({
+        where: { code: String(tableCode).toUpperCase() },
+      });
+      if (!table || !table.isActive) {
+        return NextResponse.json(
+          { error: "Invalid or inactive table code", code: "INVALID_TABLE" },
+          { status: 400 },
+        );
+      }
+      tableId = table.id;
+    }
+
+    let order: { id: string } | null = null;
+    let lastError: any = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        order = await runTx(async (tx) => {
+          const { lines, subtotal } = await resolveOrderLines(tx, items);
+
+          const orderNumber = await generateOrderNumber(
+            tx,
+            attempt,
+            createdAtOverride ?? undefined,
+          );
+
+          const newOrder = await tx.order.create({
+            data: {
+              orderNumber,
+              userId: null,
+              tableId,
+              customerName: body.customerName || "补录",
+              customerPhone: body.customerPhone || null,
+              subtotal,
+              totalPrice: subtotal,
+              note: note || null,
+              orderType: type,
+              settlementMode: mode,
+              status: "PENDING",
+              // 补录：把开单时间落到所选时刻（报表按 createdAt 落日 → 历史日报自动重算）
+              ...(createdAtOverride
+                ? { createdAt: createdAtOverride, updatedAt: createdAtOverride }
+                : {}),
+              items: {
+                create: lines.map((l) => ({
+                  menuItemId: l.menuItemId,
+                  quantity: l.quantity,
+                  unitPrice: l.unitPrice,
+                  totalPrice: l.totalPrice,
+                  optionKey: l.optionKey,
+                  note: l.note,
+                  ...(l.options
+                    ? { options: l.options as unknown as Prisma.InputJsonValue }
+                    : {}),
+                })),
+              },
+            },
+            include: { items: true },
+          });
+
+          // 下单即预占库存（不足时事务内抛 InsufficientStockError，整体回滚）
+          await reserveStock(
+            tx,
+            newOrder.id,
+            newOrder.items.map((it) => ({
+              menuItemId: it.menuItemId,
+              quantity: it.quantity,
+              optionKey: it.optionKey,
+              orderItemId: it.id,
+            })),
+          );
+
+          await recalcOrderTotals(tx, newOrder.id);
+
+          return newOrder;
+        });
+        break;
+      } catch (e: any) {
+        lastError = e;
+        if (e?.code === "P2002") continue;
+        throw e;
+      }
+    }
+    if (!order) throw lastError ?? new Error("Failed to create order");
+
+    const fullOrder = await prisma.order.findUnique({
+      where: { id: order.id },
+      include: {
+        items: { include: { menuItem: true } },
+        bookings: true,
+        weighings: true,
+        table: true,
+        paymentRecords: { where: { voidedAt: null }, orderBy: { paidAt: "asc" } },
+      },
+    });
+
+    return NextResponse.json(fullOrder || order, { status: 201 });
+  } catch (error: any) {
+    if (error instanceof OptionError) {
+      return NextResponse.json(
+        { error: error.humanMessage, code: error.code },
+        { status: 400 },
+      );
+    }
+    if (error instanceof InsufficientStockError) {
+      return NextResponse.json(
+        { error: `${error.itemName} 库存不足，请调整数量`, code: "INSUFFICIENT_STOCK" },
+        { status: 400 },
+      );
+    }
+    console.error("Admin create order error:", error);
+    return NextResponse.json(
+      { error: "Failed to create order" },
       { status: 500 },
     );
   }

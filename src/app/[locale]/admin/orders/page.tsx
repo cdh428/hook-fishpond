@@ -14,6 +14,7 @@ import {
   addOrderWeighing,
   deleteOrderWeighing,
   settleAdminOrder,
+  createAdminOrder,
   fetchAdminServiceCalls,
   updateServiceCall,
   type AdminOrderSummary,
@@ -50,6 +51,7 @@ type Modal =
   | { kind: 'items'; order: any }
   | { kind: 'settle'; order: any }
   | { kind: 'rebind'; order: any }
+  | { kind: 'create' }
   | null;
 
 const FISH_FREE_KG = 1; // 每根鱼竿免 1kg
@@ -447,6 +449,12 @@ export default function AdminOrdersPage() {
         >
           ↻
         </button>
+        <button
+          onClick={() => setModal({ kind: 'create' })}
+          className="shrink-0 rounded-lg bg-primary-700 px-2.5 py-2 text-xs font-semibold text-white hover:bg-primary-800"
+        >
+          ＋ {t('adminOrders.createOrder')}
+        </button>
       </div>
 
       {toast && (
@@ -590,6 +598,20 @@ export default function AdminOrdersPage() {
             } else {
               flash(t('adminOrders.settledToast'));
             }
+          }}
+          onError={(m) => setError(m)}
+        />
+      )}
+
+      {/* ===== 新建订单（后台补录） ===== */}
+      {modal?.kind === 'create' && (
+        <CreateOrderModal
+          locale={locale}
+          onClose={() => setModal(null)}
+          onCreated={() => {
+            setModal(null);
+            load();
+            flash(t('adminOrders.createdToast'));
           }}
           onError={(m) => setError(m)}
         />
@@ -1624,6 +1646,363 @@ function ItemsModal({
           appendRow(sheetItem, res);
           setSheetItem(null);
         }}
+      />
+    </Sheet>
+  );
+}
+
+/* =====================================================================
+ * 新建订单（后台补录）：可选下单时间（不能未来）+ 桌号
+ * ===================================================================*/
+function CreateOrderModal({
+  locale,
+  onClose,
+  onCreated,
+  onError,
+}: {
+  locale: string;
+  onClose: () => void;
+  onCreated: () => void;
+  onError: (m: string) => void;
+}) {
+  const t = useTranslations();
+  const [rows, setRows] = useState<EditRow[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [menu, setMenu] = useState<any[] | null>(null);
+  const [menuBusy, setMenuBusy] = useState(false);
+  const [query, setQuery] = useState('');
+  const [sheetItem, setSheetItem] = useState<any | null>(null);
+  const [orderType, setOrderType] = useState<'DINE_IN' | 'TAKEAWAY'>('DINE_IN');
+  const [settlementMode, setSettlementMode] = useState<'PREPAID' | 'POSTPAID'>('POSTPAID');
+  const [tableCode, setTableCode] = useState<string | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [backdate, setBackdate] = useState(false);
+  // datetime-local；max = 现在（本地时区），未来直接被前端挡住
+  const [orderLocal, setOrderLocal] = useState<string>(() => {
+    const d = new Date(Date.now() - new Date().getTimezoneOffset() * 60_000);
+    return d.toISOString().slice(0, 16);
+  });
+  const nowLocal = (() => {
+    const d = new Date(Date.now() - new Date().getTimezoneOffset() * 60_000);
+    return d.toISOString().slice(0, 16);
+  })();
+
+  const step = (idx: number, delta: number) =>
+    setRows((list) =>
+      list.map((r, i) => (i === idx ? { ...r, quantity: Math.max(0, r.quantity + delta) } : r)),
+    );
+
+  const openAdd = async () => {
+    setAddOpen(true);
+    if (menu || menuBusy) return;
+    setMenuBusy(true);
+    try {
+      setMenu(await fetchMenuItems());
+    } catch (e: any) {
+      onError(e?.message || t('common.error'));
+      setAddOpen(false);
+    } finally {
+      setMenuBusy(false);
+    }
+  };
+
+  const appendRow = (item: any, res?: { optionIds: string[]; options: any[]; optionsDelta: number }) => {
+    const optionIds = res?.optionIds ?? [];
+    const key = makeOptionKey(item.id, optionIds);
+    setRows((list) => {
+      const idx = list.findIndex((r) => r.key === key);
+      if (idx >= 0) {
+        return list.map((r, i) => (i === idx ? { ...r, quantity: r.quantity + 1 } : r));
+      }
+      return [
+        ...list,
+        {
+          key,
+          menuItemId: item.id,
+          name: locale === 'en' ? item.name_en : locale === 'th' ? item.name_th : item.name_zh,
+          optionLines: formatLineOptions(res?.options ?? [], locale),
+          optionIds,
+          note: null,
+          quantity: 1,
+          unitPrice: Math.round((Number(item.price) + Number(res?.optionsDelta ?? 0)) * 100) / 100,
+          isNew: true,
+        },
+      ];
+    });
+  };
+
+  const subtotal = rows.reduce((s, r) => s + r.unitPrice * r.quantity, 0);
+
+  const save = async () => {
+    const items = rows
+      .filter((r) => r.quantity > 0)
+      .map((r) => ({
+        menuItemId: r.menuItemId,
+        quantity: r.quantity,
+        optionIds: r.optionIds,
+        ...(r.note ? { note: r.note } : {}),
+      }));
+    if (items.length === 0) {
+      onError(t('adminOrders.needItems'));
+      return;
+    }
+    if (orderType === 'DINE_IN' && !tableCode) {
+      setPickerOpen(true);
+      return;
+    }
+    setBusy(true);
+    try {
+      await createAdminOrder({
+        items: items as any,
+        orderType,
+        settlementMode,
+        tableCode: orderType === 'DINE_IN' ? tableCode! : undefined,
+        orderDate:
+          backdate && orderLocal
+            ? new Date(orderLocal).toISOString()
+            : undefined,
+      });
+      onCreated();
+    } catch (e: any) {
+      onError(e?.message || t('common.error'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const q = query.trim().toLowerCase();
+  const menuFiltered = (menu ?? []).filter((i) => {
+    if (!q) return true;
+    return [i.name_zh, i.name_en, i.name_th]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase()
+      .includes(q);
+  });
+
+  return (
+    <Sheet title={`📝 ${t('adminOrders.createOrder')}`} onClose={onClose}>
+      <p className="mb-3 rounded-lg bg-warning-100 px-3 py-2 text-[11px] leading-relaxed text-warning-600">
+        {t('adminOrders.createOrderHint')}
+      </p>
+
+      {/* 下单时间 */}
+      <div className="mb-3 rounded-xl bg-neutral-50 px-3 py-2">
+        <label className="flex items-center gap-2 text-sm font-medium text-neutral-700">
+          <input
+            type="checkbox"
+            checked={backdate}
+            onChange={(e) => setBackdate(e.target.checked)}
+            className="h-4 w-4 accent-primary-700"
+          />
+          {t('adminOrders.orderDateBack')}
+        </label>
+        {backdate && (
+          <input
+            type="datetime-local"
+            value={orderLocal}
+            max={nowLocal}
+            onChange={(e) => setOrderLocal(e.target.value)}
+            className="mt-2 w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none"
+          />
+        )}
+      </div>
+
+      {/* 堂食 / 外带 + 桌号 */}
+      <div className="mb-3 grid grid-cols-2 gap-2">
+        <button
+          onClick={() => setOrderType('DINE_IN')}
+          className={`rounded-xl border-2 py-2 text-sm font-semibold transition ${
+            orderType === 'DINE_IN'
+              ? 'border-primary-600 bg-primary-50 text-primary-700'
+              : 'border-neutral-200 bg-white text-neutral-500'
+          }`}
+        >
+          {t('orderType.dineIn')}
+        </button>
+        <button
+          onClick={() => {
+            setOrderType('TAKEAWAY');
+            setTableCode(null);
+          }}
+          className={`rounded-xl border-2 py-2 text-sm font-semibold transition ${
+            orderType === 'TAKEAWAY'
+              ? 'border-primary-600 bg-primary-50 text-primary-700'
+              : 'border-neutral-200 bg-white text-neutral-500'
+          }`}
+        >
+          {t('orderType.takeaway')}
+        </button>
+      </div>
+      {orderType === 'DINE_IN' && (
+        <button
+          onClick={() => setPickerOpen(true)}
+          className="mb-3 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-left text-sm hover:border-primary-300"
+        >
+          <span className="block text-[11px] text-neutral-400">{t('table.selectTable')}</span>
+          <span className={`font-semibold ${tableCode ? 'text-neutral-800' : 'text-neutral-400'}`}>
+            {tableCode || t('table.selectTable')}
+          </span>
+        </button>
+      )}
+
+      {/* 结算方式 */}
+      <div className="mb-3 grid grid-cols-2 gap-2">
+        <button
+          onClick={() => setSettlementMode('POSTPAID')}
+          className={`rounded-xl border-2 py-2 text-sm font-semibold transition ${
+            settlementMode === 'POSTPAID'
+              ? 'border-primary-600 bg-primary-50 text-primary-700'
+              : 'border-neutral-200 bg-white text-neutral-500'
+          }`}
+        >
+          {t('adminOrders.postpaid')}
+        </button>
+        <button
+          onClick={() => setSettlementMode('PREPAID')}
+          className={`rounded-xl border-2 py-2 text-sm font-semibold transition ${
+            settlementMode === 'PREPAID'
+              ? 'border-primary-600 bg-primary-50 text-primary-700'
+              : 'border-neutral-200 bg-white text-neutral-500'
+          }`}
+        >
+          {t('adminOrders.prepaid')}
+        </button>
+      </div>
+
+      {/* 菜品行 */}
+      <div className="space-y-2">
+        {rows.map((r, idx) => (
+          <div key={r.key} className="rounded-xl bg-neutral-50 px-3 py-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="min-w-0 flex-1 truncate text-sm text-neutral-800">
+                {r.name}
+                <span className="ml-1.5 shrink-0 text-xs text-neutral-400">฿{r.unitPrice}</span>
+              </span>
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  onClick={() => step(idx, -1)}
+                  className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-sm font-medium text-neutral-600 shadow-sm"
+                >
+                  −
+                </button>
+                <span className="w-6 text-center text-sm font-semibold">{r.quantity}</span>
+                <button
+                  onClick={() => step(idx, 1)}
+                  className="flex h-7 w-7 items-center justify-center rounded-full bg-primary-50 text-sm font-medium text-primary-700"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+            {r.optionLines.length > 0 && (
+              <div className="mt-0.5">
+                {r.optionLines.map((l, i) => (
+                  <p key={i} className="text-[11px] text-neutral-500">
+                    {l}
+                  </p>
+                ))}
+              </div>
+            )}
+            {r.note && <p className="text-[11px] text-accent-600">※ {r.note}</p>}
+          </div>
+        ))}
+      </div>
+
+      {/* 加菜 */}
+      {!addOpen ? (
+        <button
+          onClick={() => void openAdd()}
+          className="mt-3 w-full rounded-xl border border-dashed border-neutral-300 py-2.5 text-sm font-medium text-neutral-600 hover:border-primary-300 hover:text-primary-700"
+        >
+          ＋ {t('adminOrders.addItem')}
+        </button>
+      ) : (
+        <div className="mt-3 rounded-xl border border-neutral-200 p-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-neutral-600">
+              {t('adminOrders.addItem')}
+            </span>
+            <button
+              onClick={() => setAddOpen(false)}
+              className="text-xs text-neutral-400 hover:text-neutral-600"
+            >
+              {t('common.close')}
+            </button>
+          </div>
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={t('menu.searchPlaceholder')}
+            className="mt-2 w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none"
+          />
+          <div className="mt-2 max-h-52 overflow-y-auto">
+            {menuBusy ? (
+              <p className="py-3 text-center text-xs text-neutral-400">
+                {t('common.loading')}
+              </p>
+            ) : (
+              menuFiltered.slice(0, 60).map((i) => (
+                <button
+                  key={i.id}
+                  onClick={() => {
+                    if ((i.optionGroups ?? []).length > 0) {
+                      setSheetItem(i);
+                    } else {
+                      appendRow(i);
+                    }
+                  }}
+                  className="flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-neutral-50"
+                >
+                  <span className="min-w-0 truncate text-neutral-700">
+                    {locale === 'en' ? i.name_en : locale === 'th' ? i.name_th : i.name_zh}
+                  </span>
+                  <span className="shrink-0 text-xs text-neutral-400">฿{i.price}</span>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {rows.length > 0 && (
+        <p className="mt-3 text-right text-sm font-semibold text-neutral-800">
+          {t('adminOrders.subtotal')} ฿{subtotal.toFixed(2)}
+        </p>
+      )}
+
+      <button
+        onClick={save}
+        disabled={busy}
+        className="mt-4 w-full rounded-xl bg-primary-700 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+      >
+        {busy ? t('common.saving') : t('adminOrders.createOrder')}
+      </button>
+
+      {/* 加菜时选规格（与顾客端同一个面板） */}
+      <OptionSheet
+        open={!!sheetItem}
+        item={sheetItem}
+        groups={sheetItem?.optionGroups ?? []}
+        locale={locale}
+        onClose={() => setSheetItem(null)}
+        onConfirm={(res) => {
+          if (!sheetItem) return;
+          appendRow(sheetItem, res);
+          setSheetItem(null);
+        }}
+      />
+
+      {/* 选桌 */}
+      <TablePicker
+        open={pickerOpen}
+        currentCode={tableCode}
+        onSelect={(code) => {
+          setTableCode(code);
+          setPickerOpen(false);
+        }}
+        onClose={() => setPickerOpen(false)}
       />
     </Sheet>
   );
