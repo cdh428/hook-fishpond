@@ -11,6 +11,7 @@ import {
   applyAdminOrderDiscount,
   cancelAdminOrder,
   restoreAdminOrder,
+  reopenAdminOrder,
   addOrderWeighing,
   deleteOrderWeighing,
   settleAdminOrder,
@@ -319,6 +320,20 @@ export default function AdminOrdersPage() {
     }
   };
 
+  const doReopen = async (order: any) => {
+    if (!window.confirm(t('adminOrders.reopenConfirm', { order: order.orderNumber }))) return;
+    setBusy(true);
+    try {
+      await reopenAdminOrder(order.id, 'SERVED');
+      await load();
+      flash(t('adminOrders.reopenedToast'));
+    } catch (e: any) {
+      setError(e?.message || t('common.error'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const tabs: { key: Tab; labelKey: string; count: number }[] = [
     { key: 'open', labelKey: 'adminOrders.tabOpen', count: summary.open },
     { key: 'awaiting', labelKey: 'adminOrders.tabAwaiting', count: summary.awaitingCount },
@@ -488,6 +503,7 @@ export default function AdminOrdersPage() {
               onSettle={() => setModal({ kind: 'settle', order })}
               onRebind={() => setModal({ kind: 'rebind', order })}
               onRestore={() => doRestore(order)}
+              onReopen={() => doReopen(order)}
             />
           ))}
         </div>
@@ -637,6 +653,7 @@ function OrderCard({
   onSettle,
   onRebind,
   onRestore,
+  onReopen,
 }: {
   order: any;
   busy: boolean;
@@ -651,6 +668,7 @@ function OrderCard({
   onSettle: () => void;
   onRebind: () => void;
   onRestore: () => void;
+  onReopen: () => void;
 }) {
   const t = useTranslations();
   const locale = useLocale();
@@ -870,9 +888,14 @@ function OrderCard({
         )}
 
         {order.status === 'SETTLED' && (
-          <Btn onClick={onPrintReceipt} tone="ghost" disabled={busy}>
-            ✅ {t('adminOrders.printReceipt')}
-          </Btn>
+          <>
+            <Btn onClick={onPrintReceipt} tone="ghost" disabled={busy}>
+              ✅ {t('adminOrders.printReceipt')}
+            </Btn>
+            <Btn onClick={onReopen} tone="primary" disabled={busy}>
+              ↩ {t('adminOrders.reopenOrder')}
+            </Btn>
+          </>
         )}
 
         {editable && (

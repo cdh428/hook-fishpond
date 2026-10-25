@@ -11,6 +11,7 @@ import {
   type TargetLine,
 } from "@/lib/stock";
 import { makeOptionKey, normalizeOptionKey } from "@/lib/menu-options";
+import { syncPrepaidFromRecords } from "@/lib/payment-records";
 import { resolveOrderLines, OptionError } from "@/lib/menu-options-server";
 import {
   computeOrderTotals,
@@ -436,6 +437,47 @@ export async function PATCH(
 
       const updated = await prisma.order.findUnique({ where: { id }, include: ORDER_INCLUDE });
       return NextResponse.json({ order: updated, stock });
+    }
+
+    // ---------- 7) 已结账订单退回未结账 ----------
+    //
+    // 场景：结账后顾客又继续下单/继续消费，需要把单退回未结账状态继续记。
+    // 铁律：
+    //   - 已收金额**一律不动**：PaymentRecord 流水原样保留（append-only），
+    //     只把 prepaidAmount 重新对齐到流水实收（防止结清时被顶成全额）；
+    //   - 库存**不做任何动作**：结算时已正式扣减（stockConsumedAt 幂等守卫），
+    //     退回既不回补也不重扣；
+    //   - settledAt 清空，订单重新出现在「待收款」，差额在结算页继续收。
+    if (action === "reopen") {
+      if (order.status !== "SETTLED") {
+        return NextResponse.json(
+          { error: "Order is not settled", code: "NOT_SETTLED", status: order.status },
+          { status: 400 },
+        );
+      }
+      const status = String(body.status || "SERVED");
+      const allowed = ["PENDING", "PREPARING", "READY", "SERVED"];
+      if (!allowed.includes(status)) {
+        return NextResponse.json(
+          { error: `Invalid status. Allowed: ${allowed.join(", ")}` },
+          { status: 400 },
+        );
+      }
+      const updated = await runTx(async (tx) => {
+        await tx.order.update({
+          where: { id },
+          data: {
+            status: status as any,
+            settledAt: null,
+            adjustedBy: admin.username,
+            adjustedAt: new Date(),
+          },
+        });
+        // 只把 prepaidAmount 对齐回流水实收，不动流水本身
+        await syncPrepaidFromRecords(tx, id);
+        return tx.order.findUnique({ where: { id }, include: ORDER_INCLUDE });
+      });
+      return NextResponse.json(updated);
     }
 
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });

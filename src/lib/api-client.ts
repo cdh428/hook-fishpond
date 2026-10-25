@@ -591,6 +591,17 @@ export async function restoreAdminOrder(
   });
 }
 
+/** Admin — 已结账订单退回未结账（已收金额与流水不动，只清 settledAt 并对齐 prepaidAmount） */
+export async function reopenAdminOrder(
+  orderId: string,
+  status: 'PENDING' | 'PREPARING' | 'READY' | 'SERVED' = 'SERVED',
+): Promise<any> {
+  return request<any>(`/api/admin/orders/${orderId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ action: 'reopen', status }),
+  });
+}
+
 /** Admin — 录入渔获称重（前 1kg 免费，超出 60฿/kg） */
 export async function addOrderWeighing(
   orderId: string,

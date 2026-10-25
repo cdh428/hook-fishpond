@@ -972,7 +972,10 @@
     "orderDateLabel": "下单时间",
     "orderDateBack": "补录到过去的时间",
     "createdToast": "订单已创建",
-    "needItems": "请先至少加 1 个菜品"
+    "needItems": "请先至少加 1 个菜品",
+    "reopenOrder": "退回未结账",
+    "reopenConfirm": "确认把订单 {order} 退回未结账？已收的金额和流水保持不变，之后可以继续加菜并补收差额。",
+    "reopenedToast": "已退回未结账（已收金额不变）"
   },
   "printLabels": {
     "brandSub": "泰国 · 垂钓 · 美食",
