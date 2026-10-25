@@ -1230,6 +1230,9 @@
       "addedItems": "เพิ่มรายการใน {order}",
       "thNewOrder": "รายการใหม่ {order} {table}",
       "thAddedItems": "เพิ่มรายการใน {order}"
-    }
+    },
+    "printedAt": "พิมพ์แล้ว",
+    "notPrinted": "ยังไม่ได้พิมพ์",
+    "newOrderHint": "มีออเดอร์ใหม่ {count} รายการที่ยังไม่ได้พิมพ์"
   }
 }

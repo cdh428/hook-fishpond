@@ -483,6 +483,8 @@ export interface AdminOrderSummary {
   awaitingPrepaid?: number;
   /** 有预付但未结清的单数（前端分组用） */
   partiallyPaidCount?: number;
+  /** 未结清且还没打出来的单数（printState 为空或 FAILED） */
+  unprintedCount?: number;
 }
 
 export async function fetchAdminOrders(params?: {
@@ -980,15 +982,26 @@ export function tableOrderUrl(code: string, baseUrl?: string): string {
 }
 
 /**
- * Admin — 标记某订单「自动出单已完成」。
- * 收银台自动打印新订单的客户票+后厨票+播报后调本函数，服务端把
- * `Order.autoPrintFired` 置 true，保证同一张单**只自动打一次**（加菜后不再自动重打）。
- * 幂等：已置过再调无副作用。
+ * Admin — 回写某订单的「出单状态」。
+ *
+ * 收银台自动打完客户票+后厨票+播报后立刻调本函数，服务端置 `printState=PRINTED`，
+ * 保证同一张单**只自动打一次**：刷新页面 / 换收银机 / 加菜都不会重复出纸，
+ * 页面只显示「已打印 时间」+ 新订单提示。
+ *
+ * 打不出来时传 `state:'FAILED'`：不再自动重试，改挂「未打印」角标等人工补打。
+ * 幂等：已 PRINTED 的单不会被降级为 FAILED。
  */
-export async function markOrderAutoPrinted(orderId: string): Promise<{ autoPrintFired: boolean }> {
-  return request<{ autoPrintFired: boolean }>(`/api/admin/orders/${orderId}/auto-print`, {
-    method: 'POST',
-  });
+export async function markOrderAutoPrinted(
+  orderId: string,
+  opts?: { state?: 'PRINTED' | 'FAILED'; error?: string },
+): Promise<{ id: string; printState: string | null; printedAt: string | null }> {
+  return request<{ id: string; printState: string | null; printedAt: string | null }>(
+    `/api/admin/orders/${orderId}/auto-print`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ state: opts?.state ?? 'PRINTED', error: opts?.error }),
+    },
+  );
 }
 
 /**

@@ -1230,6 +1230,9 @@
       "addedItems": "Items added to {order}",
       "thNewOrder": "New order {order} {table}",
       "thAddedItems": "Items added to {order}"
-    }
+    },
+    "printedAt": "Printed",
+    "notPrinted": "Not printed",
+    "newOrderHint": "{count} new order(s) not printed"
   }
 }

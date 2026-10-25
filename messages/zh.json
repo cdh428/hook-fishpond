@@ -1230,6 +1230,9 @@
       "addedItems": "{order} 已加菜",
       "thNewOrder": "新订单 {order} {table}",
       "thAddedItems": "{order} 已加菜"
-    }
+    },
+    "printedAt": "已打印",
+    "notPrinted": "未打印",
+    "newOrderHint": "有 {count} 张新订单未出票"
   }
 }

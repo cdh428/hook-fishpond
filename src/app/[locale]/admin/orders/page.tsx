@@ -107,6 +107,9 @@ export default function AdminOrdersPage() {
   const [busy, setBusy] = useState(false);
   const [modal, setModal] = useState<Modal>(null);
   const [toast, setToast] = useState('');
+  // 「有新单」提示条：刷新/换机器后已打印的单不再重打，但要让人一眼知道有新单进来。
+  // 只统计**还没打印**的单数，已打印的不会触发提示（避免历史单一直挂红条）。
+  const [newOrderHint, setNewOrderHint] = useState(0);
   // 呼叫服务看板：顾客按桌上的按钮 → 这里闪出来（15 秒轮询，失败静默）
   const [calls, setCalls] = useState<ServiceCallRow[]>([]);
   const [callBusy, setCallBusy] = useState<string | null>(null);
@@ -144,6 +147,9 @@ export default function AdminOrdersPage() {
         [...res.orders].sort((a, b) => activityAt(b) - activityAt(a)),
       );
       setSummary(res.summary);
+      // 「新单未出票」数量：printState 空=待打、FAILED=打失败。
+      // 刷新/换机器后已打印的单不会再重打，这条提示让人知道「还有单没出纸」。
+      setNewOrderHint(res.summary?.unprintedCount ?? 0);
     } catch (e: any) {
       if (opts?.silent) return;
       setError(e?.message || t('common.error'));
@@ -470,6 +476,20 @@ export default function AdminOrdersPage() {
         </div>
       )}
 
+      {/* 新单提示条：刷新页面 / 换机器后，已打印的单不会重打，但要让店员知道「有新单」 */}
+      {newOrderHint > 0 && (
+        <button
+          onClick={() => {
+            setNewOrderHint(0);
+            void load();
+          }}
+          className="mb-3 flex w-full items-center justify-between rounded-xl bg-accent-50 px-3 py-2 text-xs font-medium text-accent-700 hover:bg-accent-100"
+        >
+          <span>🔔 {t('printAuto.newOrderHint', { count: newOrderHint })}</span>
+          <span className="text-[11px] text-accent-600">{t('common.refresh')} ↻</span>
+        </button>
+      )}
+
       {/* 筛选 */}
       <div className="mb-3 flex items-center gap-2">
         <div className="flex flex-1 gap-1 overflow-x-auto rounded-xl bg-neutral-100 p-1">
@@ -748,6 +768,25 @@ function OrderCard({
             >
               {t(ORDER_STATUS_I18N[order.status] || 'orders.pending')}
             </span>
+            {/* 出单状态：打过了就永远显示「已打印 时间」，刷新页面也不会再出纸 */}
+            {order.printState === 'PRINTED' ? (
+              <span className="rounded-full bg-neutral-100 px-1.5 py-0.5 text-[10px] text-neutral-500">
+                🖨 {t('printAuto.printedAt')}
+                {order.printedAt
+                  ? ` ${new Date(order.printedAt).toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}`
+                  : ''}
+              </span>
+            ) : order.printState === 'FAILED' ? (
+              <span
+                className="rounded-full bg-error-100 px-1.5 py-0.5 text-[10px] font-bold text-error-600"
+                title={order.printError || ''}
+              >
+                ⚠️ {t('printAuto.notPrinted')}
+              </span>
+            ) : null}
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-neutral-500">
             <button

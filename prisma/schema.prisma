@@ -475,7 +475,14 @@ model Order {
   // 自动出单标记：收银台收到「新订单」时自动打一次客户票+后厨票+播报后，置 true。
   // 之后同一单（含加菜/改菜）**不再自动打**，要靠手动按打印键。
   // 用服务端持久化而非浏览器 sessionStorage —— 标签页关了/换机器也不会重复出纸。
+  // ⚠️ 已降级为历史兼容字段，新逻辑看 printState（见下）。
   autoPrintFired Boolean    @default(false)
+  // ----- 出单状态（2026-10-25）-----
+  // null=从未尝试（满足值守条件会自动出票） / PRINTED=已出票 / FAILED=出票失败（挂「未打印」等人工补打）
+  // 一个布尔表达不了「没打出来」和「打过了但刷新后要提示」两种状态，故拆成三元 + 时间点 + 失败原因。
+  printState    PrintState?
+  printedAt     DateTime?
+  printError    String?
   payment       Payment?
   // 分次收款流水（定金 / 补款 / 结清 / 退款）。只追加不覆盖，可标 voidedAt 作废。
   paymentRecords PaymentRecord[]
@@ -549,6 +556,12 @@ model Weighing {
   createdAt  DateTime @default(now())
 
   @@index([orderId])
+}
+
+/// 出单状态：null=从未尝试 / PRINTED=已出票 / FAILED=出票失败（等人工补打）
+enum PrintState {
+  PRINTED
+  FAILED
 }
 
 enum OrderStatus {

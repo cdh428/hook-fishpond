@@ -96,10 +96,16 @@ export function useAutoPrinter({
       for (const order of toPrint) {
         // 先占位再打：打印途中若又来一轮轮询，这张单不会被重复挑中
         doneRef.current.add(order.id);
-        try {
-          const receipt = toReceiptOrder(order, locale) as ReceiptOrder;
-          const tableCode = order.table?.code || '';
+        const receipt = toReceiptOrder(order, locale) as ReceiptOrder;
+        const tableCode = order.table?.code || '';
 
+        // 两联必须**都成功**才算出票成功。只打出一联就标已打印的话，
+        // 后厨拿不到单、厨房漏菜，比完全没打更难查。
+        let billOk = false;
+        let kitchenOk = false;
+        let failReason = '';
+
+        try {
           // ① 客户票：带价格 + 桌号续点单 QR（外带单无桌号则不打桌号 QR）
           let billQrTable: string | null = null;
           if (tableCode) {
@@ -117,37 +123,89 @@ export function useAutoPrinter({
               ? labels.scanMoreFood ?? 'Scan to add more items'
               : null,
           });
-          await submitPrint(billHtml, 'bill');
+          const billOut = await submitPrint(billHtml, 'bill');
+          billOk = sentOk(billOut);
+          if (!billOk) failReason = failText(billOut);
+        } catch (e: any) {
+          failReason = e?.message || '客户票打印异常';
+        }
 
-          // ② 后厨票：不带 QR（后厨只需看菜品）
-          const kitchenHtml = buildKitchenTicketHtml(
-            receipt,
-            labels,
-            labels.kitchenCopy1 || '【ครัว】',
-          );
-          await submitPrint(kitchenHtml, 'kitchen');
+        if (billOk) {
+          try {
+            // ② 后厨票：不带 QR（后厨只需看菜品）
+            const kitchenHtml = buildKitchenTicketHtml(
+              receipt,
+              labels,
+              labels.kitchenCopy1 || '【ครัว】',
+            );
+            const kOut = await submitPrint(kitchenHtml, 'kitchen');
+            kitchenOk = sentOk(kOut);
+            if (!kitchenOk) failReason = failText(kOut);
+          } catch (e: any) {
+            failReason = e?.message || '后厨票打印异常';
+          }
+        }
 
-          // ③ 泰+中双语语音播报（收银机喇叭）
+        // ③ 语音播报：只在新单**成功出纸**后播，避免「响了但没票」让店员空手找单
+        if (billOk && kitchenOk) {
           announceOrder({
             orderNumber: receipt.orderNumber,
             tableCode: tableCode || undefined,
             kind: 'new',
           });
-
-          // ④ 立刻置服务端标记：同一张单从此不再自动打（加菜后也靠手动）
-          try {
-            await markOrderAutoPrinted(order.id);
-          } catch {
-            /* 置位失败也不阻断：下轮轮询会再看到 false 再试一次（最终一致） */
-          }
-
-          onEvent?.(`已出票 ${receipt.orderNumber}`);
-        } catch {
-          /* 打印/播报任一失败静默吞掉，绝不阻塞后台订单页 */
         }
+
+        // ④ 回写服务端状态
+        //    PRINTED → 以后刷新/换机器/加菜都不再自动出纸，只显示「已打印」
+        //    FAILED  → 不再自动重试（避免每 12 秒把旧单重打一遍），改挂「未打印」等人工补打
+        try {
+          await markOrderAutoPrinted(order.id, {
+            state: billOk && kitchenOk ? 'PRINTED' : 'FAILED',
+            error: billOk && kitchenOk ? undefined : failReason || '打印桥不可用',
+          });
+        } catch {
+          /* 回写失败：本机 doneRef 已挡住重复，服务端下次仍会视为未处理，可接受 */
+        }
+
+        onEvent?.(
+          billOk && kitchenOk
+            ? t_autoPrinted(receipt.orderNumber)
+            : t_printFailed(receipt.orderNumber),
+        );
       }
     })().finally(() => {
       busyRef.current = false;
     });
   }, [orders, locale, labels, buildTableUrl, enabled, onEvent]);
+}
+
+/** 出票成功的提示语（保持与旧行为一致，避免引出新的翻译 key） */
+function t_autoPrinted(orderNumber: string): string {
+  return `已出票 ${orderNumber}`;
+}
+
+/** 出票失败的提示语 —— 必须显眼，店员得知道去手动补打 */
+function t_printFailed(orderNumber: string): string {
+  return `⚠️ ${orderNumber} 未打印成功，请手动补打`;
+}
+
+/**
+ * 「真的打到纸上了」的判定。
+ * submitPrint 的语义是：走桥成功 = 已投递给打印机（via==='bridge'）；
+ * via==='browser' 代表**回退到浏览器弹打印对话框**——那是「等人点确认」，
+ * 自动出单场景下没人会去点，等于没打。所以浏览器回退一律算失败。
+ * （例外：用户主动把打印模式设成 browser，那是另一套手动流程，不走本自动器。）
+ */
+function sentOk(o: { via: 'bridge' | 'browser' } | null | undefined): boolean {
+  return o?.via === 'bridge';
+}
+
+/** 把失败原因翻成一句店员看得懂的话 */
+function failText(o: { via: 'bridge' | 'browser'; fallbackReason?: string; error?: string } | null | undefined): string {
+  if (!o) return '打印桥无响应';
+  if (o.fallbackReason === 'bridge-offline') return '打印桥未启动（127.0.0.1:17777）';
+  if (o.fallbackReason === 'no-target') return '找不到 POS80 打印机';
+  if (o.fallbackReason === 'bt-offline') return '蓝牙打印机离线';
+  if (o.fallbackReason === 'bridge-error') return `打印桥报错：${o.error || ''}`.slice(0, 120);
+  return o.error || '打印失败';
 }

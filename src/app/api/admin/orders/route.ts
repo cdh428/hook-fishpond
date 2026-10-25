@@ -125,6 +125,11 @@ export async function GET(request: NextRequest) {
       unsettledPrepaid: openOrders.filter((o) => o.settlementMode === "PREPAID").length,
       // 明细：有预付但未结清的单（前端分组「已付未结清」用）
       partiallyPaidCount: openOrders.filter((o) => collectedOf(o) > 0).length,
+      // 未结清且「还没打出来」的单数（printState 为空=待打，FAILED=打失败）。
+      // 收银台据此挂红点，提醒手动补打 —— 自动出单失败时不能靠肉眼看列表发现。
+      unprintedCount: openOrders.filter(
+        (o) => o.printState !== "PRINTED",
+      ).length,
     };
 
     return NextResponse.json({ orders, summary });
@@ -144,7 +149,7 @@ export async function GET(request: NextRequest) {
  *  - 无需顾客身份（userId 可空），customerName 默认「补录」；
  *  - 可选 orderDate：把订单 createdAt 落到过去的某个时刻（不能是未来日期），
  *    订单号序号按所选曼谷日的已有单数重新计算 → 历史日报表自动正确；
- *  - autoPrintFired 保持默认 false → 补录单会触发自动出单（POS80 打票 + 播报）。
+ *  - printState 保持为空（从未尝试）→ 补录单若落在本机值守时刻之后，会触发自动出单；
  */
 export async function POST(request: NextRequest) {
   try {
