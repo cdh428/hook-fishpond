@@ -958,6 +958,9 @@ export default function AdminReportsPage() {
                       <span className="whitespace-nowrap text-[9px] text-neutral-400">
                         {p.key.length > 7 ? p.key.slice(5) : p.key}
                       </span>
+                      <span className="whitespace-nowrap text-[9px] font-medium text-neutral-600">
+                        {money(p.revenue)}
+                      </span>
                     </div>
                   ))}
                 </div>
