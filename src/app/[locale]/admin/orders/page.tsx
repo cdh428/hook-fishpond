@@ -42,6 +42,7 @@ import {
 } from '@/lib/print-receipt';
 import { formatLineOptions, makeOptionKey } from '@/lib/menu-options';
 import { submitPrint, describeOutcome } from '@/lib/print-agent';
+import { useAutoPrinter } from '@/lib/auto-printer';
 import TablePicker from '@/components/TablePicker';
 import OptionSheet from '@/components/OptionSheet';
 
@@ -234,6 +235,34 @@ export default function AdminOrdersPage() {
     }),
     [t],
   );
+
+  // ---------- 自动出单（收银台侧）----------
+  // 线上新增/追加菜品 → 本台收银机自动打客户票(带桌号QR)+后厨票(无QR)+泰中双语播报
+  const [autoPrint, setAutoPrint] = useState(() => {
+    try {
+      return localStorage.getItem('hf.autoPrint') !== 'off';
+    } catch {
+      return true;
+    }
+  });
+  const toggleAutoPrint = () => {
+    setAutoPrint((v) => {
+      const nv = !v;
+      try {
+        localStorage.setItem('hf.autoPrint', nv ? 'on' : 'off');
+      } catch {
+        /* ignore */
+      }
+      return nv;
+    });
+  };
+  useAutoPrinter({
+    orders: filtered,
+    locale,
+    labels: printLabels,
+    enabled: autoPrint,
+    onEvent: (msg) => flash(msg),
+  });
 
   // ---------- 动作 ----------
   const doPrintKitchen = async (order: any) => {
@@ -444,6 +473,15 @@ export default function AdminOrdersPage() {
             </button>
           ))}
         </div>
+        {/* 自动出单开关（收银台侧：新单/加菜自动打客户票+后厨票+播报） */}
+        <button
+          onClick={toggleAutoPrint}
+          className={`shrink-0 rounded-xl px-3 py-1.5 text-xs font-semibold transition ${
+            autoPrint ? 'bg-primary-700 text-white' : 'bg-neutral-200 text-neutral-500'
+          }`}
+        >
+          {autoPrint ? t('printAuto.autoPrintOn') : t('printAuto.autoPrintOff')}
+        </button>
         {tab === 'settled' || tab === 'cancelled' ? (
           <button
             onClick={() => setTodayOnly((v) => !v)}
