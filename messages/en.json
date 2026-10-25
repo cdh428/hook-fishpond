@@ -761,6 +761,7 @@
     "noPrev": "no previous data",
     "orderRevenue": "Food & drinks",
     "bookingRevenue": "Bookings",
+    "bookingExpected": "Bookings (unpaid, not in revenue)",
     "orderCount": "Orders",
     "avgTicket": "Avg ticket",
     "marginRate": "Margin",

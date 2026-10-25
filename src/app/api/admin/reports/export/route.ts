@@ -77,7 +77,7 @@ export async function GET(request: NextRequest) {
 
     if (selected.includes("summary")) {
       const rows: (string | number)[][] = [
-        ["日期", "点餐营收", "预约营收", "总营收", "订单数", "毛利", "毛利率"],
+        ["日期", "点餐营收(净实收)", "预约(未收款,不计入)", "总营收", "订单数", "毛利", "毛利率"],
       ];
       for (const t of report.trend) {
         const rev = t.revenue;

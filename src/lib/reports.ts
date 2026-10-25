@@ -316,10 +316,12 @@ async function fetchPeriodRevenue(
   const refunds = collectedAgg?.refunds ?? 0;            // 退款（负流水绝对值）
   const orderCount = collectedAgg?.orders ?? 0;           // 实收覆盖的订单数（按流水归属）
   const bookingCount = bookingAgg?.bookings ?? 0;
-  const bookingRevenue = bookingAgg?.revenue ?? 0;        // 预约无流水，保留订单口径
-  // 点餐营收 = 净实收（含退款为负），与趋势图、支付方式拆分同口径
+  // 预约只是「预计消费」（预约本身没有收款流水，客人到店后通过订单实收），
+  // 不计入营收，只作运营指标展示 —— 否则到店开单会重复计算、爽约会虚增。
+  const bookingRevenue = bookingAgg?.revenue ?? 0;
+  // 总营收 = 净实收现金流（含退款为负），与趋势图、支付方式拆分同口径
   const orderRevenue = collected - refunds;
-  const totalRevenue = orderRevenue + bookingRevenue;
+  const totalRevenue = orderRevenue;
 
   // 毛利 = 实收营收 − 成本合计（未设成本菜按售价全计，成本=0）
   const cogs = salesAgg?.cost ?? 0;
@@ -453,7 +455,8 @@ async function fetchTrend(
     // 实收营收 − 成本合计（未设成本菜=0，含全部菜品）
     b.profit += (c?.revenue ?? 0) - (costMap.get(dayKey) ?? 0);
   }
-  for (const b of buckets.values()) b.revenue = b.orderRevenue + b.bookingRevenue;
+  // 总营收 = 净实收现金流；预约金额仅随行展示（bookingRevenue），不并入 revenue
+  for (const b of buckets.values()) b.revenue = b.orderRevenue;
 
   return [...buckets.values()].sort((a, b) => (a.key < b.key ? -1 : 1));
 }

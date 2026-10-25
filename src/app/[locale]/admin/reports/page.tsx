@@ -170,7 +170,7 @@ function TransactionLedger(props: LedgerProps) {
               <p className="mt-1 text-2xl font-bold text-primary-700">{successCount}/{transactionCount}</p>
             </div>
             <div className="rounded-xl bg-accent-50 p-4">
-              <p className="text-xs text-accent-600 opacity-70">{t('admin.bookings')}</p>
+              <p className="text-xs text-accent-600 opacity-70">{t('adminReports.bookingExpected')}</p>
               <p className="mt-1 text-xl font-bold text-accent-700">฿{bookingRevenue.toLocaleString()}</p>
             </div>
             <div className="rounded-xl bg-neutral-100 p-4">
@@ -752,7 +752,7 @@ export default function AdminReportsPage() {
                 </div>
                 <div className="rounded-xl bg-white p-3 shadow-sm">
                   <div className="text-xs text-neutral-500">
-                    🎣 {t('adminReports.bookingRevenue')}
+                    🎣 {t('adminReports.bookingExpected')}
                   </div>
                   <div className="mt-0.5 text-lg font-bold text-neutral-900">
                     {money(o.bookingRevenue)}

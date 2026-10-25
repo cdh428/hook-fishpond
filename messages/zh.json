@@ -761,6 +761,7 @@
     "noPrev": "无上期数据",
     "orderRevenue": "点餐 / 饮品",
     "bookingRevenue": "预约",
+    "bookingExpected": "预约（未收款，不计入营收）",
     "orderCount": "订单数",
     "avgTicket": "客单价",
     "marginRate": "毛利率",
