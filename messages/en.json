@@ -974,6 +974,7 @@
     "orderDateBack": "Backdate to a past time",
     "createdToast": "Order created",
     "needItems": "Add at least 1 item first",
+    "createFailed": "Failed to create order (reason below)",
     "paidNow": "Collected on the spot",
     "reopenOrder": "Reopen (unsettle)",
     "reopenConfirm": "Reopen order {order}? Collected amounts and payment records stay unchanged; you can keep adding items and collect the difference later.",

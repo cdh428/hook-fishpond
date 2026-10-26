@@ -378,6 +378,12 @@ export async function PATCH(
           data: { voidedAt: new Date() },
         });
         await syncPrepaidFromRecords(tx, id);
+        // 旧 Payment 凭证同步置 FAILED：cancel 后该单不再收款，
+        // 凭证留 PENDING 会让顾客端继续轮询旧码，admin_confirm 可对 CANCELLED 单扣库存。
+        await tx.payment.updateMany({
+          where: { orderId: id, status: { notIn: ["FAILED", "REFUNDED"] } },
+          data: { status: "FAILED" },
+        });
         const row = await tx.order.update({
           where: { id },
           data: { status: "CANCELLED" },
@@ -419,6 +425,36 @@ export async function PATCH(
       try {
         stock = await runTx(async (tx) => {
           const res = await restoreOrderStock(tx, id, { adminName: admin.username });
+          // 取消时作废旧 Payment 凭证（P1-3 修），恢复时把它们改回 PENDING 状态，
+          // 让顾客继续扫「原差额码」补差额。实收口径仍以 PaymentRecord 流水为准。
+          await tx.payment.updateMany({
+            where: { orderId: id, status: "FAILED" },
+            data: { status: "PENDING", paidAt: null },
+          });
+          // 取消时作废了流水 → 恢复时把该单「本单 cancel 那一次作废」的流水重新生效：
+          // 只 unvoid 那些 voidedAt 是「最近」的（同时间戳批次的作废），避免误复活历史退款。
+          // 安全口径：用 voidedAt 非空 且 本单当前 prepaid 仍为 0 的判断，保守 unvoid 全部 cancel 批次。
+          const activeSum = await tx.paymentRecord.aggregate({
+            where: { orderId: id, voidedAt: null },
+            _sum: { amount: true },
+          });
+          const activeTotal = activeSum._sum.amount ?? 0;
+          if (activeTotal === 0) {
+            // 该单当前没有有效流水（cancel 全作废了）→ 把最近一次作废批次 unvoid
+            const latestVoid = await tx.paymentRecord.findMany({
+              where: { orderId: id, voidedAt: { not: null } },
+              select: { voidedAt: true },
+            });
+            const distinctTimes = [...new Set(latestVoid.map((r) => r.voidedAt?.getTime()))] as number[];
+            distinctTimes.sort((a, b) => b - a);
+            if (distinctTimes.length > 0) {
+              const latest = new Date(distinctTimes[0]);
+              await tx.paymentRecord.updateMany({
+                where: { orderId: id, voidedAt: latest },
+                data: { voidedAt: null },
+              });
+            }
+          }
           await tx.order.update({
             where: { id },
             data: {
@@ -429,6 +465,7 @@ export async function PATCH(
               adjustedAt: new Date(),
             },
           });
+          await syncPrepaidFromRecords(tx, id);
           return res;
         });
       } catch (e: any) {
@@ -481,6 +518,12 @@ export async function PATCH(
             adjustedBy: admin.username,
             adjustedAt: new Date(),
           },
+        });
+        // 旧结清凭证退回 PENDING：settle 的 create 分支见 SUCCESSFUL 会视为「已付满」，
+        // 不出码/不刷新金额 —— reopen 后顾客再加菜抬高的差额就收不到（生产已复现）。
+        await tx.payment.updateMany({
+          where: { orderId: id, status: { in: ["SUCCESSFUL", "PROCESSING"] } },
+          data: { status: "PENDING", paidAt: null },
         });
         // 只把 prepaidAmount 对齐回流水实收，不动流水本身
         await syncPrepaidFromRecords(tx, id);

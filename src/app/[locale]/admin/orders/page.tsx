@@ -1796,6 +1796,8 @@ function CreateOrderModal({
   const [tableCode, setTableCode] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [backdate, setBackdate] = useState(false);
+  // 弹窗内持久错误（不会像顶部 toast 那样闪没）
+  const [saveErr, setSaveErr] = useState('');
   // datetime-local；max = 现在（本地时区），未来直接被前端挡住
   const [orderLocal, setOrderLocal] = useState<string>(() => {
     const d = new Date(Date.now() - new Date().getTimezoneOffset() * 60_000);
@@ -1861,8 +1863,11 @@ function CreateOrderModal({
         optionIds: r.optionIds,
         ...(r.note ? { note: r.note } : {}),
       }));
+    setSaveErr('');
     if (items.length === 0) {
-      onError(t('adminOrders.needItems'));
+      const m = t('adminOrders.needItems');
+      setSaveErr(m);
+      onError(m);
       return;
     }
     if (orderType === 'DINE_IN' && !tableCode) {
@@ -1886,7 +1891,10 @@ function CreateOrderModal({
       });
       onCreated();
     } catch (e: any) {
-      onError(e?.message || t('common.error'));
+      // 把「为什么建不了」直接写在弹窗里（库存不足 / 菜品停用 / 未来日期 / 桌号无效 …）
+      const msg = e?.message || t('common.error');
+      setSaveErr(msg);
+      onError(msg);
     } finally {
       setBusy(false);
     }
@@ -2129,6 +2137,15 @@ function CreateOrderModal({
         <p className="mt-3 text-right text-sm font-semibold text-neutral-800">
           {t('adminOrders.subtotal')} ฿{subtotal.toFixed(2)}
         </p>
+      )}
+
+      {saveErr && (
+        <div className="mt-3 rounded-xl bg-error-50 px-3 py-2 text-xs leading-relaxed text-error-600">
+          <p className="font-semibold">✕ {t('adminOrders.createFailed')}</p>
+          <p className="mt-1 whitespace-pre-wrap text-error-700">
+            {saveErr.replace(/^FUTURE_DATE_REJECTED[: ]*/, t('adminOrders.futureDateDenied'))}
+          </p>
+        </div>
       )}
 
       <button

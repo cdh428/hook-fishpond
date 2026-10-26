@@ -75,6 +75,7 @@ const TX_METHOD_I18N: Record<string, string> = {
   CASH: 'payment.cash',
 };
 const TX_STATUS_COLOR: Record<string, string> = {
+  RECORDED: 'bg-success-100 text-success-600',
   SUCCESSFUL: 'bg-success-100 text-success-600',
   PENDING: 'bg-warning-100 text-warning-600',
   REFUNDED: 'bg-error-100 text-error-600',
@@ -116,19 +117,24 @@ function TransactionLedger(props: LedgerProps) {
   const transactionCount = txData?.transactionCount || 0;
 
   // 按日期过滤（前端二次过滤，与 KPI 卡片一致口径）
+  // 落日用曼谷 +7h（旧版直接切 ISO 字符串是 UTC 日界，凌晨 7 小时收款会划错天）
+  const bkkDay = (iso: string) => {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    return new Date(d.getTime() + 7 * 3600 * 1000).toISOString().slice(0, 10);
+  };
   const filtered = transactions.filter((tx: any) => {
-    const txDate = (tx.paidAt || '').slice(0, 10);
+    const txDate = bkkDay(tx.paidAt || '');
     if (txStart && txDate < txStart) return false;
     if (txEnd && txDate > txEnd) return false;
     return true;
   });
-  const successCount = filtered.filter((tx: any) => tx.status === 'SUCCESSFUL').length;
+  // 服务端只回有效流水（作废已排除），状态统一 RECORDED；全部计入
+  const successCount = filtered.length;
   const methodRevenue: Record<string, number> = {};
-  filtered
-    .filter((tx: any) => tx.status === 'SUCCESSFUL')
-    .forEach((tx: any) => {
-      methodRevenue[tx.method] = (methodRevenue[tx.method] || 0) + tx.amount;
-    });
+  filtered.forEach((tx: any) => {
+    methodRevenue[tx.method] = (methodRevenue[tx.method] || 0) + tx.amount;
+  });
 
   return (
     <>
@@ -238,7 +244,7 @@ function TransactionLedger(props: LedgerProps) {
                     <div className="ml-2 shrink-0 text-right">
                       <p className="text-sm font-bold text-neutral-900">฿{tx.amount?.toLocaleString()}</p>
                       <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${TX_STATUS_COLOR[tx.status] || 'bg-neutral-100 text-neutral-600'}`}>
-                        {tx.status === 'SUCCESSFUL' ? t('orders.successful') : tx.status === 'PENDING' ? t('orders.pending') : t('orders.refunded')}
+                        {tx.status === 'RECORDED' || tx.status === 'SUCCESSFUL' ? t('orders.successful') : tx.status === 'PENDING' ? t('orders.pending') : t('orders.refunded')}
                       </span>
                     </div>
                   </div>

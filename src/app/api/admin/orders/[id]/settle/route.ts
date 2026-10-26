@@ -116,7 +116,13 @@ export async function POST(
           };
         }
         // 首笔记 DEPOSIT，之后算 PARTIAL；结清补差在 confirm / mark-paid 里写 FINAL
-        const kind = curPrepaid <= 0 ? "DEPOSIT" : "PARTIAL";
+        // 特殊场景：实收曾经为负（退过 120 又收 100 → curPrepaid=-20），此时不算「首笔」
+        // 而算 PARTIAL，避免报表按 kind 分布误把补款归入定金。
+        const hasEverPositive = await tx.paymentRecord.findFirst({
+          where: { orderId: id, amount: { gt: 0 }, voidedAt: null },
+          select: { id: true },
+        });
+        const kind = hasEverPositive ? "PARTIAL" : "DEPOSIT";
         await addPaymentRecord(tx, {
           orderId: id,
           amount,
