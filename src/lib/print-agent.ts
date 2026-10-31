@@ -21,7 +21,7 @@
  *   · 打印桥地址 → 存本机 localStorage（它本来就是「这台设备怎么找到桥」，不该共用）
  */
 
-import { printHtml } from '@/lib/print-receipt';
+// 打印一律走桥（2026-10-31 起），不再需要浏览器打印回退，因此不再 import printHtml。
 
 export type PrintPurpose = 'kitchen' | 'bill' | 'receipt';
 export type PrintMode = 'bridge' | 'browser';
@@ -139,13 +139,18 @@ export function setBridgeUrl(url: string): void {
   healthCache = null;
 }
 
+/**
+ * 打印方式已**锁定为桥**（2026-10-31 用户明确：固化后网站所有打印一律走桥接）。
+ * 不再允许切回浏览器对话框——「打印方式」设置项随之失效，这里永远返回 'bridge'。
+ * 保留函数签名只是为了不破坏既有调用方（设置页仍读它做展示）。
+ */
 export function getPrintMode(): PrintMode {
-  const v = safeLocalStorage()?.getItem('hf.print.mode');
-  return v === 'browser' ? 'browser' : 'bridge';
+  return 'bridge';
 }
 
-export function setPrintMode(mode: PrintMode): void {
-  safeLocalStorage()?.setItem('hf.print.mode', mode);
+/** 锁定为桥：忽略任何传入值，写死 'bridge'。调用方（设置页）传 'browser' 也无效。 */
+export function setPrintMode(_mode: PrintMode): void {
+  safeLocalStorage()?.setItem('hf.print.mode', 'bridge');
 }
 
 /** 目标标识：串口用端口号，Windows 队列用打印机名 */
@@ -375,9 +380,13 @@ export async function printViaBridge(
 }
 
 /**
- * 统一打印入口：能走桥就走桥（静默出纸），否则回退浏览器对话框。
+ * 统一打印入口：**一律走打印桥**（2026-10-31 用户明确：固化后网站所有打印命令都走桥接）。
  *
- * 调用方只需关心「要打什么」，不用管走哪条路。
+ * 不再回退浏览器打印对话框 —— 桥不可用/失败时直接返回失败结果，
+ * 由调用方提示「打印服务不可用」，绝不弹系统对话框让店员手选。
+ * （自动出单场景早已用 noFallback 走这条路，现在手动打印也统一。）
+ *
+ * 调用方只需关心「要打什么」，不用管走哪条路；但要看 `outcome.via` / `outcome.error`。
  */
 export async function submitPrint(
   html: string,
@@ -385,28 +394,28 @@ export async function submitPrint(
   opts?: { copies?: number; feedLines?: number; cutMode?: string; cut?: boolean; noFallback?: boolean },
 ): Promise<PrintOutcome> {
   const started = Date.now();
-  const noFallback = opts?.noFallback ?? false;
-
-  if (getPrintMode() === 'browser') {
-    if (noFallback) return { via: 'browser', fallbackReason: 'mode-browser', ms: Date.now() - started };
-    await printHtml(html);
-    return { via: 'browser', fallbackReason: 'mode-browser', ms: Date.now() - started };
-  }
+  // noFallback 参数保留以兼容调用方；现在一律走桥，浏览器回退已移除，无区分意义。
 
   const health = await probeBridge();
   if (!health) {
-    if (noFallback) return { via: 'browser', fallbackReason: 'bridge-offline', ms: Date.now() - started };
-    await printHtml(html);
-    return { via: 'browser', fallbackReason: 'bridge-offline', ms: Date.now() - started };
+    return {
+      via: 'bridge',
+      fallbackReason: 'bridge-offline',
+      error: '打印桥未启动（127.0.0.1:17777）',
+      ms: Date.now() - started,
+    };
   }
 
   // 偏好从服务端拿（手机与收银机共用）；拿不到就用本地缓存
   const prefs = await loadPreferences();
   const target = pickAutoTarget(health, purpose, prefs);
   if (!target) {
-    if (noFallback) return { via: 'browser', fallbackReason: 'no-target', ms: Date.now() - started };
-    await printHtml(html);
-    return { via: 'browser', fallbackReason: 'no-target', ms: Date.now() - started };
+    return {
+      via: 'bridge',
+      fallbackReason: 'no-target',
+      error: '未指定可用的打印目标',
+      ms: Date.now() - started,
+    };
   }
 
   const cutOpts = {
@@ -449,17 +458,12 @@ export async function submitPrint(
     }
   }
 
-  // 桥在但打印失败：不能静默吞掉。
-  // 自动出单（noFallback）时不再回退浏览器对话框——没人会去点，等于没打，直接标失败；
-  // 手动打印仍回退对话框让店员有机会手选，同时把错误带回去。
-  if (!noFallback) {
-    await printHtml(html);
-  }
+  // 桥在但打印失败：不静默吞掉，返回失败结果，调用方提示「打印失败」。
   return {
-    via: 'browser',
+    via: 'bridge',
     target,
     fallbackReason: 'bridge-error',
-    error: r.error,
+    error: r.error || '打印桥返回失败',
     ms: Date.now() - started,
   };
 }
@@ -468,6 +472,22 @@ export async function submitPrint(
 type TranslateFn = (key: string, values?: Record<string, string | number | Date>) => string;
 
 export function describeOutcome(o: PrintOutcome, t: TranslateFn): string {
+  // 一律走桥后，失败时 via 仍可能为 'bridge'（带 fallbackReason + error）。
+  // 必须优先判失败，不能只凭 via==='bridge' 就当成功。
+  if (o.fallbackReason && o.fallbackReason !== 'bt-offline') {
+    switch (o.fallbackReason) {
+      case 'mode-browser':
+        return t('printAgent.browserMode');
+      case 'bridge-offline':
+        return t('printAgent.bridgeOffline');
+      case 'no-target':
+        return t('printAgent.noTarget');
+      case 'bridge-error':
+        return t('printAgent.bridgeError', { error: o.error || '' });
+      default:
+        return t('printAgent.bridgeError', { error: o.error || '' });
+    }
+  }
   if (o.via === 'bridge') {
     // 蓝牙失败改投了 USB：明确说出来，否则店员会以为蓝牙机在正常工作
     if (o.fallbackReason === 'bt-offline') {
@@ -475,16 +495,5 @@ export function describeOutcome(o: PrintOutcome, t: TranslateFn): string {
     }
     return t('printAgent.sentTo', { target: o.targetLabel || o.target || '' });
   }
-  switch (o.fallbackReason) {
-    case 'mode-browser':
-      return t('printAgent.browserMode');
-    case 'bridge-offline':
-      return t('printAgent.bridgeOffline');
-    case 'no-target':
-      return t('printAgent.noTarget');
-    case 'bridge-error':
-      return t('printAgent.bridgeError', { error: o.error || '' });
-    default:
-      return t('printAgent.browserMode');
-  }
+  return t('printAgent.browserMode');
 }
