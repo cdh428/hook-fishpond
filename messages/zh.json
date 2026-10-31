@@ -1223,15 +1223,6 @@
     "hoursNote": "一般 09:00–18:00 内回复"
   },
   "printAuto": {
-    "autoPrintOn": "自动出单已开启",
-    "autoPrintOff": "自动出单已关闭",
-    "autoPrintToast": "已自动打印客户单+后厨单",
-    "voice": {
-      "newOrder": "新订单 {order} {table}",
-      "addedItems": "{order} 已加菜",
-      "thNewOrder": "新订单 {order} {table}",
-      "thAddedItems": "{order} 已加菜"
-    },
     "printedAt": "已打印",
     "notPrinted": "未打印",
     "newOrderHint": "有 {count} 张新订单未出票"

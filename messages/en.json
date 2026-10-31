@@ -1223,15 +1223,6 @@
     "hoursNote": "We usually reply 09:00–18:00"
   },
   "printAuto": {
-    "autoPrintOn": "Auto-print ON",
-    "autoPrintOff": "Auto-print OFF",
-    "autoPrintToast": "Auto-printed customer + kitchen ticket",
-    "voice": {
-      "newOrder": "New order {order} {table}",
-      "addedItems": "Items added to {order}",
-      "thNewOrder": "New order {order} {table}",
-      "thAddedItems": "Items added to {order}"
-    },
     "printedAt": "Printed",
     "notPrinted": "Not printed",
     "newOrderHint": "{count} new order(s) not printed"

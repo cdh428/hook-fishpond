@@ -382,17 +382,20 @@ export async function printViaBridge(
 export async function submitPrint(
   html: string,
   purpose: PrintPurpose,
-  opts?: { copies?: number; feedLines?: number; cutMode?: string; cut?: boolean },
+  opts?: { copies?: number; feedLines?: number; cutMode?: string; cut?: boolean; noFallback?: boolean },
 ): Promise<PrintOutcome> {
   const started = Date.now();
+  const noFallback = opts?.noFallback ?? false;
 
   if (getPrintMode() === 'browser') {
+    if (noFallback) return { via: 'browser', fallbackReason: 'mode-browser', ms: Date.now() - started };
     await printHtml(html);
     return { via: 'browser', fallbackReason: 'mode-browser', ms: Date.now() - started };
   }
 
   const health = await probeBridge();
   if (!health) {
+    if (noFallback) return { via: 'browser', fallbackReason: 'bridge-offline', ms: Date.now() - started };
     await printHtml(html);
     return { via: 'browser', fallbackReason: 'bridge-offline', ms: Date.now() - started };
   }
@@ -401,6 +404,7 @@ export async function submitPrint(
   const prefs = await loadPreferences();
   const target = pickAutoTarget(health, purpose, prefs);
   if (!target) {
+    if (noFallback) return { via: 'browser', fallbackReason: 'no-target', ms: Date.now() - started };
     await printHtml(html);
     return { via: 'browser', fallbackReason: 'no-target', ms: Date.now() - started };
   }
@@ -445,8 +449,12 @@ export async function submitPrint(
     }
   }
 
-  // 桥在但打印失败：不能静默吞掉，回退对话框让店员有机会手选，同时把错误带回去
-  await printHtml(html);
+  // 桥在但打印失败：不能静默吞掉。
+  // 自动出单（noFallback）时不再回退浏览器对话框——没人会去点，等于没打，直接标失败；
+  // 手动打印仍回退对话框让店员有机会手选，同时把错误带回去。
+  if (!noFallback) {
+    await printHtml(html);
+  }
   return {
     via: 'browser',
     target,

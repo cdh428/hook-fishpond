@@ -260,30 +260,13 @@ export default function AdminOrdersPage() {
   );
 
   // ---------- 自动出单（收银台侧）----------
-  // 线上新增/追加菜品 → 本台收银机自动打客户票(带桌号QR)+后厨票(无QR)+泰中双语播报
-  const [autoPrint, setAutoPrint] = useState(() => {
-    try {
-      return localStorage.getItem('hf.autoPrint') !== 'off';
-    } catch {
-      return true;
-    }
-  });
-  const toggleAutoPrint = () => {
-    setAutoPrint((v) => {
-      const nv = !v;
-      try {
-        localStorage.setItem('hf.autoPrint', nv ? 'on' : 'off');
-      } catch {
-        /* ignore */
-      }
-      return nv;
-    });
-  };
+  // 线上新增/追加菜品 → 本台收银机自动打客户票(带桌号QR)+后厨票(无QR)+泰中双语播报。
+  // 自动出单**始终开启、不可切换**：新单/加菜由 POS80 打一次 + 语音播报一次，
+  // 打完即置位（服务端 printState=PRINTED），之后要再打只能手动按「打印」键。
   useAutoPrinter({
     orders: filtered,
     locale,
     labels: printLabels,
-    enabled: autoPrint,
     onEvent: (msg) => flash(msg),
   });
 
@@ -510,15 +493,6 @@ export default function AdminOrdersPage() {
             </button>
           ))}
         </div>
-        {/* 自动出单开关（收银台侧：新单/加菜自动打客户票+后厨票+播报） */}
-        <button
-          onClick={toggleAutoPrint}
-          className={`shrink-0 rounded-xl px-3 py-1.5 text-xs font-semibold transition ${
-            autoPrint ? 'bg-primary-700 text-white' : 'bg-neutral-200 text-neutral-500'
-          }`}
-        >
-          {autoPrint ? t('printAuto.autoPrintOn') : t('printAuto.autoPrintOff')}
-        </button>
         {tab === 'settled' || tab === 'cancelled' ? (
           <button
             onClick={() => setTodayOnly((v) => !v)}
