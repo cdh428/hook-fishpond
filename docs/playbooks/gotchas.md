@@ -453,7 +453,14 @@ node scripts/dup-menu-scan.mjs   # 扫全站重名 MenuItem + 每条被哪些表
 
 - 用 Bash 后台起的 `bridge.py`，父进程是工具 shell，**会话结束可能被一起回收**，
   表现为「日志说已就绪，但端口拒绝连接」。
-- 要长期在跑，只能放 **Startup 文件夹**（explorer 登录时拉起），不要靠 Agent 后台任务。
+- **经 SSH 起的一律活不过会话**（实测）：`subprocess.Popen`、`wscript` + `Shell.Run`、
+  detach 全部无效 —— Windows sshd 把会话放进 job object，通道一断整棵树被终止。
+  表现是「起好时 health 正常，SSH 一断 10 秒后端口就没了」。
+- 要长期在跑，只有两条路（**2026-10-31 已验证**）：
+  1. **Startup 文件夹**（explorer 登录时拉起）—— 需要重登录才生效；
+  2. **计划任务以 SYSTEM 身份**（父进程是 svchost，不在 SSH 的 job 里）—— 可远程立即生效。
+     见 §6.9。
+- 别再用「远程起一下看看」，会误判成「桥自己崩了」。
 
 ### 6.7 「自动出单没反应」先查三件事，别急着改代码
 
@@ -518,6 +525,50 @@ prisma.order.updateMany({
 配非空 `authToken`（前端要带 `X-Print-Key`）+ 只绑 `127.0.0.1`。
 临时缓解：`python bridge.py --host 127.0.0.1`（手机走桥打印会失效，但收银机本机正常）。
 
+### 6.9 桥的生命周期与纸宽（2026-10-31 定案）
+
+**纸宽**：POS80 用的是 **50mm 纸 → `widthDots: 464`**（80mm 才是 576）。
+写成 576 会把内容压窄/错位。两套部署的 `config.json` 都要是 464。
+
+**两套部署别混用**（机器上同时存在）：
+
+| 目录 | 特点 |
+|---|---|
+| `C:\print-bridge` | 老部署，开机 bat 原本指向它；**会自动探测纸宽**（按驱动 DEVMODE） |
+| `C:\hookfishpond-bridge` | 新部署，**按 `config.json` 的 `widthDots` 渲染**，可控 |
+
+收银台实际用 **`C:\hookfishpond-bridge`**（因为宽度可控）。
+
+**常驻方案（当前生效）**：两个计划任务，都调同一个幂等启动器
+`C:\hookfishpond-bridge\start-bridge-hidden.vbs`（先 GET `/health`，活着就直接退出）：
+
+```
+schtasks /create /tn HookFishpondPrintBridge  /tr "wscript.exe //nologo <vbs>" /sc onstart /ru SYSTEM /rl HIGHEST /f
+schtasks /create /tn HookFishpondBridgeWatchdog /tr "wscript.exe //nologo <vbs>" /sc minute /mo 5 /ru SYSTEM /rl HIGHEST /f
+```
+
+- `onstart`：开机就起，不需要有人登录；
+- 看门狗每 5 分钟幂等巡检，桥死了最多 5 分钟内自动拉起（`onstart` 本身不监控崩溃）。
+
+**⚠️ 配置陷阱**：`authToken` 一非空，前端就必须在 `localStorage` 里放同一个
+`hf.print.bridgeKey`。而 `localStorage` **按 origin 隔离** —— 换域名（如从
+`hook-fishpond-xi15.vercel.app` 换成 `www.hookfishpond.com`）后 key 全丢，
+`/health` 不校验所以"探测正常"，`/print` 却一律 **401**，表现和"桥没开"极像。
+**判断口诀**：看 `Order.printError` —— 写「桥未启动」是真离线；空 error 或 HTTP 401 才是鉴权。
+
+**诊断顺序**（从便宜到贵）：
+1. `curl 100.85.92.120:17777/health` → 有无 `"ok":true`、`widthDots` 对不对；
+2. `schtasks /query /tn HookFishpondPrintBridge` → 任务在不在、状态；
+3. `tasklist /fi "imagename eq python.exe"` → 进程在不在；
+4. 查 `Order.printState / printError` → 分清「没轮询」/「桥离线」/「鉴权失败」。
+
+**⚠️ 不要拿空 body 打 `/print` 试探鉴权**（`curl -d '{}'`）—— 实测会把桥搞挂，
+得重启任务。想验鉴权就发一张真票，或者直接看前端是否带 `X-Print-Key`。
+
+**播报链路与桥无关**：`src/lib/speech.ts` 走的是**浏览器** `speechSynthesis`，
+在收银机 Chrome（Session 1，有音频设备）里播；桥跑在 Session 0 不影响播报。
+所以「打印成功但没声音」要查 Chrome 的扬声器/音量/静音标签页，不要去查桥。
+
 ---
 
 ## 七、改动前的自检清单
@@ -532,4 +583,5 @@ prisma.order.updateMany({
 - [ ] 改完构建？→ `CODEBUDDY_SAFE_DELETE_ENABLED=0 npx next build`
 - [ ] 提交前？→ `git diff --cached --stat` 逐个确认，没用 `git add -A`
 - [ ] 推完？→ 抓页面内容验证，而不是只看「推送成功」
+- [ ] 动了打印/自动出单？→ 桥在跑吗（`/health`）？`widthDots` 是 464（50mm）吗？`printError` 写的是什么？
 - [ ] 有临时脚本 / 临时文件？→ 用完删掉，别提交
