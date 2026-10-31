@@ -539,6 +539,9 @@ model OrderItem {
   optionKey   String?
   note        String?
   createdAt   DateTime @default(now())
+  // 送餐确认（2026-10-31）：该行送到桌的时刻；null=未送。
+  // 同一次下单的行可分批送出（送餐时间先后不固定），故按行记，不按订单。
+  servedAt    DateTime?
 }
 
 // ===== 渔获称重记录（可多次称重，便于追溯与对账） =====

@@ -62,6 +62,8 @@ export interface ReceiptItem {
   optionLines?: string[];
   /** 该行的下单时刻（用于按时间分组；同一次下单的行时间几乎相同） */
   createdAt?: string | Date | null;
+  /** 该行送餐时刻（null=未送）。打印时已送行打 ✓，未送行打 ⏳。 */
+  servedAt?: string | Date | null;
 }
 
 export interface ReceiptOrder {
@@ -157,6 +159,10 @@ const BASE_CSS = `
   .batch-time { font-size: 11px; font-weight: 800; color: #000; margin: 2px 0 0; letter-spacing: .3px; }
   .batch-div { border-top: 1.5px dashed #000; margin: 6px 0 0; }
   .batch-count { font-size: 10px; font-weight: 600; color: #555; }
+  /* 行级送餐状态：已送 ✓ / 未送 ⏳ */
+  .serve-line { font-size: 10px; margin-top: 1px; padding-left: 2px; }
+  .serve-tag { font-weight: 700; color: #555; }
+  .serve-tag.served { color: #000; font-weight: 800; }
   /* 后厨单泰文大字与规格放大 */
   .big .item { margin-top: 6px; }
   .big .item-th { font-size: 20px; font-weight: 900; line-height: 1.4; }
@@ -254,6 +260,12 @@ function itemsBlock(order: ReceiptOrder, labels: PrintLabels, withPrices: boolea
         .map((it) => {
           const opts = Array.isArray(it.optionLines) ? it.optionLines : [];
           const { th, zh } = splitBilingual(it.name);
+          // 送餐状态：已送行打 ✓ 已送 HH:mm，未送行打 ⏳ 未送
+          const servedAt = it.servedAt ? new Date(it.servedAt) : null;
+          const isServed = !!servedAt && !Number.isNaN(servedAt.getTime());
+          const serveTag = isServed
+            ? `<span class="serve-tag served">✓ 已送 ${esc(fmtMinute(servedAt))}</span>`
+            : `<span class="serve-tag">⏳ 未送</span>`;
           return `
         <div class="item">
           <span class="n item-th">${esc(th)}</span>
@@ -262,7 +274,8 @@ function itemsBlock(order: ReceiptOrder, labels: PrintLabels, withPrices: boolea
         </div>
         ${zh ? `<div class="item-zh">${esc(zh)}</div>` : ''}
         ${opts.map((o) => `<div class="item-note">› ${esc(o)}</div>`).join('')}
-        ${it.note ? `<div class="item-note">※ ${esc(it.note)}</div>` : ''}`;
+        ${it.note ? `<div class="item-note">※ ${esc(it.note)}</div>` : ''}
+        <div class="serve-line">${serveTag}</div>`;
         })
         .join('');
 

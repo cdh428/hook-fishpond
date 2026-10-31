@@ -18,6 +18,7 @@ import {
   createAdminOrder,
   fetchAdminServiceCalls,
   updateServiceCall,
+  markOrderItemsServed,
   type AdminOrderSummary,
   type DiscountTypeValue,
   type ServiceCallRow,
@@ -53,6 +54,7 @@ type Modal =
   | { kind: 'items'; order: any }
   | { kind: 'settle'; order: any }
   | { kind: 'rebind'; order: any }
+  | { kind: 'serve'; order: any }
   | { kind: 'create' }
   | null;
 
@@ -551,6 +553,7 @@ export default function AdminOrdersPage() {
               onItems={() => setModal({ kind: 'items', order })}
               onSettle={() => setModal({ kind: 'settle', order })}
               onRebind={() => setModal({ kind: 'rebind', order })}
+              onServe={() => setModal({ kind: 'serve', order })}
               onRestore={() => doRestore(order)}
               onReopen={() => doReopen(order)}
             />
@@ -668,6 +671,21 @@ export default function AdminOrdersPage() {
         />
       )}
 
+      {/* ===== 送餐确认（行级勾选） ===== */}
+      {modal?.kind === 'serve' && (
+        <ServeModal
+          order={modal.order}
+          locale={locale}
+          onClose={() => setModal(null)}
+          onSaved={(updated) => {
+            patchOrder(updated);
+            setModal(null);
+            flash(t('adminOrders.servedToast'));
+          }}
+          onError={(m) => setError(m)}
+        />
+      )}
+
       {/* ===== 新建订单（后台补录） ===== */}
       {modal?.kind === 'create' && (
         <CreateOrderModal
@@ -701,6 +719,7 @@ function OrderCard({
   onItems,
   onSettle,
   onRebind,
+  onServe,
   onRestore,
   onReopen,
 }: {
@@ -716,6 +735,7 @@ function OrderCard({
   onItems: () => void;
   onSettle: () => void;
   onRebind: () => void;
+  onServe: () => void;
   onRestore: () => void;
   onReopen: () => void;
 }) {
@@ -761,6 +781,24 @@ function OrderCard({
                 ⚠️ {t('printAuto.notPrinted')}
               </span>
             ) : null}
+            {/* 送餐进度徽章：已送 X/Y 项（行级） */}
+            {(() => {
+              const its = Array.isArray(order.items) ? order.items : [];
+              if (its.length === 0) return null;
+              const served = its.filter((i: any) => i.servedAt).length;
+              const allServed = served === its.length;
+              return (
+                <span
+                  className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+                    allServed ? 'bg-success-100 text-success-600' : 'bg-warning-100 text-warning-600'
+                  }`}
+                >
+                  {allServed
+                    ? `✓ ${t('adminOrders.servedAll')}`
+                    : t('adminOrders.servedProgress', { n: served, total: its.length })}
+                </span>
+              );
+            })()}
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-neutral-500">
             <button
@@ -897,13 +935,30 @@ function OrderCard({
                 </div>
                 {group.map((it: any) => {
                   const optLines = formatLineOptions(it.options, locale);
+                  const servedAt = it.servedAt ? new Date(it.servedAt) : null;
+                  const isServed = !!servedAt && !Number.isNaN(servedAt.getTime());
                   return (
-                    <div key={it.id}>
-                      <div className="flex justify-between text-xs">
+                    <div
+                      key={it.id}
+                      className={isServed ? 'opacity-60' : ''}
+                    >
+                      <div className="flex items-start justify-between text-xs">
                         <span className="min-w-0 flex-1 text-neutral-700">
                           {pickName(it.menuItem, locale)} × {it.quantity}
                         </span>
-                        <span className="shrink-0 text-neutral-500">฿{it.totalPrice}</span>
+                        <span className="ml-2 flex shrink-0 items-center gap-1">
+                          {isServed ? (
+                            <span className="text-[10px] font-bold text-success-600">
+                              ✓ {t('adminOrders.servedAt')}{' '}
+                              {servedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold text-warning-600">
+                              ⏳ {t('adminOrders.notServed')}
+                            </span>
+                          )}
+                          <span className="text-neutral-500">฿{it.totalPrice}</span>
+                        </span>
                       </div>
                       {optLines.map((l, i) => (
                         <p key={i} className="pl-3 text-[11px] text-neutral-500">
@@ -957,11 +1012,16 @@ function OrderCard({
           🧾 {t('adminOrders.printBill')}
         </Btn>
 
-        {next && (
+        {next === 'SERVED' ? (
+          // 送餐改为行级勾选：点开送餐弹窗，勾选本次送出的菜品行（可分批，可取消）
+          <Btn onClick={onServe} tone="primary" disabled={busy}>
+            🍽 {t('adminOrders.serve')}
+          </Btn>
+        ) : next ? (
           <Btn onClick={onAdvance} tone="primary" disabled={busy}>
             {t(NEXT_STATUS_I18N[next] || 'common.confirm')}
           </Btn>
-        )}
+        ) : null}
 
         {editable && (
           <>
@@ -2426,6 +2486,176 @@ function SettleModal({
           className="w-full rounded-xl bg-neutral-100 py-2 text-[11px] font-medium text-neutral-600 disabled:opacity-50"
         >
           {t('adminOrders.markPaidDirect')}
+        </button>
+      </div>
+    </Sheet>
+  );
+}
+
+/* =====================================================================
+ * 送餐确认弹窗（行级勾选）
+ * ===================================================================*/
+function ServeModal({
+  order,
+  locale,
+  onClose,
+  onSaved,
+  onError,
+}: {
+  order: any;
+  locale: string;
+  onClose: () => void;
+  onSaved: (updated: any) => void;
+  onError: (m: string) => void;
+}) {
+  const t = useTranslations();
+  const [busy, setBusy] = useState(false);
+  // 勾选集：itemId → true 表示「本次要操作该行」
+  const [sel, setSel] = useState<Record<string, boolean>>({});
+
+  const items = Array.isArray(order.items) ? order.items : [];
+
+  // 按下单时间分组（同批一起显示）
+  const fmtMin = (d: any) => {
+    if (!d) return '';
+    const dt = new Date(d);
+    if (Number.isNaN(dt.getTime())) return '';
+    return `${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}`;
+  };
+  const groups = new Map<string, any[]>();
+  for (const it of items) {
+    const key = fmtMin(it.createdAt) || '--:--';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(it);
+  }
+  const keys = [...groups.keys()].sort();
+
+  const isServed = (it: any) => !!it.servedAt && !Number.isNaN(new Date(it.servedAt).getTime());
+  const toggle = (id: string) => setSel((s) => ({ ...s, [id]: !s[id] }));
+
+  // 全选未送（已送行不动，除非手动勾取消）
+  const selectAllUnsaved = () => {
+    const next: Record<string, boolean> = {};
+    for (const it of items) if (!isServed(it)) next[it.id] = true;
+    setSel(next);
+  };
+  // 全部送完 = 全选所有未送行
+  const markAll = () => {
+    const next: Record<string, boolean> = {};
+    for (const it of items) if (!isServed(it)) next[it.id] = true;
+    setSel(next);
+  };
+
+  const confirm = async () => {
+    const markIds: string[] = [];
+    const unmarkIds: string[] = [];
+    for (const it of items) {
+      if (!sel[it.id]) continue;
+      if (isServed(it)) unmarkIds.push(it.id);
+      else markIds.push(it.id);
+    }
+    if (markIds.length === 0 && unmarkIds.length === 0) return;
+    setBusy(true);
+    try {
+      let updated = order;
+      if (markIds.length > 0) updated = (await markOrderItemsServed(order.id, markIds, true)) || updated;
+      if (unmarkIds.length > 0) updated = (await markOrderItemsServed(order.id, unmarkIds, false)) || updated;
+      onSaved(updated);
+    } catch (e: any) {
+      onError(e?.message || t('common.error'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const totalServed = items.filter(isServed).length;
+
+  return (
+    <Sheet title={`🍽 ${t('adminOrders.serve')} · ${order.orderNumber}`} onClose={onClose}>
+      {/* 进度提示 */}
+      <div className="mb-2 flex items-center justify-between text-xs">
+        <span className="font-semibold text-neutral-700">
+          {t('adminOrders.servedProgress', { n: totalServed, total: items.length })}
+        </span>
+        <span className="text-neutral-400">{t('adminOrders.serveHint')}</span>
+      </div>
+
+      {/* 菜品分组列表 */}
+      <div className="mb-3 max-h-[50vh] space-y-1 overflow-y-auto rounded-xl bg-neutral-50 p-2">
+        {keys.map((key, gi) => (
+          <div key={key}>
+            <div className={`flex items-center gap-1.5 ${gi > 0 ? 'mt-2 border-t border-dashed border-neutral-300 pt-1.5' : ''}`}>
+              <span className="text-[10px] font-bold text-primary-700">🕘</span>
+              <span className="text-[10px] font-bold text-neutral-600">{key}</span>
+              <span className="h-px flex-1 bg-neutral-200" />
+            </div>
+            {groups.get(key)!.map((it: any) => {
+              const served = isServed(it);
+              return (
+                <label
+                  key={it.id}
+                  className={`flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-xs transition ${
+                    served ? 'bg-success-50 text-neutral-500' : 'bg-white text-neutral-800'
+                  } ${sel[it.id] ? 'ring-2 ring-primary-400' : ''}`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={!!sel[it.id]}
+                    onChange={() => toggle(it.id)}
+                    className="shrink-0 accent-primary-600"
+                  />
+                  <span className="min-w-0 flex-1">
+                    {pickName(it.menuItem, locale)} × {it.quantity}
+                  </span>
+                  {served ? (
+                    <span className="shrink-0 text-[10px] font-bold text-success-600">
+                      ✓ {t('adminOrders.servedAt')}{' '}
+                      {new Date(it.servedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  ) : (
+                    <span className="shrink-0 text-[10px] font-bold text-warning-600">
+                      ⏳ {t('adminOrders.notServed')}
+                    </span>
+                  )}
+                </label>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+
+      {/* 快捷操作 */}
+      <div className="flex flex-wrap gap-1.5">
+        <button
+          onClick={selectAllUnsaved}
+          disabled={busy}
+          className="rounded-lg bg-neutral-100 px-2.5 py-1.5 text-[11px] font-medium text-neutral-600 disabled:opacity-50"
+        >
+          {t('adminOrders.selectAllUnsaved')}
+        </button>
+        <button
+          onClick={markAll}
+          disabled={busy}
+          className="rounded-lg bg-neutral-100 px-2.5 py-1.5 text-[11px] font-medium text-neutral-600 disabled:opacity-50"
+        >
+          {t('adminOrders.serveAllNow')}
+        </button>
+      </div>
+
+      <div className="mt-3 flex gap-2">
+        <button
+          onClick={onClose}
+          disabled={busy}
+          className="flex-1 rounded-xl bg-neutral-100 py-2.5 text-xs font-medium text-neutral-600 disabled:opacity-50"
+        >
+          {t('common.cancel')}
+        </button>
+        <button
+          onClick={confirm}
+          disabled={busy}
+          className="flex-1 rounded-xl bg-primary-700 py-2.5 text-xs font-semibold text-white disabled:opacity-50"
+        >
+          {t('adminOrders.confirmServe')}
         </button>
       </div>
     </Sheet>

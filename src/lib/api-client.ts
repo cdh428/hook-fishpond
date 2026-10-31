@@ -1005,6 +1005,24 @@ export async function markOrderAutoPrinted(
 }
 
 /**
+ * Admin — 行级送餐确认 / 取消送餐。
+ *
+ * 送餐时勾选「还没送出」的菜品行 → served=true（servedAt=now）；
+ * 送错了 → served=false（清空 servedAt，撤销标记）。
+ * 只标记行级送餐时间，订单状态**不**自动推 SERVED（由店员手动推）。
+ */
+export async function markOrderItemsServed(
+  orderId: string,
+  itemIds: string[],
+  served: boolean,
+): Promise<any> {
+  return request<any>(`/api/admin/orders/${orderId}/serve-items`, {
+    method: 'POST',
+    body: JSON.stringify({ itemIds, served }),
+  });
+}
+
+/**
  * Build a **locale-pinned** ordering URL for a table's QR code.
  *
  * Instead of the language-agnostic landing page `/t/{code}` (which auto-detects
