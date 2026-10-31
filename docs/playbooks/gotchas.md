@@ -237,6 +237,50 @@
 **防再犯**：改订单页任何金额显示前，先确认那个数是不是 `subtotal`；
 「应付类」金额一律减已付；改完跑 `node scripts/check-dashboard.cjs` 对照线上 stats 同口径。
 
+### 3.12 「库存显示 0 / 下不了单」先查三件事：重名条目 → 分类错位 → remaining 阈值语义
+
+**现象**（2026-10-31）：1.25 可乐进货两单（24 + 17，已过账，台账 24→41）后，仍然显示库存 0
+而且**下单也被拒**；同一天管理员补录建单，试 Leo 啤酒、冰（小桶）也都「建不了单」。
+
+**根因链**——三个坑叠在一起，只查数据层永远查不出来：
+
+1. **重名条目（幽灵条目）**：`MenuItem` 允许同名。饮料大类下有两条「可乐 640 毫升」，
+   真货（库存 24，有 `PurchaseReceiptLine` / `StockMovement` / `StockLedgerAudit` 引用）
+   和一条后来误建的幽灵（库存 0，**零引用**）。人按名字选菜，**选到哪条取决于分类页顺序**，
+   选到幽灵就永远库存 0、永远下不了单。
+2. **分类错位**：真货被归到「烧烤」大类，幽灵在「饮料」大类 ——
+   于是饮料页里看到的**恰好**是库存 0 那条，而库存 24 那条藏在烧烤页。
+3. **`remaining` 返回 `null` 不是 bug**：顾客端 `/api/menu/items` 的 `stock.remaining`
+   **只在 ≤ `LOW_STOCK_DISPLAY_THRESHOLD`(10) 时返回数字，其余返回 `null`**，
+   这是刻意不向顾客暴露确切库存。前端**绝不能**把 `null` 当 0
+   （`menu/page.tsx` 的 `handleAdd` 写成 `remaining != null && current >= remaining` 才拦，是正确写法）。
+   admin 库存页读真实 `stockQty`，不受这条影响。
+
+**排查顺序**（5 分钟定位，只读）：
+
+```bash
+node scripts/dup-menu-scan.mjs   # 扫全站重名 MenuItem + 每条被哪些表引用
+```
+
+- 会引用 `MenuItem` 的表：`OrderItem` / `PurchaseReceiptLine` / `StockMovement` /
+  `StockLedgerAudit` / `StockTakeLine` / `MenuItemOptionGroup`
+- **判定**：有引用 = 真货（保留）；零引用 = 幽灵（可删）
+- 再看 `categoryId`：**重名条目几乎总是伴随分类错位**，两条要一起看
+
+**处理**：
+
+- 幽灵条目：先备份再删 `node scripts/dup-menu-cleanup.mjs <id>`
+  （脚本强制做引用检查，**有引用会拒绝删除**并提示改用 `isActive=false`）
+- 真货分类错了：只改 `categoryId`，**不动库存/台账**（都按 `itemId` 关联，不受影响）
+- 有历史引用的重复条目（如「雪碧」那条挂着 3 个 `OrderItem`）：**只能停用，绝不硬删**
+
+**防再犯**：
+
+- 建菜单 / CSV 导入后跑一次 `dup-menu-scan.mjs`，重名组应为 0（或已知且已停用）
+- 建单失败**必须有可读原因**：`CreateOrderModal` 已落 `saveErr` 持久红框，
+  直出服务端 400 的 `code`（`INSUFFICIENT_STOCK` / `ITEM_NOT_FOUND` / `FUTURE_DATE_REJECTED`）。
+  没有这层提示，用户只能看到「建不了单」而拿不到任何线索 —— 这次排查绕的弯路全源于此。
+
 ---
 
 ## 四、本机 / 工具链

@@ -109,6 +109,14 @@ node scripts/verify-ledger.cjs
 #   d) 9 月营收 ≠ 0（确认旧数据迁移过）
 ```
 
+```bash
+node scripts/dup-menu-scan.mjs
+# 校验：
+#   e) 重名 MenuItem 组 = 0（非零则逐条看引用：零引用=幽灵可删，有引用=真货只能停用）
+#   f) 同名条目的 categoryId 落在正确大类（重名常伴随分类错位，见 gotchas 3.12）
+#   g) 顾客端 stock.remaining 为 null 属正常（>10 不暴露），前端不得当 0
+```
+
 ---
 
 ## 5. 已发现 & 已修复（审计 agent 三路，2026-10-27）
@@ -139,5 +147,7 @@ node scripts/verify-ledger.cjs
 - `scripts/probe-login.cjs` — 登录拿 admin cookie（读 `.workbuddy/secrets/`，不打印）
 - `scripts/verify-ledger.cjs` — 数据级回归（a~d 四项）
 - `scripts/scan-impact.sh` — 影响面扫描（财务模块改动的关联文件清单）
+- `scripts/dup-menu-scan.mjs` — 重名/幽灵菜单条目扫描（只读，含引用统计）
+- `scripts/dup-menu-cleanup.mjs <id>` — 删幽灵条目（先备份到 `.workbuddy/backups/`，有引用则拒绝）
 
 > 若脚本缺失，按 §2/§4 的命令临时补一份，跑完删除（不留脏脚本）。
