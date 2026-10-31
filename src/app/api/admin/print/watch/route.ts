@@ -153,10 +153,16 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    // 只取「近期新单」：桥不该一启动就翻历史未出票单（踩过：14 张存量单连打）。
+    // 用 createdAt 窗口过滤——新单 created 在最近 WATCH_WINDOW_MS 内才自动打；
+    // 更早的未出票单保持 null，等店员手动补打（历史遗留不自动出纸）。
+    const WATCH_WINDOW_MS = 30 * 60 * 1000; // 最近 30 分钟
+    const since = new Date(Date.now() - WATCH_WINDOW_MS);
     const orders = await prisma.order.findMany({
       where: {
         printState: null, // 从未出票
         status: { notIn: ["SETTLED", "CANCELLED"] },
+        createdAt: { gte: since },
       },
       include: {
         items: {
