@@ -72,6 +72,8 @@ export function toReceiptOrder(raw: any, locale: string): ReceiptOrder {
     unitPrice: it.unitPrice,
     totalPrice: it.totalPrice,
     note: it.note ?? null,
+    // 该行下单时刻：用于按时间分组（同一次下单的行时间几乎相同）
+    createdAt: it.createdAt ?? null,
     // 规格 / 面型 / 加料：后厨单必须逐行打出来，否则会做错
     optionLines: formatLineOptions(
       (Array.isArray(it.options) ? it.options : []) as OrderLineOption[],

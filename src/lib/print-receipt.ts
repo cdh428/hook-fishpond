@@ -60,6 +60,8 @@ export interface ReceiptItem {
   note?: string | null;
   /** 该行的规格 / 面型 / 加料（已本地化，如「份量: 加大 (+฿10)」） */
   optionLines?: string[];
+  /** 该行的下单时刻（用于按时间分组；同一次下单的行时间几乎相同） */
+  createdAt?: string | Date | null;
 }
 
 export interface ReceiptOrder {
@@ -98,6 +100,15 @@ function fmtTime(d: string | Date): string {
   if (Number.isNaN(date.getTime())) return '';
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+/** 只取「日期+时:分」作分组键（同一次下单的行时间几乎相同，精确到分钟足够） */
+function fmtMinute(d: string | Date | null | undefined): string {
+  if (!d) return '';
+  const date = typeof d === 'string' ? new Date(d) : d;
+  if (Number.isNaN(date.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 const BASE_CSS = `
@@ -142,6 +153,10 @@ const BASE_CSS = `
   .item-zh { font-size: 12px; color: #444; line-height: 1.3; margin-top: 1px; padding-left: 2px; }
   .item .q { flex: 0 0 auto; font-weight: 800; padding-right: 1mm; font-size: 15px; }
   .item-note { font-size: 12px; padding-left: 6px; line-height: 1.5; color: #333; }
+  /* 按下单时间分组的批次时间行 + 批次分隔线 */
+  .batch-time { font-size: 11px; font-weight: 800; color: #000; margin: 2px 0 0; letter-spacing: .3px; }
+  .batch-div { border-top: 1.5px dashed #000; margin: 6px 0 0; }
+  .batch-count { font-size: 10px; font-weight: 600; color: #555; }
   /* 后厨单泰文大字与规格放大 */
   .big .item { margin-top: 6px; }
   .big .item-th { font-size: 20px; font-weight: 900; line-height: 1.4; }
@@ -221,10 +236,21 @@ function splitBilingual(raw: string): { th: string; zh: string } {
  * 第三行：规格 / 备注选项。
  */
 function itemsBlock(order: ReceiptOrder, labels: PrintLabels, withPrices: boolean): string {
-  return `
-    <div class="dashed"></div>
-    <div class="items">
-      ${order.items
+  // 按下单时间分组：同一次下单的菜放一起（时间相同），不同次追加的分开（时间不同）。
+  // 每组前打一行「下单时间」，组间加虚线，方便后厨/收银确认每个批次的送餐进度。
+  const items = Array.isArray(order.items) ? order.items : [];
+  const groups = new Map<string, ReceiptItem[]>();
+  for (const it of items) {
+    const key = fmtMinute(it.createdAt) || '--:--';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(it);
+  }
+  const keys = [...groups.keys()].sort();
+
+  const groupHtml = keys
+    .map((key, gi) => {
+      const group = groups.get(key)!;
+      const itemsHtml = group
         .map((it) => {
           const opts = Array.isArray(it.optionLines) ? it.optionLines : [];
           const { th, zh } = splitBilingual(it.name);
@@ -238,8 +264,18 @@ function itemsBlock(order: ReceiptOrder, labels: PrintLabels, withPrices: boolea
         ${opts.map((o) => `<div class="item-note">› ${esc(o)}</div>`).join('')}
         ${it.note ? `<div class="item-note">※ ${esc(it.note)}</div>` : ''}`;
         })
-        .join('')}
-    </div>`;
+        .join('');
+
+      return `
+    ${gi > 0 ? '<div class="batch-div"></div>' : ''}
+    <div class="batch-time">下单 ${esc(key)} <span class="batch-count">· ${group.length} 项</span></div>
+    ${itemsHtml}`;
+    })
+    .join('');
+
+  return `
+    <div class="dashed"></div>
+    <div class="items">${groupHtml}</div>`;
 }
 
 /** 后厨出票：不带价格，菜品放大，方便备餐核对，支持联单区分（如厨房留存联 / 备餐传菜联） */

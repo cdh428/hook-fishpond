@@ -866,29 +866,60 @@ function OrderCard({
         </div>
       )}
 
-      {/* 菜品 */}
-      <div className="space-y-0.5 rounded-lg bg-neutral-50 px-2.5 py-2">
-        {(order.items || []).map((it: any) => {
-          const optLines = formatLineOptions(it.options, locale);
-          return (
-            <div key={it.id}>
-              <div className="flex justify-between text-xs">
-                <span className="min-w-0 flex-1 text-neutral-700">
-                  {pickName(it.menuItem, locale)} × {it.quantity}
-                </span>
-                <span className="shrink-0 text-neutral-500">฿{it.totalPrice}</span>
+      {/* 菜品 —— 按下单时间分组：同一次下单的菜放一起，不同次追加的分开 */}
+      <div className="space-y-1 rounded-lg bg-neutral-50 px-2.5 py-2">
+        {(() => {
+          const items = Array.isArray(order.items) ? order.items : [];
+          // 按「下单时间（精确到分钟）」分组，保持升序（早→晚）
+          const fmtMin = (d: any) => {
+            if (!d) return '';
+            const dt = new Date(d);
+            if (Number.isNaN(dt.getTime())) return '';
+            return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')} ${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}`;
+          };
+          const groups = new Map<string, any[]>();
+          for (const it of items) {
+            const key = fmtMin(it.createdAt) || 'unknown';
+            if (!groups.has(key)) groups.set(key, []);
+            groups.get(key)!.push(it);
+          }
+          const keys = [...groups.keys()].sort();
+          return keys.map((key, gi) => {
+            const group = groups.get(key)!;
+            return (
+              <div key={key}>
+                {/* 时间分隔条：每组一次下单，带下单时间，方便核对批次 */}
+                <div className={`flex items-center gap-1.5 ${gi > 0 ? 'mt-2 border-t border-dashed border-neutral-300 pt-1.5' : ''}`}>
+                  <span className="text-[10px] font-bold text-primary-700">🕘</span>
+                  <span className="text-[10px] font-bold text-neutral-600">{key}</span>
+                  <span className="h-px flex-1 bg-neutral-200" />
+                  <span className="text-[10px] text-neutral-400">{group.length} 项</span>
+                </div>
+                {group.map((it: any) => {
+                  const optLines = formatLineOptions(it.options, locale);
+                  return (
+                    <div key={it.id}>
+                      <div className="flex justify-between text-xs">
+                        <span className="min-w-0 flex-1 text-neutral-700">
+                          {pickName(it.menuItem, locale)} × {it.quantity}
+                        </span>
+                        <span className="shrink-0 text-neutral-500">฿{it.totalPrice}</span>
+                      </div>
+                      {optLines.map((l, i) => (
+                        <p key={i} className="pl-3 text-[11px] text-neutral-500">
+                          {l}
+                        </p>
+                      ))}
+                      {it.note && (
+                        <p className="pl-3 text-[11px] text-accent-600">※ {it.note}</p>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
-              {optLines.map((l, i) => (
-                <p key={i} className="pl-3 text-[11px] text-neutral-500">
-                  {l}
-                </p>
-              ))}
-              {it.note && (
-                <p className="pl-3 text-[11px] text-accent-600">※ {it.note}</p>
-              )}
-            </div>
-          );
-        })}
+            );
+          });
+        })()}
         {order.fishWeightKg > 0 && (
           <div className="flex justify-between text-xs text-primary-700">
             <span>
