@@ -281,6 +281,32 @@ node scripts/dup-menu-scan.mjs   # 扫全站重名 MenuItem + 每条被哪些表
   直出服务端 400 的 `code`（`INSUFFICIENT_STOCK` / `ITEM_NOT_FOUND` / `FUTURE_DATE_REJECTED`）。
   没有这层提示，用户只能看到「建不了单」而拿不到任何线索 —— 这次排查绕的弯路全源于此。
 
+### 3.13 Prisma 7.5 嵌套创建：报错一次只报一个，别修一个就收工
+
+**现象**（2026-11-01）：admin 补录建单全部 500（堂食外卖都炸，外卖最先被发现），
+接口只回 `{"error":"Failed to create order"}`，毫无线索。
+生产探针复现 500 后，把本地 dev 指向同一生产库才拿到真实堆栈。
+
+**根因（两处叠加，修掉第一个才露出第二个）**：
+
+1. `data` 里同时有**嵌套 `items: { create }`**（关系式写法）和**显式
+   `userId: null` / `tableId: null`**（标量外键写法）时，Prisma 7.5 按
+   `OrderCreateInput`（关系式）校验 → 报
+   `Unknown argument userId. Did you mean user?`。
+   可空标量外键**省略即可**（省略 = null），不要显式传 null；
+   有值时用 `table: { connect: { id } }` 关系形式最稳。
+2. 修掉上面后暴露第二个错：`Argument customerPhone must not be null` ——
+   **必填 `String` 字段传 null 在 7.5 直接验证失败**。顾客端传的是 `""` 所以没事，
+   admin 补录写的是 `|| null` 就炸。必填字段兜底用空串，别用 null。
+
+**排查套路**：接口只回 500 泛化文案时，**本地 dev（`.env.local` 连生产库）跑同一请求**，
+控制台就有完整 Prisma 堆栈 —— 不用去翻 Vercel 日志（本机没有凭据）。
+
+**防再犯**：
+- 新 API 的 create data 里，可空外键**一律省略或用关系 connect**，不写 `xxxId: null`；
+- 必填 String 字段兜底 `|| ""`，不写 `|| null`；
+- 修 Prisma validation 错误后**必须重跑同一请求**确认没有下一个错（7.5 一次只报一个）。
+
 ---
 
 ## 四、本机 / 工具链
