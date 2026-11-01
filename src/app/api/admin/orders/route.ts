@@ -231,10 +231,11 @@ export async function POST(request: NextRequest) {
           const newOrder = await tx.order.create({
             data: {
               orderNumber,
-              userId: null,
-              tableId,
+              // ⚠️ Prisma 7.5：data 含嵌套 items.create 时按「关系式输入」校验，
+              // 显式传 userId: null / tableId: null 会报 Unknown argument —— 省略即 null。
+              ...(tableId ? { table: { connect: { id: tableId } } } : {}),
               customerName: body.customerName || "补录",
-              customerPhone: body.customerPhone || null,
+              customerPhone: body.customerPhone || "",
               subtotal,
               totalPrice: subtotal,
               note: note || null,
