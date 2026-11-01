@@ -149,5 +149,21 @@ node scripts/dup-menu-scan.mjs
 - `scripts/scan-impact.sh` — 影响面扫描（财务模块改动的关联文件清单）
 - `scripts/dup-menu-scan.mjs` — 重名/幽灵菜单条目扫描（只读，含引用统计）
 - `scripts/dup-menu-cleanup.mjs <id>` — 删幽灵条目（先备份到 `.workbuddy/backups/`，有引用则拒绝）
+- `scripts/_probe-takeaway.mjs`（本机）— admin 建单冒烟：外卖后付 / 外带立即收款双路径 POST，
+  成功单自动清理（paidNow 单需再作废流水，见脚本尾部说明）。改 admin orders 接口后必跑。
+
+## 8. 「接口 500 无线索」排查法（2026-11-01 实战）
+
+生产接口只回 `{"error":"Failed to create order"}` 时，不要猜：
+
+1. 写探针脚本对生产 API 复现，确认能稳定 500（用真实登录态，读 `.workbuddy/secrets/`）；
+2. **本地 `npm run dev`（`.env.local` 连生产库）跑同一请求** —— 控制台直接吐完整
+   Prisma/Next 堆栈，本机没有 Vercel 凭据也能拿到一线日志；
+3. 堆栈里 Prisma 7.5 的 validation 错误**一次只报一个**，修一个必须重跑同一请求，
+   直到 200/201 为止（当天连爆两个：Unknown argument userId → customerPhone must not be null）；
+4. 探针建出的真实订单必须清理：未收款单 cancel；已结清（paidNow）单把
+   `PaymentRecord.voidedAt` 置位 + `prepaidAmount` 归零，**别让测试流水进营收**。
+
+详见 gotchas 3.13。
 
 > 若脚本缺失，按 §2/§4 的命令临时补一份，跑完删除（不留脏脚本）。
