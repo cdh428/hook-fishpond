@@ -72,6 +72,9 @@ model AdminUser {
   password  String
   role      AdminRole @default(MANAGER)
   isActive  Boolean   @default(true)
+  // 折扣确认用的 6 位数字 PIN（**明文**存储——admin 进设置页要能看到当前值，
+  // 且 6 位内部 PIN 强度有限，无需哈希；null=未设置，初始由 seed 设为 123456）
+  discountPin String?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 }

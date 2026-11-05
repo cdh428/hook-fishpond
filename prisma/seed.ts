@@ -264,12 +264,14 @@ async function main() {
   const hashedPassword = await bcrypt.hash(adminPassword, 10);
   await prisma.adminUser.upsert({
     where: { username: "admin" },
-    update: {},
+    // 初始折扣 PIN = 123456；已存在的 admin 也补上（update 分支），保证有默认值
+    update: { discountPin: "123456" },
     create: {
       username: "admin",
       password: hashedPassword,
       role: "SUPER_ADMIN",
       isActive: true,
+      discountPin: "123456",
     },
   });
   console.log(`  ✅ Admin user (username: admin, role: SUPER_ADMIN)`);

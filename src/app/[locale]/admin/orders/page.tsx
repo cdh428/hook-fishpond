@@ -1444,12 +1444,16 @@ function DiscountModal({
         discountType: type,
         discountValue: v,
         note,
-        adminPassword: needsAdmin ? password : undefined,
+        // ⚠️ 2026-11-05 修复：超 10% 额度时密码框靠 overLimit 显示，但 needsAdmin
+        // 还是 false，导致密码被丢弃、后端永远收到空密码 → 403。必须同时认两个。
+        adminPassword: needsAdmin || overLimit ? password : undefined,
       });
       onSaved(updated);
     } catch (e: any) {
       const m = e?.message || '';
-      if (m.includes('admin password') || m.toLowerCase().includes('needs_admin')) {
+      // 后端返回 error: "Over staff limit — discount PIN required"，code: NEEDS_ADMIN。
+      // 前端只认错误文案里含 "discount PIN" 或 "needs_admin"（旧 code 兼容）。
+      if (m.toLowerCase().includes('discount pin') || m.toLowerCase().includes('needs_admin')) {
         setNeedsAdmin(true);
         setMsg(t('adminOrders.needsAdminPassword'));
       } else {

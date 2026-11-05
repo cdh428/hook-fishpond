@@ -473,7 +473,8 @@
     "undoPaymentConfirm": "Void this payment record? It will no longer count as collected.",
     "openOutstanding": "Open to Collect",
     "openOutstandingCount": "Open Orders",
-    "todayProjected": "Projected Today"
+    "todayProjected": "Projected Today",
+    "settings": "Settings"
   },
   "adminBulk": {
     "title": "Bulk Management",
@@ -944,13 +945,13 @@
     "discountAmountLabel": "Discount amount (฿)",
     "discountNote": "Reason",
     "discountNotePlaceholder": "e.g. regular customer",
-    "overLimitWarning": "Over the 10% staff limit — enter the admin password to confirm.",
-    "adminPassword": "Admin password",
+    "overLimitWarning": "Discount exceeds the staff limit (10%) — enter the 6-digit discount PIN to confirm.",
+    "adminPassword": "Discount PIN (6 digits)",
     "gross": "Gross",
     "payable": "Payable",
     "applyDiscount": "Apply discount",
     "discountApplied": "Discount applied",
-    "needsAdminPassword": "Over the staff limit — admin password required.",
+    "needsAdminPassword": "Over the staff limit — discount PIN required.",
     "editItems": "Edit items",
     "editItemsHint": "Reducing a quantity returns it to stock; amounts are recalculated automatically.",
     "saveChanges": "Save changes",
@@ -1236,5 +1237,20 @@
     "printedAt": "Printed",
     "notPrinted": "Not printed",
     "newOrderHint": "{count} new order(s) not printed"
+  },
+  "adminSettings": {
+    "entry": "Settings",
+    "title": "Back-office Settings",
+    "discountPin": "Discount Confirmation PIN",
+    "discountPinHint": "When a discount exceeds 10%, cashiers enter this 6-digit PIN to confirm. Initial value is 123456 — change it soon.",
+    "currentPin": "Current PIN",
+    "newPin": "New PIN",
+    "newPinPlaceholder": "Enter 6 digits",
+    "savePin": "Save PIN",
+    "pinSaved": "PIN updated",
+    "pinInvalid": "PIN must be exactly 6 digits",
+    "pinLoadFailed": "Failed to load PIN",
+    "pinSaveFailed": "Failed to save PIN",
+    "pinVisibleHint": "For management purposes the current PIN is shown in plain text (visible only to logged-in admins)."
   }
 }

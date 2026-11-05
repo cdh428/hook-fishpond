@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { runTx } from "@/lib/tx";
 import { requireAdmin } from "@/lib/auth";
@@ -309,12 +308,14 @@ export async function PATCH(
       const guard = checkStaffChange(probe.gross, probe.discountAmount);
       if (guard.needsAdmin) {
         const password = typeof body.adminPassword === "string" ? body.adminPassword : "";
+        // ⚠️ 2026-11-05：折扣确认改用独立的 6 位数字 PIN（discountPin，明文），
+        // 不再用 admin 登录密码（bcrypt）。用户可在 admin/设置 里自行修改。
         const me = await prisma.adminUser.findUnique({ where: { id: admin.id } });
-        const ok = !!me && !!password && (await bcrypt.compare(password, me.password));
+        const ok = !!me && !!password && password === me.discountPin;
         if (!ok) {
           return NextResponse.json(
             {
-              error: "Over staff limit — admin password required",
+              error: "Over staff limit — discount PIN required",
               code: "NEEDS_ADMIN",
               ratio: guard.ratio,
               gross: guard.gross,

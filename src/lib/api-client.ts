@@ -441,6 +441,21 @@ export async function adminLogout(): Promise<{ message: string }> {
   });
 }
 
+/** Admin — 读取折扣确认 PIN（明文，仅后台管理员可见） */
+export async function fetchDiscountPin(): Promise<string | null> {
+  const r = await request<{ pin: string | null }>(`/api/admin/settings/discount-pin`);
+  return r.pin ?? null;
+}
+
+/** Admin — 设置新的 6 位折扣 PIN */
+export async function saveDiscountPin(pin: string): Promise<string> {
+  const r = await request<{ pin: string }>(`/api/admin/settings/discount-pin`, {
+    method: 'PUT',
+    body: JSON.stringify({ pin }),
+  });
+  return r.pin;
+}
+
 export async function fetchAdminStats(): Promise<any> {
   return request<any>(`/api/admin/stats`);
 }

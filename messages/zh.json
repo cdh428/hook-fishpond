@@ -473,7 +473,8 @@
     "undoPaymentConfirm": "确认作废这条收款记录？作废后不再计入实收。",
     "openOutstanding": "进行中待收",
     "openOutstandingCount": "进行中单数",
-    "todayProjected": "今日预计收入"
+    "todayProjected": "今日预计收入",
+    "settings": "设置"
   },
   "adminBulk": {
     "title": "批量管理",
@@ -944,13 +945,13 @@
     "discountAmountLabel": "减免金额 (฿)",
     "discountNote": "折扣原因",
     "discountNotePlaceholder": "例如：熟客优惠",
-    "overLimitWarning": "折扣超过店员额度（10%），请输入管理员密码确认。",
-    "adminPassword": "管理员密码",
+    "overLimitWarning": "折扣超过店员额度（10%），请输入 6 位折扣 PIN 确认。",
+    "adminPassword": "折扣 PIN（6 位数字）",
     "gross": "原价",
     "payable": "应付",
     "applyDiscount": "应用折扣",
     "discountApplied": "已应用折扣",
-    "needsAdminPassword": "超出店员额度，需要管理员密码。",
+    "needsAdminPassword": "超出店员额度，需要折扣 PIN。",
     "editItems": "改单",
     "editItemsHint": "减少数量会把对应库存加回去，金额会自动重算。",
     "saveChanges": "保存改单",
@@ -1236,5 +1237,20 @@
     "printedAt": "已打印",
     "notPrinted": "未打印",
     "newOrderHint": "有 {count} 张新订单未出票"
+  },
+  "adminSettings": {
+    "entry": "设置",
+    "title": "后台设置",
+    "discountPin": "折扣确认 PIN",
+    "discountPinHint": "超 10% 折扣时，收银员输入这个 6 位数字 PIN 即可确认。初始为 123456，建议尽快修改。",
+    "currentPin": "当前 PIN",
+    "newPin": "新 PIN",
+    "newPinPlaceholder": "输入 6 位数字",
+    "savePin": "保存 PIN",
+    "pinSaved": "PIN 已更新",
+    "pinInvalid": "PIN 必须是 6 位数字",
+    "pinLoadFailed": "读取 PIN 失败",
+    "pinSaveFailed": "保存 PIN 失败",
+    "pinVisibleHint": "出于管理需要，当前 PIN 以明文显示（仅登录后台的管理员可见）。"
   }
 }
