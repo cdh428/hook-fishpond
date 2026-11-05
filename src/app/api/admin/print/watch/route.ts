@@ -153,6 +153,20 @@ export async function GET(request: NextRequest) {
     // 开机/换纸不涉及订单修改 → updatedAt 不更新 → 不会触发，杜绝「开机打一大堆」。
     const WATCH_WINDOW_MS = 5 * 60 * 1000; // 最近 5 分钟
     const since = new Date(Date.now() - WATCH_WINDOW_MS);
+
+    // ⚠️ 2026-11-05：读取打印纸宽偏好（50/80mm），决定小票 HTML 渲染宽度。
+    let paperWidthMm = 80;
+    try {
+      const row = await prisma.setting.findUnique({ where: { key: "print.preferences" } });
+      if (row) {
+        const p = JSON.parse(row.value) as { paperWidth?: string };
+        const pw = Number(p.paperWidth);
+        if (pw === 50 || pw === 80) paperWidthMm = pw;
+      }
+    } catch {
+      // 读取失败保持默认 80mm
+    }
+
     const orders = await prisma.order.findMany({
       where: {
         printState: null, // 从未出票（防重复打印）
@@ -194,6 +208,7 @@ export async function GET(request: NextRequest) {
           qrDataUrl: null,
           tableQrDataUrl: null,
           tableQrLabel: null,
+          paperWidthMm,
         });
         kitchenHtml = null; // 不再打后厨票
       } catch (e) {
@@ -220,6 +235,8 @@ export async function GET(request: NextRequest) {
         tableName,
         billHtml,
         kitchenHtml,
+        // ⚠️ 2026-11-05：把纸宽一起返回，桥端 watch 打印时按此设置视口与输出点宽
+        paperWidthMm,
         thText: tableCode
           ? `มีออเดอร์ใหม่ โต๊ะ ${tableCode} ค่ะ`
           : "มีออเดอร์ใหม่ค่ะ",

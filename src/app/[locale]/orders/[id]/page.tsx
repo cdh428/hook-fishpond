@@ -16,7 +16,7 @@ import {
   buildBillHtml,
   type PrintLabels,
 } from '@/lib/print-receipt';
-import { submitPrint, describeOutcome } from '@/lib/print-agent';
+import { submitPrint, describeOutcome, loadPreferences } from '@/lib/print-agent';
 import { formatLineOptions } from '@/lib/menu-options';
 
 /**
@@ -78,10 +78,13 @@ export default function OrderDetailPage() {
     setPrintMsg('');
     try {
       const ro = toReceiptOrder(order, locale);
+      // ⚠️ 2026-11-05：纸宽（50/80mm）从偏好读取，决定 HTML 渲染宽度
+      const prefs = await loadPreferences();
+      const pw = Number(prefs.paperWidth) || 80;
       const html =
         purpose === 'kitchen'
-          ? buildKitchenTicketHtml(ro, printLabels)
-          : buildBillHtml(ro, { qrDataUrl: null, labels: printLabels });
+          ? buildKitchenTicketHtml(ro, printLabels, undefined, pw)
+          : buildBillHtml(ro, { qrDataUrl: null, labels: printLabels, paperWidthMm: pw });
       const outcome = await submitPrint(html, purpose);
       setPrintMsg(describeOutcome(outcome, t));
     } catch (e: any) {

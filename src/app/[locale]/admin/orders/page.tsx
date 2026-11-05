@@ -42,7 +42,7 @@ import {
   type PrintLabels,
 } from '@/lib/print-receipt';
 import { formatLineOptions, makeOptionKey } from '@/lib/menu-options';
-import { submitPrint, describeOutcome } from '@/lib/print-agent';
+import { submitPrint, describeOutcome, loadPreferences } from '@/lib/print-agent';
 import TablePicker from '@/components/TablePicker';
 import OptionSheet from '@/components/OptionSheet';
 
@@ -272,15 +272,20 @@ export default function AdminOrdersPage() {
   const doPrintKitchen = async (order: any) => {
     // 厨房小票固定出 2 联：第一联厨房留存制作，第二联备餐后送给客户
     const receiptOrder = toReceiptOrder(order, locale);
+    // ⚠️ 2026-11-05：打印纸宽（50/80mm）从偏好读取，决定 HTML 渲染宽度与输出点宽
+    const prefs = await loadPreferences();
+    const pw = Number(prefs.paperWidth) || 80;
     const html1 = buildKitchenTicketHtml(
       receiptOrder,
       printLabels,
       printLabels.kitchenCopy1 || '【 ครัว / 厨房留存联 】',
+      pw,
     );
     const html2 = buildKitchenTicketHtml(
       receiptOrder,
       printLabels,
       printLabels.kitchenCopy2 || '【 ส่งอาหาร / 备餐传菜联 】',
+      pw,
     );
     const outcome1 = await submitPrint(html1, 'kitchen');
     const outcome2 = await submitPrint(html2, 'kitchen');
@@ -298,13 +303,17 @@ export default function AdminOrdersPage() {
         qrDataUrl = null;
       }
     }
-    const html = buildBillHtml(toReceiptOrder(order, locale), { qrDataUrl, labels: printLabels });
+    const prefs = await loadPreferences();
+    const pw = Number(prefs.paperWidth) || 80;
+    const html = buildBillHtml(toReceiptOrder(order, locale), { qrDataUrl, labels: printLabels, paperWidthMm: pw });
     const outcome = await submitPrint(html, 'bill');
     flash(describeOutcome(outcome, t));
   };
 
   const doPrintReceipt = async (order: any) => {
-    const html = buildReceiptHtml(toReceiptOrder(order, locale), { labels: printLabels });
+    const prefs = await loadPreferences();
+    const pw = Number(prefs.paperWidth) || 80;
+    const html = buildReceiptHtml(toReceiptOrder(order, locale), { labels: printLabels, paperWidthMm: pw });
     const outcome = await submitPrint(html, 'receipt');
     flash(describeOutcome(outcome, t));
   };

@@ -588,7 +588,12 @@
     "feedLines": "切纸前走纸行数",
     "feedLinesHint": "6 行约 24mm。切在字上 → 调大；空白太多 → 调小。",
     "lanTitle": "手机用这个地址",
-    "lanHint": "手机与电脑在同一 Wi-Fi 时，点下面地址填入「打印服务地址」即可静默打印。"
+    "lanHint": "手机与电脑在同一 Wi-Fi 时，点下面地址填入「打印服务地址」即可静默打印。",
+    "paperWidth": "打印纸宽",
+    "paperWidthHint": "选择打印机实际使用的纸宽。80mm 是标准小票纸；50mm 用于较窄的机器，内容会按比例收窄。",
+    "paper80": "80mm（标准）",
+    "paper50": "50mm（窄）",
+    "paperWidthDots": "输出宽度：{dots} 点"
   },
   "adminStock": {
     "entry": "库存",

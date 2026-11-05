@@ -38,8 +38,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
+import subprocess
 import sys
+import tempfile
 import threading
 import time
 import traceback
@@ -53,6 +56,10 @@ sys.path.insert(0, str(HERE))
 
 import escpos  # noqa: E402
 import render  # noqa: E402
+try:
+    import sound_announcer
+except ImportError:
+    sound_announcer = None
 
 VERSION = "1.1.0"
 CONFIG_PATH = HERE / "config.json"
@@ -69,6 +76,10 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "feedLines": 6,         # 切纸前走纸行数（一行≈4mm）；走不够会切在字上或切不断
     "baudRate": 9600,       # 仅蓝牙串口用；SPP 是虚拟链路，此值对吞吐无影响
     "authToken": "",        # 安全通信秘钥（为空时不校验，配上后必须 Header 带 X-Print-Key）
+    # 自动出单 watch（桥自己轮询服务端，不依赖浏览器）
+    "watchUrl": "",         # 服务端基地址，如 https://www.hookfishpond.com
+    "watchToken": "",       # 与服务端 expectedToken 一致的内部 token（从 DATABASE_URL 派生）
+    "watchInterval": 5,     # 轮询间隔（秒）
 }
 
 # 一次只渲染/打印一份，避免并发把打印机和 Chrome 打爆
@@ -91,7 +102,30 @@ CORS_HEADERS = {
 
 def log(msg: str) -> None:
     stamp = datetime.now().strftime("%H:%M:%S")
-    print(f"[{stamp}] {msg}", flush=True)
+    line = f"[{stamp}] {msg}"
+    print(line, flush=True)
+    # 同时追加到文件（隐藏窗口时 stdout 可能无处可去，日志是唯一观测手段）
+    try:
+        with open(HERE / "bridge.log", "a", encoding="utf-8") as f:
+            f.write(line + "\n")
+    except Exception:
+        pass
+
+
+def print_log(entry: str) -> None:
+    """结构化打印日志：追加到 print.log，方便查「何时打了哪张单」。
+
+    格式：ISO 时间 | 单号 | 动作 | 结果
+    例如：2026-11-05T16:11:42+07:00 | FP-20261105-001 | PRINT | ok
+    """
+    stamp = datetime.now().isoformat(timespec="seconds")
+    line = f"{stamp} | {entry}"
+    print(line, flush=True)
+    try:
+        with open(HERE / "print.log", "a", encoding="utf-8") as f:
+            f.write(line + "\n")
+    except Exception:
+        pass
 
 
 def load_config() -> dict[str, Any]:
@@ -171,12 +205,29 @@ def do_print(payload: dict[str, Any]) -> dict[str, Any]:
     feed = int(payload.get("feedLines", CONFIG["feedLines"]))
     copies = max(1, min(5, int(payload.get("copies") or 1)))
     baud = int(payload.get("baud") or CONFIG.get("baudRate") or 9600)
+    # ⚠️ 2026-11-05：纸宽（mm）用于决定 Chrome 渲染视口宽度。
+    # 不传时按 width 点推算：576 点→80mm，384 点→50mm（或按默认 80mm）。
+    paper_mm = int(payload.get("paperWidthMm") or 0) or round(width / 576 * 80)
 
     started = time.time()
     with _PRINT_LOCK:
+        # 触发目标电脑扬声器语音播报（泰中双语）
+        if sound_announcer:
+            try:
+                table_info = payload.get("tableName") or payload.get("table") or ""
+                if not table_info and html:
+                    # 从 HTML 提取桌位名称
+                    m = re.search(r'class="v">([^<]+)</span>', html)
+                    if m:
+                        table_info = m.group(1).strip()
+                sound_announcer.announce_new_order({"table_no": table_info or "新订单"})
+            except Exception as e:
+                log(f"语音播报触发跳过：{e}")
+
         if html:
             img = render.render_html_to_bitmap(
-                html, target_width=width, scale=scale, mode=mode, threshold=threshold
+                html, target_width=width, scale=scale, mode=mode, threshold=threshold,
+                paper_width_mm=paper_mm,
             )
         elif text:
             img = _text_to_bitmap(text, width)
@@ -332,8 +383,9 @@ class Handler(BaseHTTPRequestHandler):
             self._send(401, {"ok": False, "error": "未授权：无效或缺失 X-Print-Key"})
             return
         path = self.path.split("?")[0].rstrip("/") or "/"
+
         if path != "/print":
-            self._send(404, {"ok": False, "error": f"未知路径 {path}（只支持 POST /print）"})
+            self._send(404, {"ok": False, "error": f"未知路径 {path}（支持 /print）"})
             return
         try:
             payload = self._read_json()
@@ -449,6 +501,139 @@ def _lan_ips() -> list[str]:
     return ips
 
 
+# --------------------------------------------------------------------------- #
+# 自动出单 watch 模式：桥自己轮询服务端，不依赖浏览器
+# --------------------------------------------------------------------------- #
+
+def _http_json(url: str, method: str = "GET", body: dict | None = None,
+               headers: dict | None = None, timeout: float = 15) -> tuple[int, dict]:
+    """发 HTTP 请求返回 (status, json)。返回 status 0 表示网络失败。"""
+    import urllib.request
+    import urllib.error
+    data = None
+    if body is not None:
+        data = json.dumps(body, ensure_ascii=False).encode("utf-8")
+    req = urllib.request.Request(url, data=data, method=method)
+    req.add_header("Content-Type", "application/json; charset=utf-8")
+    if headers:
+        for k, v in headers.items():
+            req.add_header(k, v)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            raw = resp.read().decode("utf-8", "replace")
+            try:
+                return resp.status, json.loads(raw)
+            except Exception:
+                return resp.status, {"raw": raw}
+    except urllib.error.HTTPError as e:
+        raw = e.read().decode("utf-8", "replace")
+        try:
+            return e.code, json.loads(raw)
+        except Exception:
+            return e.code, {"raw": raw}
+    except Exception as e:
+        return 0, {"error": str(e)}
+
+
+def _write_pending_announce(table_no: str) -> None:
+    """写播报标记文件：桥(Session0) 触发 Session1 播报任务时传递 table_no。
+
+    文件放在桥目录，run_audio.bat（Session 1）读取后播报并删除。
+    用文件而非命令行参数，避免命令行编码/转义问题（泰文、空格）。
+    """
+    try:
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pending_announce.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump({"table_no": table_no, "ts": time.time()}, f, ensure_ascii=False)
+    except Exception:
+        pass
+
+
+def watch_loop(args: Any) -> None:
+    """轮询服务端 watch API，发现新单打印两联+播报+回写。"""
+    import urllib.parse
+    base = (args.watch_url or CONFIG.get("watchUrl") or "").rstrip("/")
+    token = args.watch_token or CONFIG.get("watchToken") or ""
+    interval = args.watch_interval or CONFIG.get("watchInterval") or 5
+    if not base:
+        log("[watch] 未配置 watchUrl，watch 模式不启动")
+        return
+    if not token:
+        log("[watch] 未配置 watchToken，watch 模式不启动")
+        return
+
+    watch_url = f"{base}/api/admin/print/watch"
+    mark_url = f"{base}/api/admin/print/mark"
+    headers = {"X-Print-Token": token}
+    log(f"[watch] 启动：轮询 {watch_url} 每 {interval}s")
+
+    while True:
+        try:
+            status, payload = _http_json(watch_url, "GET", headers=headers, timeout=12)
+            if status != 200:
+                log(f"[watch] 拉取失败 HTTP {status}: {payload.get('error') or payload.get('raw','')[:120]}")
+            else:
+                orders = payload.get("orders") or []
+                for o in orders:
+                    order_no = o.get("orderNumber") or "?"
+                    log(f"[watch] 命中新单 {order_no} table={o.get('tableCode')}")
+                    print_log(f"{order_no} | HIT | table={o.get('tableCode')}")
+                    ok_bill = False
+                    try:
+                        # ① 只打印一份（客户票）。服务端已把 kitchenHtml 置 null，不再打后厨票。
+                        bill_html = o.get("billHtml")
+                        if bill_html:
+                            # ⚠️ 2026-11-05：服务端返回了纸宽（mm），桥按此决定视口与输出点宽。
+                            pw = int(o.get("paperWidthMm") or 0) or 80
+                            r = do_print({
+                                "html": bill_html,
+                                "printer": args.printer or CONFIG.get("defaultPrinter"),
+                                "cut": True,
+                                "paperWidthMm": pw,
+                                "width": round(pw / 80 * 576),
+                            })
+                            ok_bill = r.get("ok", True)
+                            print_log(f"{order_no} | PRINT | {'ok' if ok_bill else 'fail'}")
+                        else:
+                            print_log(f"{order_no} | PRINT | no-bill-html")
+                        # ③ 播报（成功出纸后）
+                        # 桥跑在 Session 0（SYSTEM），SAPI 播报需要音频设备（用户会话 Session 1）。
+                        # 因此不直接调 sound_announcer，而是：
+                        #   a) 写 pending_announce.json（传 table_no）
+                        #   b) 触发 HookFishpondAudioNotify 计划任务（InteractiveToken=McIntosh，Session 1，有音频）
+                        # 由 run_audio.bat 读标记文件完成真实播报，播完删除。
+                        if ok_bill:
+                            try:
+                                _write_pending_announce(
+                                    o.get("tableName") or o.get("tableCode") or ""
+                                )
+                                subprocess.run(
+                                    ["schtasks", "/run", "/tn", "HookFishpondAudioNotify"],
+                                    capture_output=True, timeout=15,
+                                )
+                                log(f"[watch] 已请求播报 {order_no}")
+                            except Exception as e:
+                                log(f"[watch] 播报请求失败：{e}")
+                    except Exception as e:
+                        log(f"[watch] 打印异常 {order_no}：{e}")
+                        print_log(f"{order_no} | PRINT | error={e}")
+                        ok_bill = False
+                    # ④ 回写（打印失败也要回写 FAILED，否则状态停在 processing 不再处理）
+                    state = "PRINTED" if ok_bill else "FAILED"
+                    print_log(f"{order_no} | MARK | {state}")
+                    try:
+                        _http_json(mark_url, "POST",
+                                   body={"id": o.get("id"), "state": state,
+                                         "error": None if state == "PRINTED" else "桥打印失败"},
+                                   headers=headers, timeout=10)
+                        log(f"[watch] 回写 {state} {o.get('orderNumber')}")
+                    except Exception as e:
+                        log(f"[watch] 回写失败 {e}")
+        except Exception as e:
+            log(f"[watch] 循环异常：{e}")
+        time.sleep(interval)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Hook Fishpond 本地打印桥接服务")
     parser.add_argument("--port", type=int, default=None, help=f"监听端口（默认 {CONFIG['port']}）")
@@ -459,6 +644,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--width", type=int, default=None, help="打印宽度（点），默认 576")
     parser.add_argument("--selftest", action="store_true", help="只打一张自检页然后退出")
     parser.add_argument("--list", action="store_true", help="列出本机所有打印目标后退出")
+    parser.add_argument("--watch", action="store_true",
+                        help="轮询服务端 /api/admin/print/watch，发现新单自动打印+播报（不依赖浏览器）")
+    parser.add_argument("--watch-url", default=None,
+                        help="服务端 watch API 基地址，如 https://www.hookfishpond.com（默认读 config）")
+    parser.add_argument("--watch-token", default=None,
+                        help="内部打印 token（默认读 config）")
+    parser.add_argument("--watch-interval", type=int, default=None,
+                        help="轮询间隔秒数（默认 5）")
     args = parser.parse_args(argv)
 
     if args.list:
@@ -518,6 +711,13 @@ def main(argv: list[str] | None = None) -> int:
         else:
             log("         未检测到局域网地址，手机可能连不上（检查 Wi-Fi）")
     log(f"网页端会访问 /health 探测本服务；探测不到就退回浏览器打印对话框。")
+
+    # 自动出单 watch：桥自己轮询服务端，不依赖浏览器
+    if args.watch:
+        t = threading.Thread(target=watch_loop, args=(args,), daemon=True)
+        t.start()
+        log(f"自动出单 watch 线程已启动（--watch）")
+
     try:
         server.serve_forever()
     except KeyboardInterrupt:

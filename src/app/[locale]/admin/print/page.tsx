@@ -28,6 +28,7 @@ import {
   getPrintMode,
   loadPreferences,
   pickAutoTarget,
+  paperWidthToDots,
   printViaBridge,
   probeBridge,
   savePreferences,
@@ -40,6 +41,7 @@ import {
   type BridgeTarget,
   type ChannelPreference,
   type CutMode,
+  type PaperWidthMm,
   type PrintMode,
   type PrintPreferences,
   type PrintPurpose,
@@ -52,6 +54,7 @@ type ProbeState = 'checking' | 'online' | 'offline';
 const PURPOSES: PrintPurpose[] = ['kitchen', 'bill', 'receipt'];
 const CHANNELS: ChannelPreference[] = ['usb', 'bluetooth', 'auto'];
 const CUT_MODES: CutMode[] = ['full', 'partial', 'full-feed', 'partial-feed'];
+const PAPER_WIDTHS: PaperWidthMm[] = ['50', '80'];
 
 /** 设置页测试用的假订单 —— 只为验证链路，不进数据库 */
 function demoOrder(locale: string): ReceiptOrder {
@@ -210,14 +213,17 @@ export default function AdminPrintPage() {
     setMessage('');
     try {
       const order = demoOrder(locale);
+      const paperWidthMm = Number(prefs.paperWidth) || 80;
       const html =
         purpose === 'kitchen'
-          ? buildKitchenTicketHtml(order, labels)
-          : buildBillHtml(order, { qrDataUrl: null, labels });
+          ? buildKitchenTicketHtml(order, labels, undefined, paperWidthMm)
+          : buildBillHtml(order, { qrDataUrl: null, labels, paperWidthMm });
       const r = await printViaBridge(html, target, {
         copies: 1,
         cutMode: prefs.cutMode,
         feedLines: prefs.feedLines,
+        width: paperWidthToDots(prefs.paperWidth),
+        paperWidthMm: paperWidthMm,
       });
       if (r.ok) {
         setMessage(
@@ -424,6 +430,30 @@ export default function AdminPrintPage() {
           />
           <p className="mt-1 text-[11px] leading-relaxed text-neutral-400">{t('adminPrint.feedLinesHint')}</p>
         </div>
+      </div>
+
+      {/* 纸宽 */}
+      <div className="rounded-2xl bg-white p-4 shadow-sm">
+        <p className="text-sm font-semibold text-neutral-900">{t('adminPrint.paperWidth')}</p>
+        <p className="mt-1 text-xs leading-relaxed text-neutral-400">{t('adminPrint.paperWidthHint')}</p>
+        <div className="mt-3 grid grid-cols-2 gap-1.5">
+          {PAPER_WIDTHS.map((mm) => (
+            <button
+              key={mm}
+              onClick={() => void updatePrefs({ paperWidth: mm })}
+              className={`rounded-lg border px-2 py-2 text-[11px] font-medium transition ${
+                prefs.paperWidth === mm
+                  ? 'border-primary-500 bg-primary-50 text-primary-700'
+                  : 'border-neutral-200 text-neutral-500 hover:border-neutral-300'
+              }`}
+            >
+              {mm === '80' ? t('adminPrint.paper80') : t('adminPrint.paper50')}
+            </button>
+          ))}
+        </div>
+        <p className="mt-2 text-[11px] leading-relaxed text-neutral-400">
+          {t('adminPrint.paperWidthDots', { dots: prefs.paperWidth === '50' ? 384 : 576 })}
+        </p>
       </div>
 
       {/* 测试打印 */}

@@ -29,6 +29,8 @@ export type PrintMode = 'bridge' | 'browser';
 /** 通道偏好：不是具体端口号，因此手机/电脑可以共用同一份配置 */
 export type ChannelPreference = 'usb' | 'bluetooth' | 'auto';
 export type CutMode = 'full' | 'partial' | 'full-feed' | 'partial-feed';
+/** 纸宽：50mm 或 80mm（决定打印点宽与 CSS 渲染宽度） */
+export type PaperWidthMm = '50' | '80';
 
 export interface PrintPreferences {
   kitchen: ChannelPreference;
@@ -36,6 +38,8 @@ export interface PrintPreferences {
   receipt: ChannelPreference;
   cutMode: CutMode;
   feedLines: number;
+  /** 纸宽（mm）。80mm 默认。50mm 用于较窄的小票机。 */
+  paperWidth: PaperWidthMm;
 }
 
 export const DEFAULT_PREFERENCES: PrintPreferences = {
@@ -44,7 +48,13 @@ export const DEFAULT_PREFERENCES: PrintPreferences = {
   receipt: 'usb',
   cutMode: 'full',
   feedLines: 6,
+  paperWidth: '80',
 };
+
+/** 纸宽 → 输出点宽（203dpi 热敏机）。80mm=576 点，50mm=384 点。 */
+export function paperWidthToDots(mm: PaperWidthMm): number {
+  return mm === '50' ? 384 : 576;
+}
 
 export interface BridgeTarget {
   /** 显示名，如 `GLPrinter (COM8)` */
@@ -167,12 +177,14 @@ function normalizePrefs(raw: unknown): PrintPreferences {
       ? (o.cutMode as CutMode)
       : 'full';
   const feed = Number(o.feedLines);
+  const paper = o.paperWidth === '50' || o.paperWidth === '80' ? o.paperWidth : DEFAULT_PREFERENCES.paperWidth;
   return {
     kitchen: ch(o.kitchen),
     bill: ch(o.bill),
     receipt: ch(o.receipt),
     cutMode: cut,
     feedLines: Number.isFinite(feed) ? Math.min(12, Math.max(0, Math.round(feed))) : 6,
+    paperWidth: paper,
   };
 }
 
@@ -342,7 +354,7 @@ export function pickAutoTarget(
 export async function printViaBridge(
   html: string,
   target: string,
-  opts?: { copies?: number; cut?: boolean; feedLines?: number; cutMode?: string },
+  opts?: { copies?: number; cut?: boolean; feedLines?: number; cutMode?: string; width?: number; paperWidthMm?: number },
 ): Promise<{ ok: boolean; width?: number; height?: number; bytes?: number; ms?: number; transport?: string; error?: string }> {
   try {
     const key = getBridgeKey();
@@ -363,6 +375,8 @@ export async function printViaBridge(
           cut: opts?.cut ?? true,
           ...(opts?.feedLines != null ? { feedLines: opts.feedLines } : {}),
           ...(opts?.cutMode ? { cutMode: opts.cutMode } : {}),
+          ...(opts?.width ? { width: opts.width } : {}),
+          ...(opts?.paperWidthMm ? { paperWidthMm: opts.paperWidthMm } : {}),
         }),
       },
       PRINT_TIMEOUT_MS,
@@ -423,6 +437,10 @@ export async function submitPrint(
     cut: opts?.cut,
     cutMode: opts?.cutMode ?? prefs.cutMode,
     feedLines: opts?.feedLines ?? prefs.feedLines,
+    // ⚠️ 2026-11-05：纸宽偏好 → 输出点宽 + 桥端渲染视口宽。
+    // 80mm=576 点，50mm=384 点；桥用 paperWidthMm 决定 Chrome 视口 mm。
+    width: paperWidthToDots(prefs.paperWidth),
+    paperWidthMm: Number(prefs.paperWidth) || 80,
   };
   const r = await printViaBridge(html, target, cutOpts);
   if (r.ok) {

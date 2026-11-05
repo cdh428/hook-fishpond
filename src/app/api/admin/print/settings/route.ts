@@ -29,6 +29,8 @@ export interface PrintPreferences {
   cutMode: "full" | "partial" | "full-feed" | "partial-feed";
   /** 切纸前走纸行数，切在字上就调大 */
   feedLines: number;
+  /** 纸宽（mm）：80 标准 / 50 窄 */
+  paperWidth: "50" | "80";
 }
 
 export const DEFAULT_PREFERENCES: PrintPreferences = {
@@ -37,6 +39,7 @@ export const DEFAULT_PREFERENCES: PrintPreferences = {
   receipt: "usb",
   cutMode: "full",
   feedLines: 6,
+  paperWidth: "80",
 };
 
 const VALID_CHANNEL: ChannelPreference[] = ["usb", "bluetooth", "auto"];
@@ -50,12 +53,14 @@ function normalize(raw: unknown): PrintPreferences {
     ? (o.cutMode as PrintPreferences["cutMode"])
     : DEFAULT_PREFERENCES.cutMode;
   const feed = Number(o.feedLines);
+  const paper = o.paperWidth === "50" || o.paperWidth === "80" ? o.paperWidth : DEFAULT_PREFERENCES.paperWidth;
   return {
     kitchen: ch(o.kitchen),
     bill: ch(o.bill),
     receipt: ch(o.receipt),
     cutMode: cut,
     feedLines: Number.isFinite(feed) ? Math.min(12, Math.max(0, Math.round(feed))) : DEFAULT_PREFERENCES.feedLines,
+    paperWidth: paper,
   };
 }
 

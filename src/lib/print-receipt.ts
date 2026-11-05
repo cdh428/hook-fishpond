@@ -113,80 +113,93 @@ function fmtMinute(d: string | Date | null | undefined): string {
   return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-const BASE_CSS = `
+/** 按纸宽（mm）生成票据 CSS 变量。80mm 走原布局，50mm 收窄所有固定 mm 宽度。 */
+function baseCssFor(paperWidthMm: number): string {
+  // 内容区占纸宽比例：80mm 用 70mm 内容（87.5%），50mm 按同样比例收窄。
+  // 所有固定 mm 尺寸按 `k = mm / 80` 缩放，保证 50mm 上不溢出、字号不缩成渣。
+  const k = paperWidthMm / 80;
+  const pageW = `${paperWidthMm}mm`;
+  const bodyW = `${paperWidthMm}mm`;
+  const ticketW = `${Math.round(70 * k * 100) / 100}mm`;
+  const qrW = `${Math.round(48 * k * 100) / 100}mm`;
+  const qrTableW = `${Math.round(30 * k * 100) / 100}mm`;
+  // 字号：80mm 保持原值，50mm 按比例略缩（避免换行过多）。用 clamp 保底可读。
+  const fs = (base: number) => Math.max(9, Math.round(base * Math.max(0.85, k) * 10) / 10);
+  return `
   * { box-sizing: border-box; }
-  @page { size: 80mm auto; margin: 0; }
+  @page { size: ${pageW} auto; margin: 0; }
   html, body {
     margin: 0; padding: 0;
-    width: 80mm;
+    width: ${bodyW};
     background: #fff; color: #000;
     font-family: 'Leelawadee UI', 'Noto Sans Thai', 'Noto Sans SC', 'Sarabun', -apple-system, 'Segoe UI', sans-serif;
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
-  /* 黄金安全宽度锁定 70mm (点阵 400px)，饱满且绝不超出 420 纸边，底部留足 1 行空白切纸 */
-  .ticket { width: 70mm; margin: 0 auto; padding: 2mm 1mm 6mm; }
+  /* 黄金安全宽度锁定内容区，绝不超出纸边，底部留足 1 行空白切纸 */
+  .ticket { width: ${ticketW}; margin: 0 auto; padding: 2mm 1mm 6mm; }
   .center { text-align: center; }
-  .brand { font-size: 18px; font-weight: 700; letter-spacing: .5px; }
-  .brand-sub { font-size: 12px; margin-top: 1px; }
+  .brand { font-size: ${fs(18)}px; font-weight: 700; letter-spacing: .5px; }
+  .brand-sub { font-size: ${fs(12)}px; margin-top: 1px; }
   .copy-tag {
     display: inline-block;
     border: 2px solid #000;
     padding: 2px 8px;
-    font-size: 15px;
+    font-size: ${fs(15)}px;
     font-weight: 900;
     margin: 4px auto 2px;
   }
   .doc-type {
     margin: 6px 0 4px; padding: 3px 0;
     border-top: 2px dashed #000; border-bottom: 2px dashed #000;
-    font-size: 16px; font-weight: 800; letter-spacing: 1px;
+    font-size: ${fs(16)}px; font-weight: 800; letter-spacing: 1px;
   }
   .dashed { border-top: 1.5px dashed #000; margin: 5px 0; }
   .solid { border-top: 2px solid #000; margin: 5px 0; }
-  .row { display: flex; justify-content: space-between; gap: 6px; font-size: 13px; line-height: 1.6; }
+  .row { display: flex; justify-content: space-between; gap: 6px; font-size: ${fs(13)}px; line-height: 1.6; }
   .row .k { color: #000; }
   .row .v { text-align: right; font-weight: 600; }
-  .order-no { font-size: 28px; font-weight: 900; letter-spacing: 1px; line-height: 1.15; }
-  .meta { font-size: 13px; line-height: 1.6; }
+  .order-no { font-size: ${fs(28)}px; font-weight: 900; letter-spacing: 1px; line-height: 1.15; }
+  .meta { font-size: ${fs(13)}px; line-height: 1.6; }
   .items { margin-top: 4px; }
   .item { display: flex; justify-content: space-between; gap: 6px; line-height: 1.4; margin-top: 4px; }
   .item .n { flex: 1 1 auto; word-break: break-word; }
-  .item-th { font-size: 16px; font-weight: 800; color: #000; line-height: 1.35; }
-  .item-zh { font-size: 12px; color: #444; line-height: 1.3; margin-top: 1px; padding-left: 2px; }
-  .item .q { flex: 0 0 auto; font-weight: 800; padding-right: 1mm; font-size: 15px; }
-  .item-note { font-size: 12px; padding-left: 6px; line-height: 1.5; color: #333; }
+  .item-th { font-size: ${fs(16)}px; font-weight: 800; color: #000; line-height: 1.35; }
+  .item-zh { font-size: ${fs(12)}px; color: #444; line-height: 1.3; margin-top: 1px; padding-left: 2px; }
+  .item .q { flex: 0 0 auto; font-weight: 800; padding-right: 1mm; font-size: ${fs(15)}px; }
+  .item-note { font-size: ${fs(12)}px; padding-left: 6px; line-height: 1.5; color: #333; }
   /* 按下单时间分组的批次时间行 + 批次分隔线 */
-  .batch-time { font-size: 11px; font-weight: 800; color: #000; margin: 2px 0 0; letter-spacing: .3px; }
+  .batch-time { font-size: ${fs(11)}px; font-weight: 800; color: #000; margin: 2px 0 0; letter-spacing: .3px; }
   .batch-div { border-top: 1.5px dashed #000; margin: 6px 0 0; }
-  .batch-count { font-size: 10px; font-weight: 600; color: #555; }
+  .batch-count { font-size: ${fs(10)}px; font-weight: 600; color: #555; }
   /* 行级送餐状态：已送 ✓ / 未送 ⏳ */
-  .serve-line { font-size: 10px; margin-top: 1px; padding-left: 2px; }
+  .serve-line { font-size: ${fs(10)}px; margin-top: 1px; padding-left: 2px; }
   .serve-tag { font-weight: 700; color: #555; }
   .serve-tag.served { color: #000; font-weight: 800; }
   /* 后厨单泰文大字与规格放大 */
   .big .item { margin-top: 6px; }
-  .big .item-th { font-size: 20px; font-weight: 900; line-height: 1.4; }
-  .big .item-zh { font-size: 14px; font-weight: 500; color: #333; margin-top: 2px; }
-  .big .item .q { font-size: 22px; font-weight: 900; }
-  .big .item-note { font-size: 15px; font-weight: 700; line-height: 1.6; padding-left: 8px; }
-  .total-row { display: flex; justify-content: space-between; font-size: 18px; font-weight: 800; }
-  .grand { font-size: 23px; font-weight: 900; }
+  .big .item-th { font-size: ${fs(20)}px; font-weight: 900; line-height: 1.4; }
+  .big .item-zh { font-size: ${fs(14)}px; font-weight: 500; color: #333; margin-top: 2px; }
+  .big .item .q { font-size: ${fs(22)}px; font-weight: 900; }
+  .big .item-note { font-size: ${fs(15)}px; font-weight: 700; line-height: 1.6; padding-left: 8px; }
+  .total-row { display: flex; justify-content: space-between; font-size: ${fs(18)}px; font-weight: 800; }
+  .grand { font-size: ${fs(23)}px; font-weight: 900; }
   .qr { text-align: center; margin: 6px 0 2px; }
-  .qr img { width: 48mm; height: 48mm; image-rendering: pixelated; }
-  .qr-cap { font-size: 12px; font-weight: 700; margin-top: 2px; }
-  .qr-amt { font-size: 18px; font-weight: 800; }
-  .foot { text-align: center; font-size: 12px; margin-top: 8px; line-height: 1.6; }
-  .warn { font-size: 11px; }
+  .qr img { width: ${qrW}; height: ${qrW}; image-rendering: pixelated; }
+  .qr-cap { font-size: ${fs(12)}px; font-weight: 700; margin-top: 2px; }
+  .qr-amt { font-size: ${fs(18)}px; font-weight: 800; }
+  .foot { text-align: center; font-size: ${fs(12)}px; margin-top: 8px; line-height: 1.6; }
+  .warn { font-size: ${fs(11)}px; }
   .stamp {
     margin: 6px auto 2px; text-align: center; width: 90px;
-    font-size: 18px; font-weight: 900; letter-spacing: 2px;
+    font-size: ${fs(18)}px; font-weight: 900; letter-spacing: 2px;
     border: 2px solid #000; padding: 2px 0;
   }
 `;
+}
 
-function shell(title: string, inner: string, labels: PrintLabels): string {
+function shell(title: string, inner: string, labels: PrintLabels, paperWidthMm = 80): string {
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(title)}</title>
-<style>${BASE_CSS}</style></head><body><div class="ticket">${inner}</div></body></html>`;
+<style>${baseCssFor(paperWidthMm)}</style></head><body><div class="ticket">${inner}</div></body></html>`;
 }
 
 function header(docType: string, labels: PrintLabels): string {
@@ -296,6 +309,7 @@ export function buildKitchenTicketHtml(
   order: ReceiptOrder,
   labels: PrintLabels,
   copyLabel?: string,
+  paperWidthMm = 80,
 ): string {
   const inner = `
     ${header(labels.kitchenTicket, labels)}
@@ -309,7 +323,7 @@ export function buildKitchenTicketHtml(
     }
     <div class="solid"></div>
     <div class="foot">${esc(labels.kitchenTicket)}${copyLabel ? ` (${esc(copyLabel)})` : ''} · ${esc(order.orderNumber)}</div>`;
-  return shell(order.orderNumber, inner, labels);
+  return shell(order.orderNumber, inner, labels, paperWidthMm);
 }
 
 /** 预结算单（顾客看着付钱）：菜品 + 渔获 + 折扣 + 应付 + 收款二维码 + 桌号续点单 QR */
@@ -321,9 +335,13 @@ export function buildBillHtml(
     tableQrDataUrl?: string | null;
     tableQrLabel?: string | null;
     labels: PrintLabels;
+    paperWidthMm?: number;
   },
 ): string {
   const { labels, qrDataUrl, tableQrDataUrl } = opts;
+  const paperWidthMm = opts.paperWidthMm ?? 80;
+  // 桌号续点单 QR 宽度随纸宽缩放
+  const qrTableW = `${Math.round(30 * (paperWidthMm / 80) * 100) / 100}mm`;
   const inner = `
     ${header(labels.bill, labels)}
     ${orderMeta(order, labels)}
@@ -360,7 +378,7 @@ export function buildBillHtml(
       tableQrDataUrl
         ? `<div class="dashed"></div>
            <div class="qr">
-             <img src="${tableQrDataUrl}" alt="table" style="width:30mm;height:30mm" />
+             <img src="${tableQrDataUrl}" alt="table" style="width:${qrTableW};height:${qrTableW}" />
              ${
                opts.tableQrLabel
                  ? `<div class="qr-cap">${esc(opts.tableQrLabel)}</div>`
@@ -371,15 +389,16 @@ export function buildBillHtml(
     }
     <div class="dashed"></div>
     <div class="foot">${esc(labels.thanks)}<br/>${esc(order.orderNumber)}</div>`;
-  return shell(order.orderNumber, inner, labels);
+  return shell(order.orderNumber, inner, labels, paperWidthMm);
 }
 
 /** 收款收据（结清凭证） */
 export function buildReceiptHtml(
   order: ReceiptOrder,
-  opts: { labels: PrintLabels; paidAtText?: string | null },
+  opts: { labels: PrintLabels; paidAtText?: string | null; paperWidthMm?: number },
 ): string {
   const { labels } = opts;
+  const paperWidthMm = opts.paperWidthMm ?? 80;
   const inner = `
     ${header(labels.receipt, labels)}
     <div class="stamp">PAID</div>
@@ -407,7 +426,7 @@ export function buildReceiptHtml(
     )}</span></div>
     <div class="dashed"></div>
     <div class="foot">${esc(labels.thanks)}<br/>${esc(order.orderNumber)}</div>`;
-  return shell(order.orderNumber, inner, labels);
+  return shell(order.orderNumber, inner, labels, paperWidthMm);
 }
 
 /**

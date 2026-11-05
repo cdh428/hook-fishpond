@@ -28,7 +28,6 @@ MM80_CSS_PX = 80 / 25.4 * 96  # ≈ 302.36
 
 # 渲染高度的试探序列（CSS px）。先从小的试，不够再加大，避免每次都很慢。
 _HEIGHT_LADDER = (1500, 2600, 4200, 7000)
-
 _CHROME_CANDIDATES = (
     r"C:\Program Files\Google\Chrome\Application\chrome.exe",
     r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
@@ -64,8 +63,10 @@ def find_chrome() -> str:
 
 
 def _screenshot(chrome: str, html_path: Path, png_path: Path, css_h: int, scale: int,
-                timeout: int = 90) -> None:
-    css_w = round(MM80_CSS_PX)
+                timeout: int = 90, css_w: int | None = None) -> None:
+    # 默认 80mm 纸宽的 CSS 宽；传了 paperWidth 就按实际纸宽算（50mm≈189px）。
+    if css_w is None:
+        css_w = round(MM80_CSS_PX)
     profile = Path(tempfile.mkdtemp(prefix="pb-chrome-"))
     try:
         args = [
@@ -148,6 +149,7 @@ def render_html_to_bitmap(
     mode: str = "threshold",
     threshold: int = 128,
     chrome: str | None = None,
+    paper_width_mm: int = 80,
 ) -> Image.Image:
     """
     把一份完整票据 HTML 渲染成 1-bit 位图（宽度 = target_width 点）。
@@ -168,10 +170,13 @@ def render_html_to_bitmap(
         html_path = workdir / "ticket.html"
         html_path.write_text(html, encoding="utf-8")
 
+        # Chrome 视口宽度按纸宽（mm）换算成 CSS px，保证 50mm 纸不溢出、不留白边。
+        css_w = round(paper_width_mm / 25.4 * 96)
+
         last_img: Image.Image | None = None
         for css_h in _HEIGHT_LADDER:
             png_path = workdir / f"shot-{css_h}.png"
-            _screenshot(chrome, html_path, png_path, css_h, scale)
+            _screenshot(chrome, html_path, png_path, css_h, scale, css_w=css_w)
             with Image.open(png_path) as raw:
                 shot = raw.copy()
             cropped, truncated = _crop_content(shot)

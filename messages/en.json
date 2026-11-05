@@ -588,7 +588,12 @@
     "feedLines": "Feed lines before cut",
     "feedLinesHint": "6 lines ≈ 24mm. Cutting text → increase; too much blank → decrease.",
     "lanTitle": "Address for your phone",
-    "lanHint": "With phone and computer on the same Wi-Fi, tap an address below to use it as the service URL for silent printing."
+    "lanHint": "With phone and computer on the same Wi-Fi, tap an address below to use it as the service URL for silent printing.",
+    "paperWidth": "Paper width",
+    "paperWidthHint": "Choose the paper width your printer actually uses. 80mm is standard receipt paper; 50mm is for narrower machines and content scales down proportionally.",
+    "paper80": "80mm (standard)",
+    "paper50": "50mm (narrow)",
+    "paperWidthDots": "Output width: {dots} dots"
   },
   "adminStock": {
     "entry": "Inventory",
