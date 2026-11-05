@@ -236,12 +236,19 @@ def do_print(payload: dict[str, Any]) -> dict[str, Any]:
 
         # 如果目标是 Windows 驱动打印机 (非串口，如 POS80)，走高保真 GDI 驱动渲染
         if not escpos.is_serial_target(printer):
+            # ⚠️ 2026-11-05：GDI 直接使用桥已按纸宽渲染好的点宽（384/576），
+            # 不再二次缩放；左边距按纸宽物理点居中，确保 50/80mm 都不超出纸边。
+            # 203 DPI：80mm≈640px，50mm≈400px。
+            phys_w = round(paper_mm / 25.4 * 203)
+            left_margin = max(0, (phys_w - img.width) // 2)
             for i in range(copies):
                 escpos.send_image_gdi(
                     printer, img,
                     job_name=f"Hook Fishpond ticket {i + 1}/{copies}",
                     auto_cut=cut,
-                    feed_lines=feed
+                    feed_lines=feed,
+                    target_w=img.width,
+                    left_margin=left_margin,
                 )
             transport = "winspool-gdi"
             job = b"" # GDI 直接通过 DC 输出

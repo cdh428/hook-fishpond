@@ -145,18 +145,24 @@ def send_raw(printer_name: str, data: bytes, *, job_name: str = "Hook Fishpond")
 
 
 def send_image_gdi(printer_name: str, img, *, job_name: str = "Hook Fishpond",
-                   auto_cut: bool = True, feed_lines: int = 1) -> None:
+                   auto_cut: bool = True, feed_lines: int = 1,
+                   target_w: int | None = None, left_margin: int | None = None) -> None:
     """
     通过 Windows 原生 GDI 驱动设备上下文将图像打印至指定打印机。
-    规格升级：
-      1. 安全宽度扩展至 78mm (520 像素)，充分利用纸宽，文字等比加大。
-      2. 底部增加 1 行空白后紧随切纸，杜绝单独切出多余空白纸条。
+
+    规格：
+      - 目标宽 target_w（像素）由调用方按纸宽决定；不传时默认按 50mm 校准。
+      - 内容宽 + 左边距 = 右边缘，恰好落在对应纸宽内（203 DPI 物理分辨率），
+        绝不超出纸边。底部留 1 行空白后切纸。
     """
     import win32ui, win32con
     from PIL import Image, ImageWin
 
-    # 黄金安全宽度锁定 400 像素 (基准点 420 纸边内，留 15px 安全边距，绝不超出边界)
-    target_w = 400
+    # 默认 50mm 校准：内容 375px + 左边距 25px = 右边缘 400px = 50.05mm
+    if target_w is None:
+        target_w = 375
+    if left_margin is None:
+        left_margin = 25
     ratio = target_w / max(1, img.width)
     target_h = int(round(img.height * ratio))
     resized = img.resize((target_w, target_h), Image.LANCZOS)
@@ -170,7 +176,6 @@ def send_image_gdi(printer_name: str, img, *, job_name: str = "Hook Fishpond",
         hdc.StartPage()
 
         dib = ImageWin.Dib(resized)
-        left_margin = 12
         top_margin = 10
         dib.draw(hdc.GetHandleOutput(), (left_margin, top_margin, left_margin + target_w, top_margin + target_h))
 
