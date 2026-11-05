@@ -43,7 +43,6 @@ import {
 } from '@/lib/print-receipt';
 import { formatLineOptions, makeOptionKey } from '@/lib/menu-options';
 import { submitPrint, describeOutcome } from '@/lib/print-agent';
-import { useAutoPrinter } from '@/lib/auto-printer';
 import TablePicker from '@/components/TablePicker';
 import OptionSheet from '@/components/OptionSheet';
 
@@ -261,16 +260,13 @@ export default function AdminOrdersPage() {
     [t],
   );
 
-  // ---------- 自动出单（收银台侧）----------
-  // 线上新增/追加菜品 → 本台收银机自动打客户票(带桌号QR)+后厨票(无QR)+泰中双语播报。
-  // 自动出单**始终开启、不可切换**：新单/加菜由 POS80 打一次 + 语音播报一次，
-  // 打完即置位（服务端 printState=PRINTED），之后要再打只能手动按「打印」键。
-  useAutoPrinter({
-    orders: filtered,
-    locale,
-    labels: printLabels,
-    onEvent: (msg) => flash(msg),
-  });
+  // ---------- 自动出单（已迁移到打印桥 watch，不再走浏览器）----------
+  // 自动出单现在由**目标机打印桥**的 --watch 模式负责：
+  //   桥每 5s 轮询服务端 /api/admin/print/watch，发现「刚修改(5分钟内)」的新单，
+  //   只打一份客户票(无QR) + 触发 AudioNotify 播报（Session 1）。
+  //   浏览器不再参与自动出单，避免与桥重复打印（踩过：同一单打两联+桥一份=3张）。
+  // 手动打印按钮（doPrintKitchen / doPrintBill）仍保留。
+  // useAutoPrinter({ orders: filtered, locale, labels: printLabels, onEvent: (msg) => flash(msg) });
 
   // ---------- 动作 ----------
   const doPrintKitchen = async (order: any) => {
