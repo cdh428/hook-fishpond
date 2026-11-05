@@ -264,8 +264,9 @@ async function main() {
   const hashedPassword = await bcrypt.hash(adminPassword, 10);
   await prisma.adminUser.upsert({
     where: { username: "admin" },
-    // 初始折扣 PIN = 123456；已存在的 admin 也补上（update 分支），保证有默认值
-    update: { discountPin: "123456" },
+    // ⚠️ update 分支**不**设 discountPin：已存在的 admin 保留用户改过的 PIN，
+    // 只在首次创建时给初始值 123456。否则每次跑 seed 都会静默重置 PIN。
+    update: {},
     create: {
       username: "admin",
       password: hashedPassword,
