@@ -1,14 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHmac } from "crypto";
 import { prisma } from "@/lib/prisma";
-import {
-  buildBillHtml,
-  buildKitchenTicketHtml,
-  makeQrDataUrl,
-  type PrintLabels,
-} from "@/lib/print-receipt";
+import { buildBillHtml, type PrintLabels } from "@/lib/print-receipt";
 import { toReceiptOrder } from "@/lib/order-view";
-import { tableOrderUrl } from "@/lib/api-client";
 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
@@ -153,16 +147,17 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // 只取「近期新单」：桥不该一启动就翻历史未出票单（踩过：14 张存量单连打）。
-    // 用 createdAt 窗口过滤——新单 created 在最近 WATCH_WINDOW_MS 内才自动打；
-    // 更早的未出票单保持 null，等店员手动补打（历史遗留不自动出纸）。
-    const WATCH_WINDOW_MS = 30 * 60 * 1000; // 最近 30 分钟
+    // 只取「刚修改的新单」：桥不该一启动就翻历史未出票单（踩过：14 张存量单连打）。
+    // 用 updatedAt 窗口过滤——「刚修改」（下单/加菜/改单都会更新 updatedAt）在最近
+    // WATCH_WINDOW_MS 内才自动打；更早的单保持 null，等店员手动补打（历史遗留不自动出纸）。
+    // 开机/换纸不涉及订单修改 → updatedAt 不更新 → 不会触发，杜绝「开机打一大堆」。
+    const WATCH_WINDOW_MS = 5 * 60 * 1000; // 最近 5 分钟
     const since = new Date(Date.now() - WATCH_WINDOW_MS);
     const orders = await prisma.order.findMany({
       where: {
-        printState: null, // 从未出票
+        printState: null, // 从未出票（防重复打印）
         status: { notIn: ["SETTLED", "CANCELLED"] },
-        createdAt: { gte: since },
+        updatedAt: { gte: since }, // 刚修改（下单/加菜/改单）
       },
       include: {
         items: {
@@ -174,7 +169,7 @@ export async function GET(request: NextRequest) {
         },
         table: true,
       },
-      orderBy: { createdAt: "asc" },
+      orderBy: { updatedAt: "asc" },
       take: 5,
     });
 
@@ -193,22 +188,14 @@ export async function GET(request: NextRequest) {
       try {
         const ro = toReceiptOrder(order, "zh"); // 渲染用中文（桥端按需）
         const labels = loadLabels("zh");
-        // 桌号续点单 QR
-        let tableQrDataUrl: string | null = null;
-        if (tableCode) {
-          try {
-            tableQrDataUrl = await makeQrDataUrl(tableOrderUrl(tableCode, "https://www.hookfishpond.com"));
-          } catch {
-            tableQrDataUrl = null;
-          }
-        }
+        // 只打印一份（客户票），取消 QR 码 + 后厨票（用户要求）
         billHtml = buildBillHtml(ro, {
           labels,
           qrDataUrl: null,
-          tableQrDataUrl,
-          tableQrLabel: tableCode ? labels.scanMoreFood : null,
+          tableQrDataUrl: null,
+          tableQrLabel: null,
         });
-        kitchenHtml = buildKitchenTicketHtml(ro, labels, labels.kitchenCopy1);
+        kitchenHtml = null; // 不再打后厨票
       } catch (e) {
         // 渲染失败：不领取，保持 null，下次再试
         console.error("watch render fail", order.id, e);
