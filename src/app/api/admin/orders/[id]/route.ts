@@ -326,12 +326,9 @@ export async function PATCH(
         }
       }
 
-      if (discountType !== "NONE" && probe.discountAmount > 0 && !note) {
-        return NextResponse.json(
-          { error: "Discount reason is required" },
-          { status: 400 },
-        );
-      }
+      // ⚠️ 2026-11-05：折扣原因改为**非必填**（用户明确要求只填金额即可）。
+      // 原来 `discountType !== "NONE" && discountAmount > 0 && !note` 会拦下所有
+      // 未填原因的折扣。现在允许空原因，discountNote 存 null。
 
       const updated = await runTx(async (tx) => {
         await tx.order.update({

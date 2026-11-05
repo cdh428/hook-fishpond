@@ -1551,7 +1551,9 @@ function DiscountModal({
 
       <button
         onClick={save}
-        disabled={busy || (discountAmount > 0 && !note.trim())}
+        // ⚠️ 2026-11-05：折扣原因改为非必填，只要填了金额（或选折扣类型）就能保存。
+        // 原来 `discountAmount > 0 && !note.trim()` 会拦下未填原因的折扣。
+        disabled={busy}
         className="w-full rounded-xl bg-primary-700 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
       >
         {busy ? t('common.saving') : t('adminOrders.applyDiscount')}
