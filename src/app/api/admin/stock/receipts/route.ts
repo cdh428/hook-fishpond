@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
       })),
     });
   } catch (error) {
-    return ledgerErrorResponse(error, "List purchase receipts error");
+    return ledgerErrorResponse(error, "List purchase receipts error", request);
   }
 }
 
@@ -65,6 +65,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ ok: true, ...result }, { status: 201 });
   } catch (error) {
-    return ledgerErrorResponse(error, "Create purchase receipt error");
+    return ledgerErrorResponse(error, "Create purchase receipt error", request);
   }
 }

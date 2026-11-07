@@ -1,6 +1,8 @@
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 import { round2 } from "@/lib/menu-options";
+import { requestLocale, serverT } from "@/lib/server-t";
 
 /**
  * 库存过账引擎 —— **全站唯一允许改动库存余额的地方**。
@@ -41,12 +43,35 @@ export type StockDocTypeValue =
   | "MANUAL"
   | "OPENING";
 
-/** 过账失败（路由转成 400/409） */
+/** 同一句话的三语版本 —— 服务端不知道页面语言，先把三种都带上，出口处再挑 */
+export type LocalizedText = string | { zh: string; en: string; th: string };
+
+/** 出口处挑语言（缺语回退中文） */
+function pickLocalized(v: LocalizedText | number | undefined, locale: string): string {
+  if (v == null) return "";
+  if (typeof v === "number") return String(v);
+  if (typeof v === "string") return v;
+  if (locale === "en") return v.en || v.zh;
+  if (locale === "th") return v.th || v.zh;
+  return v.zh;
+}
+
+/**
+ * 过账失败（路由转成 400/409）
+ *
+ * ⚠️ `message` 只用于服务端日志/兜底；返回给用户的一律走 `i18nKey`
+ * （messages 里的 `stockErr.*`），否则英文/泰文页面会弹出中文错误
+ * —— 规则见 `docs/playbooks/language-consistency.md`。
+ */
 export class StockLedgerError extends Error {
   constructor(
     public readonly code: string,
     message: string,
     public readonly status = 400,
+    /** messages/*.json 的 key，如 `stockErr.badQuantity` */
+    public readonly i18nKey?: string,
+    /** 文案插值参数（字符串原样用；对象按 locale 挑） */
+    public readonly params?: Record<string, LocalizedText | number>,
   ) {
     super(message);
     this.name = "StockLedgerError";
@@ -112,7 +137,12 @@ export async function postMovement(
   input: PostMovementInput,
 ): Promise<PostMovementResult> {
   if (!Number.isInteger(input.quantity) || input.quantity === 0) {
-    throw new StockLedgerError("BAD_QUANTITY", "quantity must be a non-zero integer");
+    throw new StockLedgerError(
+        "BAD_QUANTITY",
+        "quantity must be a non-zero integer",
+        400,
+        "stockErr.badQuantity",
+      );
   }
 
   if (input.idempotencyKey) {
@@ -144,7 +174,7 @@ export async function postMovement(
 
   await lockItem(tx, input.itemId);
   const item = await tx.menuItem.findUnique({ where: { id: input.itemId } });
-  if (!item) throw new StockLedgerError("NOT_FOUND", "Menu item not found", 404);
+  if (!item) throw new StockLedgerError("NOT_FOUND", "Menu item not found", 404, "stockErr.menuItemNotFound");
 
   const tracked = item.stockType === "PURCHASED" && !input.ledgerOnly;
 
@@ -176,6 +206,13 @@ export async function postMovement(
       throw new StockLedgerError(
         "NEGATIVE_STOCK",
         `Insufficient stock: ${item.name_zh} (on hand ${prevQty}, requested ${qty})`,
+        400,
+        "stockErr.negativeStock",
+        {
+          item: { zh: item.name_zh, en: item.name_en || item.name_zh, th: item.name_th || item.name_zh },
+          onHand: prevQty,
+          qty,
+        },
       );
     }
 
@@ -236,19 +273,35 @@ export async function reverseMovement(
   opts: { adminName?: string | null; note?: string | null } = {},
 ): Promise<PostMovementResult> {
   const origin = await tx.stockMovement.findUnique({ where: { id: movementId } });
-  if (!origin) throw new StockLedgerError("NOT_FOUND", "Movement not found", 404);
+  if (!origin)
+      throw new StockLedgerError("NOT_FOUND", "Movement not found", 404, "stockErr.movementNotFound");
   if (origin.voidedAt) {
-    throw new StockLedgerError("VOIDED", "该分录已作废，无需冲销（如需恢复请用「恢复」）", 409);
+    throw new StockLedgerError(
+      "VOIDED",
+      "该分录已作废，无需冲销（如需恢复请用「恢复」）",
+      409,
+      "stockErr.voided",
+    );
   }
   if (origin.reversalOf) {
-    throw new StockLedgerError("ALREADY_REVERSED", "This entry is itself a reversal");
+    throw new StockLedgerError(
+      "ALREADY_REVERSED",
+      "This entry is itself a reversal",
+      400,
+      "stockErr.alreadyReversed",
+    );
   }
   const existing = await tx.stockMovement.findFirst({
     where: { reversalOf: movementId, ...LIVE_MOVEMENT },
     select: { id: true },
   });
   if (existing) {
-    throw new StockLedgerError("ALREADY_REVERSED", "This entry has already been reversed", 409);
+    throw new StockLedgerError(
+      "ALREADY_REVERSED",
+      "This entry has already been reversed",
+      409,
+      "stockErr.alreadyReversed",
+    );
   }
 
   const result = await postMovement(tx, {
@@ -284,11 +337,37 @@ export async function reverseMovement(
  * 路由层统一的库存错误响应。
  * 把过账错误、库存不足错误翻译成带机器码的 4xx，其余归为 500。
  * （用鸭子类型判断库存不足错误，避免与 stock.ts 形成循环 import）
+ *
+ * ⚠️ 文案必须按**页面语言**输出：`i18nKey` 命中 messages 时用 `t()` 渲染，
+ * 否则回退 `error.message`（中文/英文混杂的老文案，仅作兜底）。
+ * 第三个参数传 `request` 才能从 Referer / Accept-Language 认出语言。
  */
-export function ledgerErrorResponse(error: unknown, label = "Stock error") {
+export async function ledgerErrorResponse(
+  error: unknown,
+  label = "Stock error",
+  request?: NextRequest | null,
+) {
+  const locale = requestLocale({ request: request ?? null });
+
   if (error instanceof StockLedgerError) {
+    let text = error.message;
+    if (error.i18nKey) {
+      const t = await serverT(locale);
+      const has = (t as unknown as { has?: (k: string) => boolean }).has;
+      if (!has || has(error.i18nKey)) {
+        const params: Record<string, string> = {};
+        for (const [k, v] of Object.entries(error.params ?? {})) {
+          params[k] = pickLocalized(v as LocalizedText | number, locale);
+        }
+        try {
+          text = t(error.i18nKey, params);
+        } catch {
+          text = error.message;
+        }
+      }
+    }
     return NextResponse.json(
-      { error: error.message, code: error.code },
+      { error: text, code: error.code },
       { status: error.status },
     );
   }
@@ -296,13 +375,20 @@ export function ledgerErrorResponse(error: unknown, label = "Stock error") {
     error instanceof Error &&
     (error.name === "InsufficientStockError" || error.message.startsWith("Insufficient stock"))
   ) {
+    const t = await serverT(locale);
+    const item = (error as unknown as { itemName?: string }).itemName;
+    const text = item ? t("stockErr.insufficientStock", { item }) : error.message;
     return NextResponse.json(
-      { error: error.message, code: "INSUFFICIENT_STOCK" },
+      { error: text, code: "INSUFFICIENT_STOCK" },
       { status: 400 },
     );
   }
   if (error instanceof Error && error.message === "NOT_FOUND") {
-    return NextResponse.json({ error: "Menu item not found" }, { status: 404 });
+    const t = await serverT(locale);
+    return NextResponse.json(
+      { error: t("stockErr.menuItemNotFound") },
+      { status: 404 },
+    );
   }
   console.error(`${label}:`, error);
   return NextResponse.json(
@@ -428,10 +514,17 @@ export async function voidMovement(
   opts: { reason: string; adminName?: string | null },
 ): Promise<{ itemId: string; stockQty: number; stockValue: number; avgCost: number }> {
   const m = await tx.stockMovement.findUnique({ where: { id: movementId } });
-  if (!m) throw new StockLedgerError("NOT_FOUND", "Movement not found", 404);
-  if (m.voidedAt) throw new StockLedgerError("ALREADY_VOIDED", "该分录已作废", 409);
+  if (!m)
+      throw new StockLedgerError("NOT_FOUND", "Movement not found", 404, "stockErr.movementNotFound");
+  if (m.voidedAt)
+      throw new StockLedgerError("ALREADY_VOIDED", "该分录已作废", 409, "stockErr.alreadyVoided");
   if (!opts.reason || !opts.reason.trim()) {
-    throw new StockLedgerError("REASON_REQUIRED", "作废必须填写原因");
+    throw new StockLedgerError(
+      "REASON_REQUIRED",
+      "作废必须填写原因",
+      400,
+      "stockErr.reasonRequired",
+    );
   }
 
   await tx.stockMovement.update({
@@ -471,8 +564,10 @@ export async function unvoidMovement(
   opts: { adminName?: string | null; reason?: string | null } = {},
 ): Promise<{ itemId: string; stockQty: number; stockValue: number; avgCost: number }> {
   const m = await tx.stockMovement.findUnique({ where: { id: movementId } });
-  if (!m) throw new StockLedgerError("NOT_FOUND", "Movement not found", 404);
-  if (!m.voidedAt) throw new StockLedgerError("NOT_VOIDED", "该分录未被作废", 409);
+  if (!m)
+      throw new StockLedgerError("NOT_FOUND", "Movement not found", 404, "stockErr.movementNotFound");
+  if (!m.voidedAt)
+      throw new StockLedgerError("NOT_VOIDED", "该分录未被作废", 409, "stockErr.notVoided");
 
   await tx.stockMovement.update({
     where: { id: movementId },

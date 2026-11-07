@@ -916,12 +916,15 @@ export async function applyStockChange(input: {
 }): Promise<{ stockQty: number; stockValue: number; avgCost: number }> {
   return runTx(async (tx) => {
     const item = await tx.menuItem.findUnique({ where: { id: input.itemId } });
-    if (!item) throw new StockLedgerError("NOT_FOUND", "Menu item not found", 404);
+    if (!item) throw new StockLedgerError("NOT_FOUND", "Menu item not found", 404, "stockErr.menuItemNotFound");
 
     if (item.stockType !== "PURCHASED") {
       throw new StockLedgerError(
         "STOCK_TYPE_NOT_TRACKED",
         `${item.name_zh} 未启用库存管理（请先把库存类型设为外购）`,
+        400,
+        "stockErr.stockTypeNotTracked",
+        { item: { zh: item.name_zh, en: item.name_en || item.name_zh, th: item.name_th || item.name_zh } },
       );
     }
 

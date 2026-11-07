@@ -204,7 +204,10 @@ export interface ReportItemStat {
   name_zh: string;
   name_en: string;
   name_th: string;
+  /** 分类名（中文，兼容旧消费方）；多语言取名用 {@link pickCategory} */
   category: string;
+  category_en?: string;
+  category_th?: string;
   price: number;
   costPrice: number | null;
   targetMargin: number | null;
@@ -463,12 +466,20 @@ async function fetchTrend(
 
 // ---------- 菜品维度 ----------
 
+/**
+ * 菜品分类名按语言取 —— 实现见 `lib/report-category.ts`
+ * （纯函数单独放，客户端组件才能引用而不把 Prisma 打进 bundle）。
+ */
+export { pickCategory } from './report-category';
+
 interface RawItemRow {
   id: string;
   name_zh: string;
   name_en: string;
   name_th: string;
   category: string | null;
+  category_en: string | null;
+  category_th: string | null;
   price: number;
   costPrice: number | null;
   targetMargin: number | null;
@@ -486,7 +497,7 @@ async function fetchItemStats(period: ResolvedPeriod): Promise<ReportItemStat[]>
       oi."menuItemId" AS id,
       mi."name_zh", mi."name_en", mi."name_th",
       mi."price", mi."costPrice", mi."targetMargin", mi."stockType",
-      mc."name_zh" AS category,
+      mc."name_zh" AS category, mc."name_en" AS category_en, mc."name_th" AS category_th,
       COALESCE(SUM(oi."quantity"), 0)::int AS qty,
       COALESCE(SUM(oi."totalPrice"), 0)::float8 AS revenue,
       COALESCE(SUM(CASE WHEN mi."costPrice" IS NOT NULL THEN oi."quantity" * mi."costPrice" ELSE 0 END), 0)::float8 AS cost,
@@ -499,7 +510,8 @@ async function fetchItemStats(period: ResolvedPeriod): Promise<ReportItemStat[]>
     WHERE o."status" <> 'CANCELLED'
       AND o."createdAt" >= ${period.from} AND o."createdAt" < ${period.to}
     GROUP BY oi."menuItemId", mi."name_zh", mi."name_en", mi."name_th",
-             mi."price", mi."costPrice", mi."targetMargin", mi."stockType", mc."name_zh"
+             mi."price", mi."costPrice", mi."targetMargin", mi."stockType",
+             mc."name_zh", mc."name_en", mc."name_th"
   `);
 
   return rows.map((r) => {
@@ -517,6 +529,8 @@ async function fetchItemStats(period: ResolvedPeriod): Promise<ReportItemStat[]>
       name_en: r.name_en,
       name_th: r.name_th,
       category: r.category ?? "",
+      category_en: r.category_en ?? "",
+      category_th: r.category_th ?? "",
       price: r.price,
       costPrice: r.costPrice,
       targetMargin: r.targetMargin,
@@ -540,6 +554,8 @@ async function fetchAllMargins(): Promise<ReportItemStat[]> {
       name_en: string;
       name_th: string;
       category: string | null;
+      category_en: string | null;
+      category_th: string | null;
       price: number;
       costPrice: number | null;
       targetMargin: number | null;
@@ -548,7 +564,7 @@ async function fetchAllMargins(): Promise<ReportItemStat[]> {
   >(Prisma.sql`
     SELECT mi."id", mi."name_zh", mi."name_en", mi."name_th",
            mi."price", mi."costPrice", mi."targetMargin", mi."stockType",
-           mc."name_zh" AS category
+           mc."name_zh" AS category, mc."name_en" AS category_en, mc."name_th" AS category_th
     FROM "MenuItem" mi
     LEFT JOIN "MenuCategory" mc ON mc."id" = mi."categoryId"
     WHERE mi."isActive" = true
@@ -568,6 +584,8 @@ async function fetchAllMargins(): Promise<ReportItemStat[]> {
       name_en: r.name_en,
       name_th: r.name_th,
       category: r.category ?? "",
+      category_en: r.category_en ?? "",
+      category_th: r.category_th ?? "",
       price: r.price,
       costPrice: r.costPrice,
       targetMargin: r.targetMargin,

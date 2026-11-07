@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { sendDailyReport } from "@/lib/line-report-send";
+import { requestLocale, serverT } from "@/lib/server-t";
 import type { ReportLocale } from "@/lib/daily-report";
 
 /**
@@ -30,14 +31,16 @@ async function authorize(request: NextRequest) {
   }
   const admin = await requireAdmin(request);
   if (admin) return { ok: true as const, via: "admin" as const };
+  // 提示带语言：cron 自己不会看，但管理员在浏览器里直接打开这个 URL 时会看到
+  const t = await serverT(requestLocale({ request }));
   if (!secret) {
     return {
       ok: false as const,
       status: 503,
-      error: "CRON_SECRET 未配置，且当前请求不是管理员会话（无法鉴权）",
+      error: t("cronErr.secretMissing"),
     };
   }
-  return { ok: false as const, status: 401, error: "Unauthorized" };
+  return { ok: false as const, status: 401, error: t("cronErr.unauthorized") };
 }
 
 async function handle(request: NextRequest) {

@@ -40,6 +40,6 @@ export async function POST(
       avgCost: result.avgCost,
     });
   } catch (error) {
-    return ledgerErrorResponse(error, "Adjust stock error");
+    return ledgerErrorResponse(error, "Adjust stock error", request);
   }
 }

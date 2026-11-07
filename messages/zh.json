@@ -594,7 +594,11 @@
     "paperWidthHint": "选择打印机实际使用的纸宽。80mm 是标准小票纸；50mm 用于较窄的机器，内容会按比例收窄。",
     "paper80": "80mm（标准）",
     "paper50": "50mm（窄）",
-    "paperWidthDots": "输出宽度：{dots} 点"
+    "paperWidthDots": "输出宽度：{dots} 点",
+    "authKey": "通信访问密钥",
+    "authKeyHint": "可选 · 仅保存在当前浏览器的 localStorage，发送打印时带上 X-Print-Key 头。",
+    "authKeyPlaceholder": "若目标打印机配置了 authToken 则填写",
+    "authKeySaved": "密钥已保存至本机"
   },
   "adminStock": {
     "entry": "库存",
@@ -854,7 +858,9 @@
     "costImportHint": "点这里下载成本表，填好成本价后上传，一次补齐所有菜品成本",
     "costDownload": "⬇ 下载成本表",
     "costUpload": "⬆ 上传成本表",
-    "batchCost": "批量补录成本"
+    "batchCost": "批量补录成本",
+    "voided": "作废",
+    "unknownValue": "未知"
   },
   "lineCard": {
     "title": "LINE 官方账号",
@@ -1292,7 +1298,9 @@
     "noValidRows": "缺少有效的行数据",
     "categoryNotExist": "分类不存在",
     "itemNotExist": "未找到对应菜品",
-    "itemHasOrders": "该菜品存在历史订单，未删除（可改为下架）"
+    "itemHasOrders": "该菜品存在历史订单，未删除（可改为下架）",
+    "unauthorized": "登录状态已失效，请重新登录",
+    "badJson": "请求体不是合法 JSON"
   },
   "reportExport": {
     "sheetSummary": "营收汇总",
@@ -1420,5 +1428,36 @@
       "MANUAL": "手动调整",
       "WASTE": "损耗自用"
     }
+  },
+  "stockErr": {
+    "menuItemNotFound": "菜品不存在",
+    "movementNotFound": "台账分录不存在",
+    "receiptNotFound": "进货单不存在",
+    "receiptItemNotFound": "进货单里有菜品不存在",
+    "badQuantity": "数量必须是非零整数",
+    "badUnitCost": "进货单价必须是非负数",
+    "emptyReceipt": "进货单至少要有一行有效明细",
+    "emptyTake": "盘点单至少要有一行有效明细",
+    "alreadyReversed": "该分录已冲销",
+    "voided": "该分录已作废，无需冲销（如需恢复请用「恢复」）",
+    "alreadyVoided": "该分录已作废",
+    "notVoided": "该分录未被作废",
+    "reasonRequired": "作废必须填写原因",
+    "insufficientStock": "库存不足：{item}",
+    "negativeStock": "库存不足：{item}（现存 {onHand}，需要 {qty}）",
+    "stockTypeNotTracked": "{item} 未启用库存管理（请先把库存类型设为外购）",
+    "generic": "操作失败，请重试",
+    "repairHealed": "已补记 {n} 件漏扣库存",
+    "repairNothing": "台账已平整，无需补记"
+  },
+  "lineWebhook": {
+    "boundUser": "绑定成功",
+    "boundGroup": "本群绑定成功",
+    "boundRoom": "本聊天绑定成功",
+    "boundBody": "每天营业结束会自动把当天经营日报发到这里。\n\n（如需解绑，请在后台「报表 → LINE 日报」中移除）"
+  },
+  "cronErr": {
+    "secretMissing": "CRON_SECRET 未配置，且当前请求不是管理员会话（无法鉴权）",
+    "unauthorized": "无权访问该接口"
   }
 }

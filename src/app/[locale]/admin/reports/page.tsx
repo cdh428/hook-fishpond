@@ -20,6 +20,7 @@ import {
   type ReportRange,
   type TrendGrain,
 } from '@/lib/api-client';
+import { pickCategory } from '@/lib/report-category';
 
 type Segment =
   | 'overview'
@@ -46,14 +47,20 @@ const GRAIN_LABEL_KEY: Record<TrendGrain, string> = {
   week: 'adminReports.grainWeek',
   month: 'adminReports.grainMonth',
 };
-const PAY_LABEL: Record<string, string> = {
-  PROMPTPAY: 'PromptPay',
-  TRUEMONEY: 'TrueMoney',
-  BANK_TRANSFER: 'Bank transfer',
-  CREDIT_CARD: 'Credit card',
-  ALIPAY: 'Alipay',
-  WECHAT_PAY: 'WeChat Pay',
-};
+/**
+ * 枚举值 → 当前页面语言的「人话」。
+ * 缺 key 时原样返回枚举值 —— 新增枚举值不该让报表页崩或显示 `enumLabel.xxx`。
+ */
+function enumText(
+  t: (key: string) => string,
+  ns: 'orderStatus' | 'payMethod' | 'orderType',
+  v?: string | null,
+): string {
+  if (!v) return '—';
+  const key = `enumLabel.${ns}.${v}`;
+  const has = (t as unknown as { has?: (k: string) => boolean }).has;
+  return typeof has === 'function' && has(key) ? t(key) : v;
+}
 
 function money(n: number): string {
   return `฿${Math.round(n).toLocaleString('en-US')}`;
@@ -306,7 +313,7 @@ function OrderDetailCard({
           <div className="text-xs text-neutral-500">{o?.customerName || order?.customerName || '—'}</div>
         </div>
         <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${o?.status === 'SETTLED' ? 'bg-success-100 text-success-600' : o?.status === 'CANCELLED' ? 'bg-error-100 text-error-600' : 'bg-warning-100 text-warning-600'}`}>
-          {o?.status || '—'}
+          {enumText(t, 'orderStatus', o?.status)}
         </span>
       </div>
 
@@ -369,7 +376,7 @@ function OrderDetailCard({
           <div className="space-y-1">
             {payments.map((p: any, i: number) => (
               <div key={i} className="flex justify-between text-xs text-neutral-600">
-                <span>{p?.method} {p?.voidedAt ? '· 作废' : ''}</span>
+                <span>{enumText(t, 'payMethod', p?.method)} {p?.voidedAt ? `· ${t('adminReports.voided')}` : ''}</span>
                 <span>฿{(p?.amount ?? 0).toLocaleString()}</span>
               </div>
             ))}
@@ -513,12 +520,14 @@ export default function AdminReportsPage() {
     if (!data) return [] as { name: string; revenue: number }[];
     const map = new Map<string, number>();
     for (const it of data.topItems) {
-      map.set(it.category, (map.get(it.category) ?? 0) + it.revenue);
+      // 分类名按页面语言取（SQL 已带 name_en / name_th）
+      const name = pickCategory(it, locale);
+      map.set(name, (map.get(name) ?? 0) + it.revenue);
     }
     return [...map.entries()]
       .map(([name, revenue]) => ({ name, revenue }))
       .sort((a, b) => b.revenue - a.revenue);
-  }, [data]);
+  }, [data, locale]);
 
   const marginRows = useMemo(() => {
     if (!data) return [] as ReportItemStat[];
@@ -571,7 +580,7 @@ export default function AdminReportsPage() {
     setLineBusy(true);
     setLineResult(null);
     try {
-      const res = await sendLineReport({ mode });
+      const res = await sendLineReport({ mode, locale: locale as 'zh' | 'th' | 'en' });
       setLineResult(res);
       await loadLine();
     } catch (err: any) {
@@ -835,7 +844,7 @@ export default function AdminReportsPage() {
                       return (
                         <div key={p.method}>
                           <div className="mb-1 flex justify-between text-xs text-neutral-600">
-                            <span>{PAY_LABEL[p.method] ?? p.method}</span>
+                            <span>{enumText(t, 'payMethod', p.method)}</span>
                             <b>
                               {(share * 100).toFixed(0)}% · {money(p.amount)}
                             </b>
@@ -1044,7 +1053,7 @@ export default function AdminReportsPage() {
                           {itemName(it)}
                         </div>
                         <div className="truncate text-xs text-neutral-500">
-                          {it.category}
+                          {pickCategory(it, locale)}
                         </div>
                       </div>
                       <div className="shrink-0 text-right">

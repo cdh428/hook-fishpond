@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
     ]);
     return NextResponse.json({ ...result, orderLink });
   } catch (error) {
-    return ledgerErrorResponse(error, "Reconcile stock error");
+    return ledgerErrorResponse(error, "Reconcile stock error", request);
   }
 }
 
@@ -52,6 +52,6 @@ export async function POST(request: NextRequest) {
     });
     return NextResponse.json({ ok: true, ...result });
   } catch (error) {
-    return ledgerErrorResponse(error, "Recalc stock error");
+    return ledgerErrorResponse(error, "Recalc stock error", request);
   }
 }

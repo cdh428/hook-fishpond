@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
       })),
     });
   } catch (error) {
-    return ledgerErrorResponse(error, "List stock takes error");
+    return ledgerErrorResponse(error, "List stock takes error", request);
   }
 }
 
@@ -59,6 +59,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ ok: true, ...result }, { status: 201 });
   } catch (error) {
-    return ledgerErrorResponse(error, "Create stock take error");
+    return ledgerErrorResponse(error, "Create stock take error", request);
   }
 }

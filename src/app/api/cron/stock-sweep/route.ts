@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
+import { requestLocale, serverT } from "@/lib/server-t";
 import { auditOrderStockLink, sweepStaleReservations } from "@/lib/stock-watch";
 
 export const dynamic = "force-dynamic";
@@ -24,14 +25,16 @@ async function authorize(request: NextRequest) {
   }
   const admin = await requireAdmin(request);
   if (admin) return { ok: true as const, via: "admin" as const };
+  // 与日报 cron 同一口径：提示语言跟随请求（管理员在浏览器打开时看得到）
+  const t = await serverT(requestLocale({ request }));
   if (!secret) {
     return {
       ok: false as const,
       status: 503,
-      error: "CRON_SECRET 未配置，且当前请求不是管理员会话（无法鉴权）",
+      error: t("cronErr.secretMissing"),
     };
   }
-  return { ok: false as const, status: 401, error: "Unauthorized" };
+  return { ok: false as const, status: 401, error: t("cronErr.unauthorized") };
 }
 
 async function handle(request: NextRequest) {

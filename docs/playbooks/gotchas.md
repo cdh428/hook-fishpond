@@ -337,6 +337,24 @@ node scripts/dup-menu-scan.mjs   # 扫全站重名 MenuItem + 每条被哪些表
 判断显示绿色 —— 文案一翻译，颜色逻辑静默失效。**永远不要用文案内容当业务判断**，
 服务端返回 `ok` 布尔，前端读布尔。
 
+**P1 补完（2026-11-07，9 项）** —— 剩下的「非页面/深层」位置：
+
+| 位置 | 曾经的坑 | 现在 |
+|---|---|---|
+| LINE 日报 | 页面点「发送」不传 `locale`，泰文页发出去是中文 | 页面传 `useLocale()`，接口缺省再走 Referer |
+| 日报正文 | `取消/拒单 N 单（未计入营收）` 写死 + 全角括号 | `Labels.cancelled` + `br(locale, …)` 全角/半角分家 |
+| LINE 绑定回复 | webhook 里写死中文 | 读 `LINE_REPORT_LOCALE`（无页面场景） |
+| 报表页枚举 | 直接渲染 `SETTLED` / `PROMPTPAY`，作废写死「作废」 | `enumText(t, 'payStatus', v)` + `enumLabels.*` |
+| 报表分类占比 | SQL 只查 `name_zh` | 三语列 + `pickCategory()` |
+| 库存台账错误 | lib 里抛中文 `Error`，直接进响应 | `StockLedgerError(i18nKey, params)` + `ledgerErrorResponse(…, request)` |
+| 打印设置页 | 「通信访问密钥 / Auth Key (可选)」等 4 处 | `adminPrint.authKey*` |
+| cron 鉴权 | 503 写死中文 | `cronErr.*`，按请求语言 |
+| 语音播报 | 只有泰/中，英语单也播中文 | `SpeakOpts.locale`：泰语第一句 + 第二句跟单语言 |
+
+⚠️ **不要把「落库的中文」一起翻掉**：`PaymentRecord.note`、库存 `note/reason`、
+补录客户名 `补录` 都被对账/检索当关键词用，翻译会让账本语义漂移
+（决策见 `language-consistency.md` §3.2.1）。
+
 ---
 
 ## 四、本机 / 工具链

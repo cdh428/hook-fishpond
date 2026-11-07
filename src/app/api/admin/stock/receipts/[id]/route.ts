@@ -69,7 +69,7 @@ export async function GET(
       })),
     });
   } catch (error) {
-    return ledgerErrorResponse(error, "Get purchase receipt error");
+    return ledgerErrorResponse(error, "Get purchase receipt error", request);
   }
 }
 
@@ -96,6 +96,6 @@ export async function POST(
     });
     return NextResponse.json({ ok: true, ...result });
   } catch (error) {
-    return ledgerErrorResponse(error, "Reverse purchase receipt error");
+    return ledgerErrorResponse(error, "Reverse purchase receipt error", request);
   }
 }

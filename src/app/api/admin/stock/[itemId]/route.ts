@@ -117,7 +117,7 @@ export async function GET(
       },
     });
   } catch (error) {
-    return ledgerErrorResponse(error, "Get stock item error");
+    return ledgerErrorResponse(error, "Get stock item error", request);
   }
 }
 
@@ -230,7 +230,7 @@ export async function PATCH(
     if (error?.code === "P2025") {
       return NextResponse.json({ error: "Menu item not found" }, { status: 404 });
     }
-    return ledgerErrorResponse(error, "Patch stock item error");
+    return ledgerErrorResponse(error, "Patch stock item error", request);
   }
 }
 
@@ -276,7 +276,12 @@ export async function POST(
 
         if (body.action === "void") {
           if (!body?.reason || !String(body.reason).trim()) {
-            throw new StockLedgerError("REASON_REQUIRED", "作废必须填写原因");
+            throw new StockLedgerError(
+              "REASON_REQUIRED",
+              "作废必须填写原因",
+              400,
+              "stockErr.reasonRequired",
+            );
           }
           return voidMovement(tx, String(body.movementId), {
             reason: String(body.reason).trim(),
@@ -311,6 +316,6 @@ export async function POST(
 
     return NextResponse.json({ ok: true, ...result });
   } catch (error) {
-    return ledgerErrorResponse(error, "Reverse movement error");
+    return ledgerErrorResponse(error, "Reverse movement error", request);
   }
 }

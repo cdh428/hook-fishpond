@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
 import { toCsv, dateStamp } from "@/lib/menu-io";
 import { buildReport, type ReportRange, type TrendGrain } from "@/lib/reports";
+import { pickCategory } from "@/lib/report-category";
 import { serverT, requestLocale } from "@/lib/server-t";
 import { downloadErrorPage } from "@/lib/download-error";
 
@@ -177,7 +178,7 @@ export async function GET(request: NextRequest) {
         if (m.costPrice == null) status = t("reportExport.stNoCost");
         else if (m.belowTarget) status = t("reportExport.stBelowTarget");
         rows.push([
-          m.category,
+          pickCategory(m, locale),
           m.name_zh,
           m.name_en,
           m.name_th,

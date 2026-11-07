@@ -149,6 +149,10 @@ node scripts/dup-menu-scan.mjs
 - `scripts/scan-impact.sh` — 影响面扫描（财务模块改动的关联文件清单）
 - `scripts/dup-menu-scan.mjs` — 重名/幽灵菜单条目扫描（只读，含引用统计）
 - `scripts/dup-menu-cleanup.mjs <id>` — 删幽灵条目（先备份到 `.workbuddy/backups/`，有引用则拒绝）
+- `scripts/verify-p1-lang.ts` — 日报三语回归：`npx tsx scripts/verify-p1-lang.ts`
+  （检查 en/th 正文零汉字、零全角标点，中文版仍是全角括号；改 `lib/daily-report.ts` 后必跑）
+- `scripts/verify-lang-consistency.cjs` — 接口层三语实测（需先起 dev：
+  `BASE=http://127.0.0.1:3102 node scripts/verify-lang-consistency.cjs`）
 - `scripts/_probe-takeaway.mjs`（本机）— admin 建单冒烟：外卖后付 / 外带立即收款双路径 POST，
   成功单自动清理（paidNow 单需再作废流水，见脚本尾部说明）。改 admin orders 接口后必跑。
 

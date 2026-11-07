@@ -2,7 +2,10 @@
  * 收银机语音播报（浏览器 Web Speech API · speechSynthesis）
  *
  * 用法：在「任何线上新增订单 → 收银台自动出票」时调用，
- * 先播泰语再播中文（泰语在收银机上是主语言，中文给中籍员工听）。
+ * 先播泰语，再播该单语言（默认中文）。
+ *
+ * 为什么泰语固定第一句：播报对象是**店里的员工**，泰国店里泰籍员工是主体；
+ * 第二句给中籍/外籍员工听 —— 语言跟 `Order.locale` 走（见 docs/playbooks/language-consistency.md）。
  *
  * ⚠️ 只在**收银机浏览器**出声（手机/顾客端不调用本函数）。
  * 语音靠浏览器本地 TTS，零联网、零依赖。若设备无 TTS 引擎则静默跳过，
@@ -16,10 +19,19 @@ export interface SpeakOpts {
   tableCode?: string;
   /** 本次是「新单」还是「追加菜品」（决定播报词） */
   kind?: 'new' | 'added';
+  /**
+   * 该单的下单语言（`Order.locale`）。
+   *
+   * 泰语始终是第一句（员工主体是泰籍），第二句才跟语言走：
+   * `en` → 英语，其余（含不传）→ 中文。
+   * 不传时行为与历史完全一致（泰语 + 中文），老流程不会出现回归。
+   */
+  locale?: 'zh' | 'en' | 'th' | null;
 }
 
 let thVoice: SpeechSynthesisVoice | null = null;
 let zhVoice: SpeechSynthesisVoice | null = null;
+let enVoice: SpeechSynthesisVoice | null = null;
 let voicesLoaded = false;
 
 function pickVoice(lang: string): SpeechSynthesisVoice | null {
@@ -35,7 +47,7 @@ function pickVoice(lang: string): SpeechSynthesisVoice | null {
   return list.find((v) => v.lang && v.lang.toLowerCase().startsWith(lang.toLowerCase())) || null;
 }
 
-/** 播报一句（泰语→中文，泰语先）。无 TTS 引擎时静默返回。 */
+/** 播报一句（泰语 → 该单语言）。无 TTS 引擎时静默返回。 */
 export function announceOrder(opts: SpeakOpts): void {
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
   // 首次调用时把语音列表预热一次：Chrome 的 voices 是异步就绪的，
@@ -51,16 +63,27 @@ export function announceOrder(opts: SpeakOpts): void {
     opts.kind === 'added'
       ? `订单 ${opts.orderNumber}${table ? ` 桌 ${table}` : ''} 已加菜`
       : `新订单 ${opts.orderNumber}${table ? ` 桌 ${table}` : ''}`;
+  const en =
+    opts.kind === 'added'
+      ? `Order ${opts.orderNumber}${table ? ` table ${table}` : ''} updated`
+      : `New order ${opts.orderNumber}${table ? ` table ${table}` : ''}`;
 
   const thV = thVoice || pickVoice('th');
-  const zhV = zhVoice || pickVoice('zh');
 
-  const speakZh = () => {
-    const s2 = new SpeechSynthesisUtterance(zh);
-    s2.lang = 'zh-CN';
+  // 第二句的语言：只有明确是英文单才用英语，其余（含历史调用不传）保持中文
+  const secondIsEn = opts.locale === 'en';
+  const secondText = secondIsEn ? en : zh;
+  const secondLang = secondIsEn ? 'en-US' : 'zh-CN';
+  const secondV = secondIsEn
+    ? enVoice || pickVoice('en')
+    : zhVoice || pickVoice('zh');
+
+  const speakSecond = () => {
+    const s2 = new SpeechSynthesisUtterance(secondText);
+    s2.lang = secondLang;
     s2.rate = 1;
     s2.pitch = 1;
-    if (zhV) s2.voice = zhV;
+    if (secondV) s2.voice = secondV;
     window.speechSynthesis.speak(s2);
   };
 
@@ -68,9 +91,9 @@ export function announceOrder(opts: SpeakOpts): void {
     window.speechSynthesis.cancel();
 
     // ⚠️ 设备没装泰语音色时，用中文/默认音色硬读泰文只会念出一串乱码音，
-    // 员工听不懂反而更扰人 → 直接只播中文。
+    // 员工听不懂反而更扰人 → 直接只播第二句。
     if (!thV) {
-      speakZh();
+      speakSecond();
       return;
     }
 
@@ -79,17 +102,17 @@ export function announceOrder(opts: SpeakOpts): void {
     s1.rate = 0.95;
     s1.pitch = 1;
     s1.voice = thV;
-    // 泰语播完接中文（给中籍员工听）。onend 在部分浏览器不触发，加兜底定时器。
-    let zhDone = false;
-    const safeZh = () => {
-      if (zhDone) return;
-      zhDone = true;
-      speakZh();
+    // 泰语播完接第二句。onend 在部分浏览器不触发，加兜底定时器。
+    let secondDone = false;
+    const safeSecond = () => {
+      if (secondDone) return;
+      secondDone = true;
+      speakSecond();
     };
-    s1.onend = safeZh;
-    s1.onerror = safeZh;
+    s1.onend = safeSecond;
+    s1.onerror = safeSecond;
     window.speechSynthesis.speak(s1);
-    window.setTimeout(safeZh, 6000);
+    window.setTimeout(safeSecond, 6000);
   } catch {
     /* TTS 不可用 → 静默，不阻塞打印 */
   }
@@ -102,6 +125,7 @@ export function primeVoices(): void {
     window.speechSynthesis.onvoiceschanged = () => {
       thVoice = pickVoice('th');
       zhVoice = pickVoice('zh');
+      enVoice = pickVoice('en');
     };
     window.speechSynthesis.getVoices();
     voicesLoaded = true;

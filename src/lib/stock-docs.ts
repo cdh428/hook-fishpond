@@ -78,11 +78,21 @@ export async function createPurchaseReceipt(input: {
     (l) => l && l.menuItemId && Number.isInteger(l.qty) && l.qty > 0,
   );
   if (lines.length === 0) {
-    throw new StockLedgerError("EMPTY_RECEIPT", "进货单至少要有一行有效明细");
+    throw new StockLedgerError(
+      "EMPTY_RECEIPT",
+      "进货单至少要有一行有效明细",
+      400,
+      "stockErr.emptyReceipt",
+    );
   }
   for (const l of lines) {
     if (l.unitCost != null && (!Number.isFinite(l.unitCost) || l.unitCost < 0)) {
-      throw new StockLedgerError("BAD_UNIT_COST", "进货单价必须是非负数");
+      throw new StockLedgerError(
+      "BAD_UNIT_COST",
+      "进货单价必须是非负数",
+      400,
+      "stockErr.badUnitCost",
+    );
     }
   }
 
@@ -109,17 +119,27 @@ export async function createPurchaseReceipt(input: {
           id: true,
           stockType: true,
           name_zh: true,
+          name_en: true,
+          name_th: true,
           avgCost: true,
           costPrice: true,
         },
       });
       if (!item) {
-        throw new StockLedgerError("NOT_FOUND", "进货单里有菜品不存在", 404);
+        throw new StockLedgerError(
+        "NOT_FOUND",
+        "进货单里有菜品不存在",
+        404,
+        "stockErr.receiptItemNotFound",
+      );
       }
       if (item.stockType !== "PURCHASED") {
         throw new StockLedgerError(
           "STOCK_TYPE_NOT_TRACKED",
           `${item.name_zh} 未启用库存管理（请先把库存类型设为外购）`,
+          400,
+          "stockErr.stockTypeNotTracked",
+          { item: { zh: item.name_zh, en: item.name_en || item.name_zh, th: item.name_th || item.name_zh } },
         );
       }
 
@@ -193,9 +213,19 @@ export async function reversePurchaseReceipt(
       where: { id: receiptId },
       include: { lines: true },
     });
-    if (!receipt) throw new StockLedgerError("NOT_FOUND", "进货单不存在", 404);
+    if (!receipt) throw new StockLedgerError(
+      "NOT_FOUND",
+      "进货单不存在",
+      404,
+      "stockErr.receiptNotFound",
+    );
     if (receipt.reversedAt) {
-      throw new StockLedgerError("ALREADY_REVERSED", "该进货单已冲销", 409);
+      throw new StockLedgerError(
+      "ALREADY_REVERSED",
+      "该进货单已冲销",
+      409,
+      "stockErr.alreadyReversed",
+    );
     }
 
     for (const line of receipt.lines) {
@@ -261,7 +291,12 @@ export async function createStockTake(input: {
     (l) => l && l.menuItemId && Number.isInteger(l.actualQty) && l.actualQty >= 0,
   );
   if (lines.length === 0) {
-    throw new StockLedgerError("EMPTY_TAKE", "盘点单至少要有一行有效明细");
+    throw new StockLedgerError(
+      "EMPTY_TAKE",
+      "盘点单至少要有一行有效明细",
+      400,
+      "stockErr.emptyTake",
+    );
   }
 
   return runTx(async (tx) => {
@@ -286,13 +321,29 @@ export async function createStockTake(input: {
     for (const line of lines) {
       const item = await tx.menuItem.findUnique({
         where: { id: line.menuItemId },
-        select: { id: true, name_zh: true, stockType: true, stockQty: true },
+        select: {
+          id: true,
+          name_zh: true,
+          name_en: true,
+          name_th: true,
+          stockType: true,
+          stockQty: true,
+        },
       });
-      if (!item) throw new StockLedgerError("NOT_FOUND", "盘点单里有菜品不存在", 404);
+      if (!item)
+        throw new StockLedgerError(
+          "NOT_FOUND",
+          "盘点单里有菜品不存在",
+          404,
+          "stockErr.receiptItemNotFound",
+        );
       if (item.stockType !== "PURCHASED") {
         throw new StockLedgerError(
           "STOCK_TYPE_NOT_TRACKED",
           `${item.name_zh} 未启用库存管理（请先把库存类型设为外购）`,
+          400,
+          "stockErr.stockTypeNotTracked",
+          { item: { zh: item.name_zh, en: item.name_en || item.name_zh, th: item.name_th || item.name_zh } },
         );
       }
 

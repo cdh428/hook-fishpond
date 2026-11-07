@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { lineAccessToken, lineChannelSecret } from "@/lib/line";
 import { sendDailyReport } from "@/lib/line-report-send";
+import { requestLocale, serverT } from "@/lib/server-t";
 import type { ReportLocale } from "@/lib/daily-report";
 
 /**
@@ -17,7 +18,10 @@ export const maxDuration = 60;
 
 async function guard(request: NextRequest) {
   const admin = await requireAdmin(request);
-  if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!admin) {
+    const t = await serverT(requestLocale({ request }));
+    return NextResponse.json({ error: t("apiErr.unauthorized") }, { status: 401 });
+  }
   return null;
 }
 
@@ -57,7 +61,8 @@ export async function POST(request: NextRequest) {
   const locale =
     body.locale === "th" || body.locale === "en" || body.locale === "zh"
       ? body.locale
-      : null;
+      : // 前端没传（旧版页面/直連接口）时按 Referer / Accept-Language 兜底
+        requestLocale({ request });
 
   const result = await sendDailyReport({
     demo: body.mode !== "real",

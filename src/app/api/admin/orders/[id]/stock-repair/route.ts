@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { repairOrderStock } from "@/lib/stock-watch";
 import { ledgerErrorResponse } from "@/lib/stock-ledger";
+import { requestLocale, serverT } from "@/lib/server-t";
 
 export const maxDuration = 60;
 
@@ -28,6 +29,8 @@ export async function POST(
     const { id } = await params;
     const result = await repairOrderStock(id, { adminName: admin.username });
 
+    // 提示按页面语言（此按钮在「订单管理」里，用户看得到）
+    const t = await serverT(requestLocale({ request }));
     return NextResponse.json({
       ok: true,
       orderId: id,
@@ -35,10 +38,10 @@ export async function POST(
       healed: result.healed,
       message:
         result.healed > 0
-          ? `已补记 ${result.healed} 件漏扣库存`
-          : "台账已平整，无需补记",
+          ? t("stockErr.repairHealed", { n: result.healed })
+          : t("stockErr.repairNothing"),
     });
   } catch (error) {
-    return ledgerErrorResponse(error, "Repair order stock error");
+    return ledgerErrorResponse(error, "Repair order stock error", request);
   }
 }

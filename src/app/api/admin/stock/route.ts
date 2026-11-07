@@ -59,6 +59,6 @@ export async function GET(request: NextRequest) {
       summary: { soldOut, lowStock, normal, total, stockValueTotal },
     });
   } catch (error) {
-    return ledgerErrorResponse(error, "Stock overview error");
+    return ledgerErrorResponse(error, "Stock overview error", request);
   }
 }

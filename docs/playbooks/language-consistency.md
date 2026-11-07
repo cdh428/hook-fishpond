@@ -38,8 +38,11 @@ const t = await serverT(locale);                                    // 复用 me
 | **菜单导出 / 模板** | `?locale=` → Referer | `api/admin/menu/{export,template}/route.ts` |
 | **菜单导入预览 / 提交** | FormData / body 的 `locale` | `api/admin/menu/import/**` |
 | **下单 / 结算 / 建单错误** | body 的 `locale` → Referer | `api/orders`、`api/admin/orders/**` |
-| LINE 日报 | `body.locale` → 配置 | `api/admin/line` + `lib/daily-report.ts` |
-| LINE webhook 回复 | 配置 | `api/webhooks/line/route.ts` |
+| LINE 日报 | `body.locale`（页面）→ `LINE_REPORT_LOCALE`（cron） | `api/admin/line` + `lib/daily-report.ts` |
+| LINE webhook 回复 | `LINE_REPORT_LOCALE`（无页面，缺省中文） | `api/webhooks/line/route.ts` |
+| 库存台账 / 进货 / 盘点错误 | `i18nKey` + 路由出口 `t()` | `lib/stock-ledger.ts` `ledgerErrorResponse` |
+| cron 鉴权提示 | `Referer` / `Accept-Language`（管理员在浏览器打开时看） | `api/cron/*/route.ts` |
+| 收银机语音播报 | 泰语固定第一句 + 第二句跟 `Order.locale`（en → 英语，其余中文） | `lib/speech.ts` |
 | 下载失败提示 | 同上（返回 HTML，不是 JSON） | `src/lib/download-error.ts` |
 
 ---
@@ -66,6 +69,39 @@ return NextResponse.json({ error: t("apiErr.insufficientStock", { item: itemName
 `OptionError` 之类不要用 `humanMessage`（写死中文）返回给客户端 ——
 用 `messageKey` + `t()`。`humanMessage` 已标 `@deprecated`，仅供服务端日志。
 
+**lib 层抛错同样受这条约束**（`StockLedgerError` 是范例）：
+
+```ts
+// lib/stock-ledger.ts —— 三种语言都带上，出口再挑
+throw new StockLedgerError(
+  "STOCK_TYPE_NOT_TRACKED",
+  `${item.name_zh} 未启用库存管理（请先把库存类型设为外购）`, // 仅日志/兜底
+  400,
+  "stockErr.stockTypeNotTracked",
+  { item: { zh: item.name_zh, en: item.name_en, th: item.name_th } },
+);
+```
+
+```ts
+// 路由层：第三个参数传 request 才有语言可认
+return ledgerErrorResponse(error, "Create purchase receipt error", request);
+```
+
+`ledgerErrorResponse` 会 `await serverT(requestLocale({ request }))` 渲染
+`stockErr.*`；**key 不存在时回退 `error.message`**（新增错误码不会让接口 500）。
+`message` 里仍写中文也无所谓 —— 它只进日志，不进响应。
+
+### 3.2.1 落库文案 vs 屏幕文案（2026-11-07 决策）
+
+有些中文是**写进数据库的业务摘要**，不是界面文案，按语言翻译反而会让账本
+在切语言后语义漂移。以下**故意保持中文**：
+
+- `PaymentRecord.note`：`线下退现`、`结清·补差`
+- 补录订单的客户名 `补录`
+- 库存台账 `note` / `reason`：`进货单 PO-xxx`、`盘盈/盘亏`、`红字冲销`
+
+判断标准：**这条字符串会不会被别的系统/对账视图当作关键词？** 会 → 不翻译。
+
 ### 3.3 枚举值必须翻译，不能把 `SETTLED` / `PROMPTPAY` 直接甩给用户
 
 用 `enumLabel.orderStatus.SETTLED` 这类 key。导出表格里尤其明显：
@@ -81,6 +117,23 @@ return NextResponse.json({ error: t("apiErr.insufficientStock", { item: itemName
 - 列名：`MENU_COLUMNS` 每项带 `header: {zh,en,th}`，`HEADER_INDEX` 建三语索引
 - 分类名：`catByName` 同时索引 `name_zh / name_en / name_th`
 - 布尔/枚举：`parseBool` / `stockType` 兼容 `是/Yes/ใช่`、`不管理/Not tracked/ไม่จัดการ`
+
+### 3.5 聚合查询要多查语言列，别只 `name_zh`
+
+报表 SQL 原来只 `SELECT mc."name_zh" AS category` —— 于是英文/泰文后台的
+「分类占比」永远是中文分类名。**凡是要上屏的维度名，SQL 里就把三语都取出来**：
+
+```sql
+SELECT mc."name_zh" AS category,
+       mc."name_en" AS category_en,
+       mc."name_th" AS category_th
+-- GROUP BY 也要带上这三列，否则 PG 报错
+```
+
+取名用 `pickCategory(it, locale)`（`src/lib/report-category.ts`）。
+
+⚠️ **这个纯函数必须单独放一个文件**：`lib/reports.ts` 里 import 了 Prisma，
+客户端组件（报表页）一旦从它取名函数，整个 Prisma 会被打进浏览器 bundle。
 
 ---
 
@@ -120,6 +173,7 @@ BASE=http://127.0.0.1:3102 node scripts/verify-lang-consistency.cjs
 
 - [ ] `npm run check:i18n` 通过（无串味、无缺 key）
 - [ ] `npx tsc --noEmit` 通过
+- [ ] `npx tsx scripts/verify-p1-lang.ts` 通过（日报三语 + 标点）
 - [ ] 导出类：访问 `?locale=en` / `?locale=th`，**文件里零中文**
 - [ ] 导入类：用英文表头的文件上传，**能正常识别列与分类**
 - [ ] 错误类：`locale=en` 触发一次失败，提示是英文

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
+import { requestLocale, serverT } from "@/lib/server-t";
 
 /**
  * 打印偏好 —— 存在数据库，手机和电脑共用同一份。
@@ -66,7 +67,10 @@ function normalize(raw: unknown): PrintPreferences {
 
 export async function GET(request: NextRequest) {
   const admin = await requireAdmin(request);
-  if (!admin) return NextResponse.json({ error: "未登录" }, { status: 401 });
+  if (!admin) {
+    const t = await serverT(requestLocale({ request }));
+    return NextResponse.json({ error: t("apiErr.unauthorized") }, { status: 401 });
+  }
 
   try {
     const row = await prisma.setting.findUnique({ where: { key: SETTING_KEY } });
@@ -80,13 +84,14 @@ export async function GET(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   const admin = await requireAdmin(request);
-  if (!admin) return NextResponse.json({ error: "未登录" }, { status: 401 });
+  const t = await serverT(requestLocale({ request }));
+  if (!admin) return NextResponse.json({ error: t("apiErr.unauthorized") }, { status: 401 });
 
   let body: unknown;
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "请求体不是合法 JSON" }, { status: 400 });
+    return NextResponse.json({ error: t("apiErr.badJson") }, { status: 400 });
   }
 
   const prefs = normalize((body as Record<string, unknown>)?.preferences ?? body);

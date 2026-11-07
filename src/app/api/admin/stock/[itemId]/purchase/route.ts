@@ -42,6 +42,6 @@ export async function POST(
       avgCost: snap?.avgCost ?? null,
     });
   } catch (error) {
-    return ledgerErrorResponse(error, "Purchase stock error");
+    return ledgerErrorResponse(error, "Purchase stock error", request);
   }
 }

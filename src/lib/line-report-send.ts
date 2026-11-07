@@ -5,6 +5,7 @@ import {
   defaultReportLocale,
   demoReportPayload,
   getTodayReport,
+  reportLabels,
   type ReportLocale,
 } from './daily-report';
 
@@ -44,6 +45,7 @@ export async function sendDailyReport(
 ): Promise<SendDailyReportResult> {
   const locale = opts.locale ?? defaultReportLocale();
   const demo = Boolean(opts.demo);
+  const L = reportLabels(locale);
 
   let text: string;
   let dateStr: string;
@@ -69,8 +71,7 @@ export async function sendDailyReport(
     return {
       ...base,
       reason: 'no_token',
-      message:
-        'LINE_CHANNEL_ACCESS_TOKEN 未配置，无法推送。请在 Vercel 环境变量中补上后再试。',
+      message: L.noTokenHint,
       total: 0,
       sent: 0,
       failed: 0,
@@ -90,8 +91,7 @@ export async function sendDailyReport(
     return {
       ...base,
       reason: 'no_targets',
-      message:
-        '还没有绑定任何接收人。请用个人 LINE 给官方账号发一句话完成绑定。',
+      message: L.noTargetsHint,
       total: 0,
       sent: 0,
       failed: 0,

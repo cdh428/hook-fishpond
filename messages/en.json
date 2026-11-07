@@ -594,7 +594,11 @@
     "paperWidthHint": "Choose the paper width your printer actually uses. 80mm is standard receipt paper; 50mm is for narrower machines and content scales down proportionally.",
     "paper80": "80mm (standard)",
     "paper50": "50mm (narrow)",
-    "paperWidthDots": "Output width: {dots} dots"
+    "paperWidthDots": "Output width: {dots} dots",
+    "authKey": "Auth key",
+    "authKeyHint": "Optional · stored only in this browser (localStorage) and sent as the X-Print-Key header.",
+    "authKeyPlaceholder": "Fill in only if the target printer has an authToken",
+    "authKeySaved": "Key saved on this device"
   },
   "adminStock": {
     "entry": "Inventory",
@@ -854,7 +858,9 @@
     "costImportHint": "Download the cost sheet, fill in costs, then upload to set costs for all items at once.",
     "costDownload": "⬇ Download cost sheet",
     "costUpload": "⬆ Upload cost sheet",
-    "batchCost": "Bulk cost entry"
+    "batchCost": "Bulk cost entry",
+    "voided": "voided",
+    "unknownValue": "Unknown"
   },
   "lineCard": {
     "title": "LINE Official Account",
@@ -1292,7 +1298,9 @@
     "noValidRows": "No valid rows",
     "categoryNotExist": "Category not found",
     "itemNotExist": "Matching item not found",
-    "itemHasOrders": "This item has order history, so it was not deleted (consider deactivating it instead)"
+    "itemHasOrders": "This item has order history, so it was not deleted (consider deactivating it instead)",
+    "unauthorized": "Your session has expired — please sign in again",
+    "badJson": "Request body is not valid JSON"
   },
   "reportExport": {
     "sheetSummary": "Revenue Summary",
@@ -1420,5 +1428,36 @@
       "MANUAL": "Manual adjustment",
       "WASTE": "Waste / own use"
     }
+  },
+  "stockErr": {
+    "menuItemNotFound": "Menu item not found",
+    "movementNotFound": "Ledger entry not found",
+    "receiptNotFound": "Purchase receipt not found",
+    "receiptItemNotFound": "A menu item in this receipt does not exist",
+    "badQuantity": "Quantity must be a non-zero whole number",
+    "badUnitCost": "Unit cost must not be negative",
+    "emptyReceipt": "A purchase receipt needs at least one valid line",
+    "emptyTake": "A stock take needs at least one valid line",
+    "alreadyReversed": "This entry has already been reversed",
+    "voided": "This entry is already voided — use Restore if you need it back",
+    "alreadyVoided": "This entry is already voided",
+    "notVoided": "This entry is not voided",
+    "reasonRequired": "A reason is required to void an entry",
+    "insufficientStock": "Not enough stock: {item}",
+    "negativeStock": "Not enough stock: {item} (on hand {onHand}, need {qty})",
+    "stockTypeNotTracked": "{item} is not stock-tracked (set its stock type to Purchased first)",
+    "generic": "Operation failed — please try again",
+    "repairHealed": "Back-filled stock for {n} missed item(s)",
+    "repairNothing": "The ledger is already balanced — nothing to back-fill"
+  },
+  "lineWebhook": {
+    "boundUser": "Bound successfully",
+    "boundGroup": "This group is now bound",
+    "boundRoom": "This chat is now bound",
+    "boundBody": "A daily business report will be sent here after closing each day.\n\n(To unbind, open Reports → LINE daily report in the admin panel.)"
+  },
+  "cronErr": {
+    "secretMissing": "CRON_SECRET is not configured and this request has no admin session",
+    "unauthorized": "Unauthorized"
   }
 }

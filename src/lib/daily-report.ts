@@ -22,7 +22,7 @@ const WEEKDAYS_TH = [
 ];
 const WEEKDAYS_EN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-interface Labels {
+export interface Labels {
   title: string;
   revenue: string;
   orderPart: string;
@@ -45,6 +45,12 @@ interface Labels {
   emptyDay: string;
   closedDay: string;
   demoTag: string;
+  /** 取消/拒单提示，含 {n} 占位 */
+  cancelled: string;
+  /** 休息日为周一时的星期名 */
+  monday: string;
+  noTokenHint: string;
+  noTargetsHint: string;
 }
 
 const L: Record<ReportLocale, Labels> = {
@@ -71,6 +77,12 @@ const L: Record<ReportLocale, Labels> = {
     emptyDay: '今日暂无营业额',
     closedDay: '今日为休息日',
     demoTag: '⚠️ 这是一条示例数据（非真实经营数据）',
+    cancelled: '取消/拒单 {n} 单（未计入营收）',
+    monday: '周一',
+    noTokenHint:
+      'LINE_CHANNEL_ACCESS_TOKEN 未配置，无法推送。请在 Vercel 环境变量中补上后再试。',
+    noTargetsHint:
+      '还没有绑定任何接收人。请用个人 LINE 给官方账号发一句话完成绑定。',
   },
   th: {
     title: 'บ่อตกปลาแฮปปี้ · รายงานประจำวัน',
@@ -95,6 +107,12 @@ const L: Record<ReportLocale, Labels> = {
     emptyDay: 'วันนี้ยังไม่มียอดขาย',
     closedDay: 'วันนี้เป็นวันหยุดร้าน',
     demoTag: '⚠️ นี่คือข้อมูลตัวอย่าง ไม่ใช่ข้อมูลจริง',
+    cancelled: 'ยกเลิก/ปฏิเสธ {n} ออเดอร์ (ไม่นับในรายได้)',
+    monday: 'วันจันทร์',
+    noTokenHint:
+      'ยังไม่ได้ตั้งค่า LINE_CHANNEL_ACCESS_TOKEN จึงส่งไม่ได้ กรุณาเพิ่มในตัวแปรสภาพแวดล้อมของ Vercel แล้วลองใหม่',
+    noTargetsHint:
+      'ยังไม่มีผู้รับที่ผูกไว้ กรุณาส่งข้อความหาบัญชีทางการด้วย LINE ส่วนตัวเพื่อผูก',
   },
   en: {
     title: 'Hook Fishpond · Daily Report',
@@ -119,6 +137,12 @@ const L: Record<ReportLocale, Labels> = {
     emptyDay: 'No revenue today',
     closedDay: 'Closed today (rest day)',
     demoTag: '⚠️ Sample data (not real business data)',
+    cancelled: 'Cancelled/rejected {n} orders (excluded from revenue)',
+    monday: 'Monday',
+    noTokenHint:
+      'LINE_CHANNEL_ACCESS_TOKEN is not configured, so nothing can be sent. Add it to the Vercel environment variables and try again.',
+    noTargetsHint:
+      'No recipients are bound yet. Send any message to the official account from your personal LINE to bind it.',
   },
 };
 
@@ -141,11 +165,39 @@ export function defaultReportLocale(): ReportLocale {
   return v === 'th' || v === 'en' || v === 'zh' ? (v as ReportLocale) : 'zh';
 }
 
+/** 推送编排（line-report-send）复用同一套三语文案，避免两处各写一份 */
+export function reportLabels(locale: ReportLocale): Labels {
+  return L[locale];
+}
+
 export interface ComposeOptions {
   /** 示例数据标记：会在正文顶部加一行醒目提示 */
   demo?: boolean;
   /** 当日是否休息日（用于空单日的解释） */
   closed?: { closed: boolean; reason?: 'monday' | 'holiday' };
+}
+
+/**
+ * 标点也要跟语言走：中文用全角（），英/泰用半角 ()。
+ * 混用会让泰文日报看起来像「中文模板套泰文词」，老板一眼看出不对劲。
+ */
+function br(locale: ReportLocale, inner: string | number): string {
+  // 中文全角括号自带视觉留白，不必再加空格；英/泰半角括号要留一格才不挤
+  return locale === 'zh' ? `（${inner}）` : ` (${inner})`;
+}
+function colon(locale: ReportLocale): string {
+  return locale === 'zh' ? '：' : ': ';
+}
+function bar(locale: ReportLocale): string {
+  return locale === 'zh' ? ' ｜ ' : ' | ';
+}
+function pondName(
+  locale: ReportLocale,
+  p: { name_zh: string; name_en?: string; name_th: string },
+): string {
+  if (locale === 'th') return p.name_th || p.name_en || p.name_zh;
+  if (locale === 'en') return p.name_en || p.name_zh || p.name_th;
+  return p.name_zh || p.name_en || p.name_th;
 }
 
 /** 把报表 payload 渲染成 LINE 文本消息 */
@@ -167,7 +219,7 @@ export function composeDailyReportText(
 
   const lines: string[] = [];
   lines.push(`📊 ${t.title}`);
-  lines.push(`${o.period.toDate}（${weekday}）`);
+  lines.push(`${o.period.toDate}${br(locale, weekday)}`);
   if (opts.demo) lines.push(t.demoTag);
   lines.push('');
 
@@ -175,10 +227,10 @@ export function composeDailyReportText(
     o.orderCount > 0 || o.bookingCount > 0 || o.totalRevenue > 0;
 
   if (!hasBusiness) {
-    lines.push(`${t.emptyDay}（0 ${t.orderPart} / 0 ${t.bookingPart}）`);
+    lines.push(`${t.emptyDay}${br(locale, `0 ${t.orderPart} / 0 ${t.bookingPart}`)}`);
     if (opts.closed?.closed) {
       lines.push(
-        `${t.closedDay}${opts.closed.reason === 'monday' ? '（Monday）' : ''}`,
+        `${t.closedDay}${opts.closed.reason === 'monday' ? br(locale, t.monday) : ''}`,
       );
     }
     return lines.join('\n');
@@ -187,13 +239,15 @@ export function composeDailyReportText(
   // 营收
   lines.push(`💰 ${t.revenue} ${money(o.totalRevenue)}`);
   lines.push(
-    `· ${t.orderPart} ${money(o.orderRevenue)}（${o.orderCount}）`,
+    `· ${t.orderPart} ${money(o.orderRevenue)}${br(locale, o.orderCount)}`,
   );
   lines.push(
-    `· ${t.bookingPart} ${money(o.bookingRevenue)}（${o.bookingCount}）`,
+    `· ${t.bookingPart} ${money(o.bookingRevenue)}${br(locale, o.bookingCount)}`,
   );
   if (o.fishRevenue > 0) {
-    lines.push(`· ${t.fish} ${money(o.fishRevenue)}（${o.fishWeightKg} kg）`);
+    lines.push(
+      `· ${t.fish} ${money(o.fishRevenue)}${br(locale, `${o.fishWeightKg} kg`)}`,
+    );
   }
   if (o.discountTotal > 0) {
     lines.push(`· ${t.discount} −${money(o.discountTotal)}`);
@@ -208,11 +262,11 @@ export function composeDailyReportText(
       : `${t.grossProfit} ${money(o.grossProfit)} · ${pct(o.marginRate)}`;
   const targetNote =
     o.marginRate != null && o.marginRate < o.period.targetMargin
-      ? `（${t.target} ${pct(o.period.targetMargin)}）⚠️ ${t.belowTarget}`
-      : `（${t.target} ${pct(o.period.targetMargin)}）`;
+      ? `${br(locale, `${t.target} ${pct(o.period.targetMargin)}`)}⚠️ ${t.belowTarget}`
+      : br(locale, `${t.target} ${pct(o.period.targetMargin)}`);
   lines.push(`📈 ${marginLine}${o.cogs > 0 ? ` ${targetNote}` : ''}`);
   if (o.cancelledOrders > 0)
-    lines.push(`· 取消/拒单 ${o.cancelledOrders} 单（未计入营收）`);
+    lines.push(`· ${t.cancelled.replace('{n}', String(o.cancelledOrders))}`);
   lines.push('');
 
   // 热销榜
@@ -258,13 +312,13 @@ export function composeDailyReportText(
     lines.push(`👥 ${t.traffic}`);
     if (ponds.length) {
       const parts = ponds.map(
-        (p) => `${locale === 'th' ? p.name_th : p.name_zh} ${p.bookings} ฿${Math.round(p.revenue).toLocaleString('en-US')}`,
+        (p) => `${pondName(locale, p)} ${p.bookings} ฿${Math.round(p.revenue).toLocaleString('en-US')}`,
       );
-      lines.push(`· ${t.ponds}：${parts.join(' ｜ ')}`);
+      lines.push(`· ${t.ponds}${colon(locale)}${parts.join(bar(locale))}`);
     }
     if (dt || ta) {
       lines.push(
-        `· ${t.dineIn} ${dt?.orders ?? 0} ｜ ${t.takeaway} ${ta?.orders ?? 0}`,
+        `· ${t.dineIn} ${dt?.orders ?? 0}${bar(locale)}${t.takeaway} ${ta?.orders ?? 0}`,
       );
     }
   }

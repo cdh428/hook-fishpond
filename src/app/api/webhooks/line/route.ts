@@ -5,6 +5,8 @@ import {
   replyLineText,
   lineChannelSecret,
 } from "@/lib/line";
+import { serverT } from "@/lib/server-t";
+import { defaultReportLocale } from "@/lib/daily-report";
 
 /**
  * LINE Messaging API Webhook
@@ -97,6 +99,10 @@ export async function POST(request: NextRequest) {
 
   const handled: string[] = [];
 
+  // 绑定成功的回复语言：无页面可依据 → 读 LINE_REPORT_LOCALE（缺省中文），
+  // 与日报正文同一开关，避免「日报是泰文、绑定回复是中文」。
+  const t = await serverT(defaultReportLocale());
+
   for (const ev of events) {
     const target = resolveTarget(ev.source);
     if (!target) continue;
@@ -124,16 +130,15 @@ export async function POST(request: NextRequest) {
     }
 
     if (ev.replyToken) {
+      // 无页面场景（老板用手机 LINE 发消息触发）→ 语言取服务端配置，
+      // 与日报正文同一个开关 LINE_REPORT_LOCALE，缺省中文。
       const label =
         target.targetType === "USER"
-          ? "绑定成功"
+          ? t("boundUser")
           : target.targetType === "GROUP"
-            ? "本群绑定成功"
-            : "本聊天绑定成功";
-      await replyLineText(
-        ev.replyToken,
-        `✅ ${label}\n每天营业结束会自动把当天经营日报发到这里。\n\n（如需解绑，请在后台「报表 → LINE 日报」中移除）`,
-      );
+            ? t("boundGroup")
+            : t("boundRoom");
+      await replyLineText(ev.replyToken, `✅ ${label}\n${t("boundBody")}`);
     }
   }
 

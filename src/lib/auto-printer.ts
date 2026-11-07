@@ -187,6 +187,8 @@ export function useAutoPrinter({
                 orderNumber: receipt.orderNumber,
                 tableCode: tableCode || undefined,
                 kind,
+                // 播报第二句跟单走：单上有 locale 用它，历史单回退当前页面语言
+                locale: ((order?.locale || locale) as 'zh' | 'en' | 'th') ?? null,
               });
             }
 
