@@ -123,6 +123,54 @@ const ZH = /[\u4e00-\u9fff]/;
     say(`[order-err ${loc}] ${r.status} code=${j.code || '-'} error=${j.error}`);
   }
 
+  /* ---------- 6. 后台建单错误（P0-9） ---------- */
+  for (const loc of ['zh', 'en', 'th']) {
+    const r = await fetch(`${BASE}/api/admin/orders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', cookie },
+      body: JSON.stringify({
+        items: [{ menuItemId: 'no-such-item', quantity: 1 }],
+        orderType: 'TAKEAWAY',
+        locale: loc,
+      }),
+    });
+    const j = await r.json().catch(() => ({}));
+    say(`[admin-create ${loc}] ${r.status} ${j.code || '-'} ${j.error || ''}`);
+  }
+
+  /* ---------- 7. 结算提示（P0-8） ----------
+   * 用**超额**请求：服务端会拒绝且不写库，所以对生产是只读安全的。
+   */
+  const list = await fetch(`${BASE}/api/admin/orders?status=PENDING`, {
+    headers: { cookie },
+  });
+  const lj = await list.json().catch(() => ({}));
+  const arr = Array.isArray(lj) ? lj : lj.orders || [];
+  const target = arr.find((o) => o.status !== 'SETTLED' && o.status !== 'CANCELLED');
+  if (!target) {
+    say('[settle] 未找到可测订单，跳过');
+  } else {
+    say(`[settle] 用订单 ${target.orderNumber}`);
+    for (const loc of ['zh', 'en', 'th']) {
+      const r = await fetch(`${BASE}/api/admin/orders/${target.id}/settle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', cookie },
+        body: JSON.stringify({ action: 'record-prepaid', amount: 99999, locale: loc }),
+      });
+      const j = await r.json().catch(() => ({}));
+      say(`[settle-prepaid ${loc}] ${r.status} exceeded=${j.exceeded} msg=${j.message || ''}`);
+    }
+    for (const loc of ['zh', 'en', 'th']) {
+      const r = await fetch(`${BASE}/api/admin/orders/${target.id}/settle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', cookie },
+        body: JSON.stringify({ action: 'refund', amount: 99999, locale: loc }),
+      });
+      const j = await r.json().catch(() => ({}));
+      say(`[settle-refund ${loc}] ${r.status} msg=${j.message || ''}`);
+    }
+  }
+
   fs.writeFileSync(LOG_FILE, log.join('\n'), 'utf8');
   say(`\n写出 ${LOG_FILE}`);
 })().catch((e) => {
