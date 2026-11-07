@@ -486,6 +486,11 @@ model Order {
   printState    PrintState?
   printedAt     DateTime?
   printError    String?
+  // ----- 票面语言（2026-11-07）-----
+  // 下单时顾客/店员界面所用的 locale（zh/en/th）。自动出单没有页面，
+  // 只能按这个字段决定票面语言（见 docs/playbooks/print-language.md）。
+  // 为空 = 历史单（该字段上线前创建），回退到服务端配置 print.locale（缺省 th）。
+  locale        String?
   payment       Payment?
   // 分次收款流水（定金 / 补款 / 结清 / 退款）。只追加不覆盖，可标 voidedAt 作废。
   paymentRecords PaymentRecord[]

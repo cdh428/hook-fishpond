@@ -152,6 +152,9 @@ node scripts/dup-menu-scan.mjs
 - `scripts/_probe-takeaway.mjs`（本机）— admin 建单冒烟：外卖后付 / 外带立即收款双路径 POST，
   成功单自动清理（paidNow 单需再作废流水，见脚本尾部说明）。改 admin orders 接口后必跑。
 
+> 📌 打印相关回归（票面语言、厨房单、收据）见 **`docs/playbooks/print-language.md`**，
+> 那里有「三语各打一次」的验收清单和硬编码中文的扫描命令。
+
 ## 8. 「接口 500 无线索」排查法（2026-11-01 实战）
 
 生产接口只回 `{"error":"Failed to create order"}` 时，不要猜：

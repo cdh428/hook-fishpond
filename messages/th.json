@@ -999,8 +999,8 @@
   "printLabels": {
     "brandSub": "ไทย · ตกปลา · อาหาร",
     "kitchenTicket": "ใบครัว",
-    "kitchenCopy1": "【 ครัว / 厨房留存联 】",
-    "kitchenCopy2": "【 ส่งอาหาร / 备餐传菜联 】",
+    "kitchenCopy1": "[ ครัว ]",
+    "kitchenCopy2": "[ ส่งอาหาร ]",
     "bill": "ใบเรียกเก็บเงิน",
     "receipt": "ใบเสร็จรับเงิน",
     "table": "โต๊ะ",
@@ -1010,7 +1010,12 @@
     "thanks": "ขอบคุณที่ใช้บริการ ยินดีต้อนรับอีกครั้ง",
     "fishCharge": "ปลา",
     "discount": "ส่วนลด",
-    "scanMoreFood": "ส่องเพิ่มรายการ"
+    "scanMoreFood": "ส่องเพิ่มรายการ",
+    "served": "เสิร์ฟแล้ว",
+    "notServed": "ยังไม่เสิร์ฟ",
+    "batchAt": "สั่งเมื่อ",
+    "itemCount": "รายการ",
+    "paidStamp": "ชำระแล้ว"
   },
   "printAgent": {
     "sentTo": "🖨️ ส่งไปที่ {target} แล้ว",

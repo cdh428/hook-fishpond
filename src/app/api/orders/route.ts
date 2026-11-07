@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { resolveTicketLocale } from "@/lib/ticket-locale";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { runTx } from "@/lib/tx";
@@ -44,6 +45,11 @@ export async function POST(request: NextRequest) {
         : orderType === "TAKEAWAY"
           ? "PREPAID"
           : "POSTPAID";
+
+    // 票面语言：记下顾客下单时界面用的语言，自动出单/小票按它渲染。
+    // 前端传 body.locale；没传则从 Referer 的 /zh|/en|/th 段兜底。
+    // 规则见 docs/playbooks/print-language.md
+    const ticketLocale = resolveTicketLocale(body.locale, request);
 
     // Block same-day (on-site) ordering when the venue is closed today
     if (await isClosedDate(bangkokDateString())) {
@@ -176,6 +182,7 @@ export async function POST(request: NextRequest) {
               orderType,
               settlementMode,
               pickupAt,
+              locale: ticketLocale,
               status: "PENDING",
               items: {
                 create: lines.map((l) => ({

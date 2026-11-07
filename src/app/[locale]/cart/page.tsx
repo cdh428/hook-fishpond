@@ -218,6 +218,8 @@ export default function CartPage() {
         tableCode: orderType === 'DINE_IN' ? tableCode || undefined : undefined,
         pickupAt:
           orderType === 'TAKEAWAY' ? localInputToIso(pickupAt) : undefined,
+        // 票面语言：下单时界面用什么语言，小票/自动出单就打什么语言
+        locale,
       });
 
       // 立即付款 + PromptPay → 直接进支付页

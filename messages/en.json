@@ -999,8 +999,8 @@
   "printLabels": {
     "brandSub": "Thailand · Fishing · Dining",
     "kitchenTicket": "KITCHEN TICKET",
-    "kitchenCopy1": "【 Kitchen Copy / 厨房留存联 】",
-    "kitchenCopy2": "【 Customer Copy / 备餐传菜联 】",
+    "kitchenCopy1": "[ Kitchen Copy ]",
+    "kitchenCopy2": "[ Service Copy ]",
     "bill": "BILL",
     "receipt": "RECEIPT",
     "table": "Table",
@@ -1010,7 +1010,12 @@
     "thanks": "Thank you, please come again",
     "fishCharge": "Fish",
     "discount": "Discount",
-    "scanMoreFood": "Scan to add more items"
+    "scanMoreFood": "Scan to add more items",
+    "served": "Served",
+    "notServed": "Not served",
+    "batchAt": "Ordered",
+    "itemCount": "items",
+    "paidStamp": "PAID"
   },
   "printAgent": {
     "sentTo": "🖨️ Sent to {target}",

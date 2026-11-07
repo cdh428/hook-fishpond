@@ -302,6 +302,8 @@ export interface CreateOrderInput {
   settlementMode?: SettlementModeValue;
   /** 外带指定的取餐时间（ISO 字符串） */
   pickupAt?: string;
+  /** 票面语言：小票/自动出单按它渲染（见 docs/playbooks/print-language.md） */
+  locale?: string;
 }
 
 export async function createOrder(input: CreateOrderInput): Promise<any> {
@@ -725,6 +727,8 @@ export async function createAdminOrder(input: {
   paidNow?: boolean;
   /** paidNow 用：收款方式，默认 PROMPTPAY */
   method?: 'CASH' | 'PROMPTPAY';
+  /** 票面语言：小票/自动出单按它渲染 */
+  locale?: string;
 }): Promise<any> {
   return request<any>('/api/admin/orders', {
     method: 'POST',

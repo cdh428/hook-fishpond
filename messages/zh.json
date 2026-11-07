@@ -999,8 +999,8 @@
   "printLabels": {
     "brandSub": "泰国 · 垂钓 · 美食",
     "kitchenTicket": "后厨单",
-    "kitchenCopy1": "【 ครัว / 厨房留存联 】",
-    "kitchenCopy2": "【 ส่งอาหาร / 备餐传菜联 】",
+    "kitchenCopy1": "[ 后厨留存联 ]",
+    "kitchenCopy2": "[ 传菜联 ]",
     "bill": "预结单",
     "receipt": "收款收据",
     "table": "桌号",
@@ -1010,7 +1010,12 @@
     "thanks": "谢谢光临，欢迎再来",
     "fishCharge": "渔获",
     "discount": "折扣",
-    "scanMoreFood": "扫此码继续加菜"
+    "scanMoreFood": "扫此码继续加菜",
+    "served": "已送",
+    "notServed": "未送",
+    "batchAt": "下单",
+    "itemCount": "项",
+    "paidStamp": "已收款"
   },
   "printAgent": {
     "sentTo": "🖨️ 已发送到 {target}",

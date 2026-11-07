@@ -17,7 +17,7 @@
  * 127.0.0.1 —— 这本来就该按设备而定，共用反而会坏。
  */
 
-import { useTranslations } from 'next-intl';
+import { useTranslations, useLocale } from 'next-intl';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   DEFAULT_PREFERENCES,
@@ -84,12 +84,10 @@ function demoOrder(locale: string): ReceiptOrder {
 
 export default function AdminPrintPage() {
   const t = useTranslations();
-  const locale = useMemo(
-    () => (typeof document !== 'undefined'
-      ? (document.documentElement.lang || 'zh').slice(0, 2)
-      : 'zh'),
-    [],
-  );
+  // ⚠️ 不要读 document.documentElement.lang：SSR 阶段不存在 → 回退 'zh' →
+  // 水合前后语言不一致（测试打单会打错语言）。一律用 next-intl 的 useLocale()，
+  // 与服务端渲染同源。见 docs/playbooks/print-language.md 4.2
+  const locale = useLocale();
 
   const [probe, setProbe] = useState<ProbeState>('checking');
   const [health, setHealth] = useState<Health>(null);
@@ -164,6 +162,12 @@ export default function AdminPrintPage() {
       scanToPay: t('adminOrders.scanToPay'),
       paidAt: t('adminOrders.settledAt'),
       thanks: t('printLabels.thanks'),
+      // 行级送餐状态与分批标题（渲染库不硬编码中文）
+      served: t('printLabels.served'),
+      notServed: t('printLabels.notServed'),
+      batchAt: t('printLabels.batchAt'),
+      itemCount: t('printLabels.itemCount'),
+      paidStamp: t('printLabels.paidStamp'),
     }),
     [t],
   );

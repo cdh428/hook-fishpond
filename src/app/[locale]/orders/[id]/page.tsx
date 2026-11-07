@@ -68,6 +68,12 @@ export default function OrderDetailPage() {
       paidAt: t('adminOrders.settledAt'),
       pickupAt: t('cart.pickupTime'),
       thanks: t('printLabels.thanks'),
+      // 行级送餐状态与分批标题（必须按 locale 传入，渲染库不硬编码中文）
+      served: t('printLabels.served'),
+      notServed: t('printLabels.notServed'),
+      batchAt: t('printLabels.batchAt'),
+      itemCount: t('printLabels.itemCount'),
+      paidStamp: t('printLabels.paidStamp'),
     }),
     [t],
   );

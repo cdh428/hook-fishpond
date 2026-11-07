@@ -21,6 +21,21 @@ export function pickName(row: NamedRow | null | undefined, locale: string): stri
   return row.name_zh || row.name_en || '';
 }
 
+/**
+ * 小票副行（第二语言小字）：**只有中文页才给中文副名**。
+ *
+ * 语义约定（用户 2026-11-07 定）：票面语言 = 页面语言，绝不混排。
+ *  - zh 页：主名中文，副行留空（避免同一语言重复打两遍）
+ *  - en/th 页：主名该语言，副行留空
+ *
+ * 换句话说：**副行永远为空**，除非以后明确要做「泰主中副」的双语后厨单。
+ * 保留函数是为了把这条规则集中在一个地方，防止再有人用正则猜语言
+ * （旧版 splitBilingual 就是猜的，导致泰文页打出中文）。
+ */
+export function pickSubName(_row: NamedRow | null | undefined, _locale: string): string {
+  return '';
+}
+
 /** 订单状态 → i18n key */
 export const ORDER_STATUS_I18N: Record<string, string> = {
   PENDING: 'orders.pending',
@@ -68,6 +83,7 @@ export function orderItemsTotal(items: { totalPrice: number }[]): number {
 export function toReceiptOrder(raw: any, locale: string): ReceiptOrder {
   const items: ReceiptItem[] = (raw.items || []).map((it: any) => ({
     name: pickName(it.menuItem, locale),
+    subName: pickSubName(it.menuItem, locale),
     quantity: it.quantity,
     unitPrice: it.unitPrice,
     totalPrice: it.totalPrice,

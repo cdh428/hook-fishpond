@@ -6,6 +6,7 @@ import { runTx } from "@/lib/tx";
 import { OPEN_ORDER_STATUSES, generateOrderNumber, recalcOrderTotals } from "@/lib/orders";
 import { bangkokDayRange, reserveStock, InsufficientStockError } from "@/lib/stock";
 import { resolveOrderLines, OptionError } from "@/lib/menu-options-server";
+import { resolveTicketLocale } from "@/lib/ticket-locale";
 import {
   addPaymentRecord,
   syncPrepaidFromRecords,
@@ -176,6 +177,9 @@ export async function POST(request: NextRequest) {
     // 「已当场收款」一键模式：建单 + 记 FINAL 流水 + 直接结清，一个事务完成。
     // 只对外带（无桌）场景设计，堂食走正常结算页。
     const paidNow = body.paidNow === true && type === "TAKEAWAY";
+    // 票面语言：记下这次建单时后台界面用的语言，自动出单/小票按它渲染。
+    // 规则见 docs/playbooks/print-language.md
+    const ticketLocale = resolveTicketLocale(body.locale, request);
     const payMethod: "CASH" | "PROMPTPAY" = body.method === "CASH" ? "CASH" : "PROMPTPAY";
 
     // 补录日期：可选；只能是过去（60 秒容差），不能是未来
@@ -240,6 +244,7 @@ export async function POST(request: NextRequest) {
               totalPrice: subtotal,
               note: note || null,
               orderType: type,
+              locale: ticketLocale,
               settlementMode: mode,
               status: "PENDING",
               // 补录：把开单时间落到所选时刻（报表按 createdAt 落日 → 历史日报自动重算）

@@ -256,6 +256,12 @@ export default function AdminOrdersPage() {
       pickupAt: t('cart.pickupTime'),
       thanks: t('printLabels.thanks'),
       scanMoreFood: t('printLabels.scanMoreFood'),
+      // 行级送餐状态与分批标题（必须按 locale 传入，渲染库不硬编码中文）
+      served: t('printLabels.served'),
+      notServed: t('printLabels.notServed'),
+      batchAt: t('printLabels.batchAt'),
+      itemCount: t('printLabels.itemCount'),
+      paidStamp: t('printLabels.paidStamp'),
     }),
     [t],
   );
@@ -1964,6 +1970,8 @@ function CreateOrderModal({
             : undefined,
         paidNow,
         method: paidNow ? payMethod : undefined,
+        // 票面语言：当前后台界面语言 —— 自动出单/小票按它渲染
+        locale,
       });
       onCreated();
     } catch (e: any) {

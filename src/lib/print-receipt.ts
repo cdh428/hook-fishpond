@@ -50,10 +50,29 @@ export interface PrintLabels {
   poweredBy?: string;
   /** 桌号续点单二维码的说明（「扫此码继续加菜」） */
   scanMoreFood?: string;
+  /**
+   * 以下为「行级送餐状态」与「分批小标题」用的文案。
+   * 必须在调用方按 locale 传入 —— 本库绝不硬编码中文
+   * （见 docs/playbooks/print-language.md 铁律 2.1）。
+   */
+  served?: string;
+  notServed?: string;
+  /** 批次标题前缀，如「下单」（后接 HH:mm） */
+  batchAt?: string;
+  /** 批次件数单位，如「项」（前接数字） */
+  itemCount?: string;
+  /** 已付款戳（RECEIPT 上的 PAID） */
+  paidStamp?: string;
 }
 
 export interface ReceiptItem {
+  /** 主语言菜名（由 toReceiptOrder 按 locale 选取） */
   name: string;
+  /**
+   * 副行小字（可选）。只在中文页 = 中文副名，其他语言页留空。
+   * 由调用方按 locale 决定，本库不猜语言。
+   */
+  subName?: string;
   quantity: number;
   unitPrice: number;
   totalPrice: number;
@@ -238,21 +257,13 @@ function orderMeta(order: ReceiptOrder, labels: PrintLabels): string {
     </div>`;
 }
 
-/** 智能拆分泰中双语名称，支持 "泰文 (中文)"、"泰文 / 中文" */
-function splitBilingual(raw: string): { th: string; zh: string } {
-  const str = (raw || '').trim();
-  const m1 = str.match(/^(.+?)\s*[\(（](.+?)[\)）]$/);
-  if (m1) return { th: m1[1].trim(), zh: m1[2].trim() };
-  const m2 = str.match(/^(.+?)\s*[\/／]\s*(.+)$/);
-  if (m2) return { th: m2[1].trim(), zh: m2[2].trim() };
-  return { th: str, zh: '' };
-}
-
 /**
- * 菜品行：泰中双语分行打印 ——
- * 第一行（主位）：泰文大字加粗，右侧挂数量与金额；
- * 第二行（辅助）：中文菜名小字跟随；
- * 第三行：规格 / 备注选项。
+ * 菜品行：主语言大字 + 可选副行小字。
+ *
+ * ⚠️ 副行语言由调用方通过 `ReceiptItem.subName` 决定（`toReceiptOrder` 已按 locale
+ * 算好），本库**不再用正则从字符串里猜语言** —— 旧版 `splitBilingual()` 会把
+ * 「ปลาย่าง (烤鱼)」括号后的内容一律当中文打出，导致泰文/英文页也多一行中文。
+ * 见 docs/playbooks/print-language.md 铁律 2.3。
  */
 function itemsBlock(order: ReceiptOrder, labels: PrintLabels, withPrices: boolean): string {
   // 按下单时间分组：同一次下单的菜放一起（时间相同），不同次追加的分开（时间不同）。
@@ -266,35 +277,47 @@ function itemsBlock(order: ReceiptOrder, labels: PrintLabels, withPrices: boolea
   }
   const keys = [...groups.keys()].sort();
 
+  // 文案兜底一律用符号，**不用中文兜底**（缺 key 时宁可不显示，也不让错误语言上纸）
+  const servedWord = labels.served || '✓';
+  const notServedWord = labels.notServed || '';
+  const batchAtWord = labels.batchAt || '';
+  const itemCountWord = labels.itemCount || '';
+
   const groupHtml = keys
     .map((key, gi) => {
       const group = groups.get(key)!;
       const itemsHtml = group
         .map((it) => {
           const opts = Array.isArray(it.optionLines) ? it.optionLines : [];
-          const { th, zh } = splitBilingual(it.name);
+          const mainName = it.name || '';
+          const subName = it.subName || '';
           // 送餐状态：已送行打 ✓ 已送 HH:mm，未送行打 ⏳ 未送
           const servedAt = it.servedAt ? new Date(it.servedAt) : null;
           const isServed = !!servedAt && !Number.isNaN(servedAt.getTime());
           const serveTag = isServed
-            ? `<span class="serve-tag served">✓ 已送 ${esc(fmtMinute(servedAt))}</span>`
-            : `<span class="serve-tag">⏳ 未送</span>`;
+            ? `<span class="serve-tag served">✓ ${esc(servedWord)} ${esc(fmtMinute(servedAt))}</span>`
+            : notServedWord
+              ? `<span class="serve-tag">⏳ ${esc(notServedWord)}</span>`
+              : '';
           return `
         <div class="item">
-          <span class="n item-th">${esc(th)}</span>
+          <span class="n item-th">${esc(mainName)}</span>
           <span class="q">× ${esc(it.quantity)}</span>
           ${withPrices ? `<span class="q" style="min-width:16mm;text-align:right">${esc(money(it.totalPrice))}</span>` : ''}
         </div>
-        ${zh ? `<div class="item-zh">${esc(zh)}</div>` : ''}
+        ${subName ? `<div class="item-zh">${esc(subName)}</div>` : ''}
         ${opts.map((o) => `<div class="item-note">› ${esc(o)}</div>`).join('')}
         ${it.note ? `<div class="item-note">※ ${esc(it.note)}</div>` : ''}
-        <div class="serve-line">${serveTag}</div>`;
+        ${serveTag ? `<div class="serve-line">${serveTag}</div>` : ''}`;
         })
         .join('');
 
+      const countPart = itemCountWord
+        ? `<span class="batch-count">· ${group.length} ${esc(itemCountWord)}</span>`
+        : '';
       return `
     ${gi > 0 ? '<div class="batch-div"></div>' : ''}
-    <div class="batch-time">下单 ${esc(key)} <span class="batch-count">· ${group.length} 项</span></div>
+    <div class="batch-time">${esc(batchAtWord)} ${esc(key)} ${countPart}</div>
     ${itemsHtml}`;
     })
     .join('');
@@ -401,7 +424,7 @@ export function buildReceiptHtml(
   const paperWidthMm = opts.paperWidthMm ?? 80;
   const inner = `
     ${header(labels.receipt, labels)}
-    <div class="stamp">PAID</div>
+    <div class="stamp">${esc(labels.paidStamp || 'PAID')}</div>
     ${orderMeta(order, labels)}
     ${itemsBlock(order, labels, true)}
     <div class="solid"></div>

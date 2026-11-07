@@ -26,15 +26,46 @@ function checkToken(request: NextRequest): boolean {
   return got === expect;
 }
 
-// 三语文案（服务端渲染小票用）。只取小票相关，避免整包。
-// 运行时读 messages 文件会太慢；直接内联小票渲染所需的最小文案。
+/** 归一化 locale：只认 zh/en/th，其他一律返回 null（由调用方决定回退） */
+function normalizeLocale(v: unknown): "zh" | "en" | "th" | null {
+  const s = String(v || "").slice(0, 2).toLowerCase();
+  return s === "zh" || s === "en" || s === "th" ? (s as "zh" | "en" | "th") : null;
+}
+
+/**
+ * 服务端自动出单的缺省票面语言（历史单 locale 为空时使用）。
+ * 读 Setting 表 `print.locale`，缺省 **th** —— 后厨是泰国人，
+ * 语言选错会直接出错菜，比老板看不懂严重。见 docs/playbooks/print-language.md
+ */
+async function getPrintLocale(): Promise<"zh" | "en" | "th"> {
+  try {
+    const row = await prisma.setting.findUnique({ where: { key: "print.locale" } });
+    return normalizeLocale(row?.value) || "th";
+  } catch {
+    return "th";
+  }
+}
+
+/** 按 locale 取桌名，别的语言缺了才回退中文 */
+function pickLocaleName(
+  row: { name_zh?: string | null; name_en?: string | null; name_th?: string | null } | null,
+  locale: string,
+): string {
+  if (!row) return "";
+  if (locale === "en") return row.name_en || row.name_zh || row.name_th || "";
+  if (locale === "th") return row.name_th || row.name_zh || row.name_en || "";
+  return row.name_zh || row.name_en || row.name_th || "";
+}
+
+// 三语文案（服务端渲染小票用）。只取小票相关，避免整包。// 运行时读 messages 文件会太慢；直接内联小票渲染所需的最小文案。
 // 注意：三语必须与 messages/*.json 的 printLabels 一致，改文案要同步。
 function loadLabels(locale: string): PrintLabels {
   const zh: PrintLabels = {
     brand: "Hook Fishpond",
     brandSub: "泰国 · 垂钓 · 美食",
     kitchenTicket: "后厨单",
-    kitchenCopy1: "【 ครัว / 厨房留存联 】",
+    kitchenCopy1: "[ 后厨留存联 ]",
+    kitchenCopy2: "[ 传菜联 ]",
     bill: "预结单",
     receipt: "收款收据",
     orderNo: "单号",
@@ -60,12 +91,14 @@ function loadLabels(locale: string): PrintLabels {
     paidAt: "结清时间",
     thanks: "谢谢光临，欢迎再来",
     scanMoreFood: "扫此码继续加菜",
+    served: "已送", notServed: "未送", batchAt: "下单", itemCount: "项", paidStamp: "已收款",
   };
   const en: PrintLabels = {
     brand: "Hook Fishpond",
     brandSub: "Thailand · Fishing · Dining",
     kitchenTicket: "Kitchen Ticket",
-    kitchenCopy1: "【 Kitchen Copy 】",
+    kitchenCopy1: "[ Kitchen Copy ]",
+    kitchenCopy2: "[ Service Copy ]",
     bill: "Bill",
     receipt: "Receipt",
     orderNo: "Order No.",
@@ -91,12 +124,14 @@ function loadLabels(locale: string): PrintLabels {
     paidAt: "Paid at",
     thanks: "Thank you, welcome again",
     scanMoreFood: "Scan to add more",
+    served: "Served", notServed: "Not served", batchAt: "Ordered", itemCount: "items", paidStamp: "PAID",
   };
   const th: PrintLabels = {
     brand: "Hook Fishpond",
     brandSub: "ประเทศไทย · ตกปลา · อาหาร",
     kitchenTicket: "ใบครัว",
-    kitchenCopy1: "【 ครัว / ใบครัว 】",
+    kitchenCopy1: "[ ครัว ]",
+    kitchenCopy2: "[ ส่งอาหาร ]",
     bill: "ใบเสร็จ",
     receipt: "ใบรับเงิน",
     orderNo: "เลขที่",
@@ -122,6 +157,7 @@ function loadLabels(locale: string): PrintLabels {
     paidAt: "ชำระเมื่อ",
     thanks: "ขอบคุณครับ ยินดีต้อนรับอีกครั้ง",
     scanMoreFood: "สแกนเพื่อสั่งเพิ่ม",
+    served: "เสิร์ฟแล้ว", notServed: "ยังไม่เสิร์ฟ", batchAt: "สั่งเมื่อ", itemCount: "รายการ", paidStamp: "ชำระแล้ว",
   };
   if (locale === "th") return th;
   if (locale === "en") return en;
@@ -191,17 +227,23 @@ export async function GET(request: NextRequest) {
     const takenIds: string[] = [];
 
     for (const order of orders) {
+      // 票面语言：**按下单时的界面语言**（Order.locale，用户 2026-11-07 定）。
+      // 自动出单没有页面，只能靠这个字段；历史单（locale 为空）回退到
+      // 服务端配置 print.locale，再缺省 th（后厨是泰国人）。
+      // 规则见 docs/playbooks/print-language.md
+      const ticketLocale = normalizeLocale((order as any).locale) || (await getPrintLocale());
+
       const tableCode = order.table?.code || "";
       const tableName = order.table
-        ? order.table.name_zh || order.table.name_en || order.table.name_th || ""
+        ? pickLocaleName(order.table, ticketLocale)
         : "";
 
       // 渲染小票（可能因 QR 生成失败而异常）
       let billHtml: string | null = null;
       let kitchenHtml: string | null = null;
       try {
-        const ro = toReceiptOrder(order, "zh"); // 渲染用中文（桥端按需）
-        const labels = loadLabels("zh");
+        const ro = toReceiptOrder(order, ticketLocale);
+        const labels = loadLabels(ticketLocale);
         // 只打印一份（客户票），取消 QR 码 + 后厨票（用户要求）
         billHtml = buildBillHtml(ro, {
           labels,
