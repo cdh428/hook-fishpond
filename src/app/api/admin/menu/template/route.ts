@@ -2,21 +2,35 @@ import { NextRequest, NextResponse } from "next/server";
 import ExcelJS from "exceljs";
 import { requireAdmin } from "@/lib/auth";
 import { buildTemplateRows, toCsv, dateStamp } from "@/lib/menu-io";
+import { serverT, requestLocale } from "@/lib/server-t";
+import { downloadErrorPage } from "@/lib/download-error";
 
+/**
+ * GET /api/admin/menu/template —— 下载空白导入模板（Excel / CSV）
+ *
+ * **语言**：`?locale=` 优先，其次 Referer。表头与示例行都按该语言输出，
+ * 且导入端认三语表头 —— 用哪种语言下载的模板都能导回去。
+ */
 export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const locale = requestLocale({
+    queryLocale: searchParams.get("locale"),
+    request,
+  });
+  const t = await serverT(locale);
+  const ctx = { locale, t };
+
   try {
     const admin = await requireAdmin(request);
     if (!admin) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { searchParams } = new URL(request.url);
     const format = searchParams.get("format") === "csv" ? "csv" : "xlsx";
-
     const date = dateStamp();
 
     if (format === "csv") {
-      const csv = toCsv(buildTemplateRows());
+      const csv = toCsv(buildTemplateRows(ctx));
       return new NextResponse("\uFEFF" + csv, {
         headers: {
           "Content-Type": "text/csv; charset=utf-8",
@@ -26,8 +40,8 @@ export async function GET(request: NextRequest) {
     }
 
     const wb = new ExcelJS.Workbook();
-    const ws = wb.addWorksheet("Menu Template");
-    ws.addRows(buildTemplateRows());
+    const ws = wb.addWorksheet(t("adminBulk.downloadTemplate"));
+    ws.addRows(buildTemplateRows(ctx));
     const buffer = await wb.xlsx.writeBuffer();
 
     return new NextResponse(new Uint8Array(buffer as ArrayBuffer), {
@@ -39,9 +53,9 @@ export async function GET(request: NextRequest) {
     });
   } catch (error: any) {
     console.error("Export menu template error:", error);
-    return NextResponse.json(
-      { error: "导出模板失败" },
-      { status: 500 },
-    );
+    return downloadErrorPage(t("apiErr.templateFailed"), {
+      title: t("apiErr.templateFailed"),
+      back: t("adminBulk.backToMenu"),
+    });
   }
 }

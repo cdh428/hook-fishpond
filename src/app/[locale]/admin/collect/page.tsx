@@ -46,6 +46,9 @@ export default function AdminCollectPage() {
   const [collectMsg, setCollectMsg] = useState('');
   const [prepaidInput, setPrepaidInput] = useState('');
   const [prepaidMsg, setPrepaidMsg] = useState('');
+  // 提示语的颜色必须来自服务端的 ok 布尔，不能靠中文前缀判断 ——
+  // 文案已按页面语言渲染，`startsWith('已记')` 在 en/th 下永远不成立。
+  const [prepaidOk, setPrepaidOk] = useState(false);
   // 当前选中订单的收款流水（账本，时间正序）
   const [linkedRecords, setLinkedRecords] = useState<
     { id: string; amount: number; method: string; kind: string; operator?: string | null; note?: string | null; paidAt: string; voidedAt?: string | null }[]
@@ -234,8 +237,10 @@ export default function AdminCollectPage() {
       });
       if (res?.exceeded) {
         setPrepaidMsg(res.message || '');
+        setPrepaidOk(false);
       } else {
         setPrepaidMsg(res.message || '');
+        setPrepaidOk(true);
         // 刷新关联订单的已付金额
         linkedOrder.prepaidAmount = res.prepaidAmount;
         linkedOrder.remaining = res.remaining;
@@ -247,6 +252,7 @@ export default function AdminCollectPage() {
       }
     } catch (e: any) {
       setPrepaidMsg(e?.message || t('common.error'));
+      setPrepaidOk(false);
     } finally {
       setCollectBusy(false);
     }
@@ -362,7 +368,7 @@ export default function AdminCollectPage() {
                     {t('admin.recordPromptPay')}
                   </button>
                   {prepaidMsg && (
-                    <span className={`truncate text-[11px] ${prepaidMsg.startsWith('已记') ? 'text-success-600' : 'text-error-600'}`}>
+                    <span className={`truncate text-[11px] ${prepaidOk ? 'text-success-600' : 'text-error-600'}`}>
                       {prepaidMsg}
                     </span>
                   )}

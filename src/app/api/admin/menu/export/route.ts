@@ -3,15 +3,30 @@ import ExcelJS from "exceljs";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
 import { buildExportRows, toCsv, dateStamp } from "@/lib/menu-io";
+import { serverT, requestLocale } from "@/lib/server-t";
+import { downloadErrorPage } from "@/lib/download-error";
 
+/**
+ * GET /api/admin/menu/export —— 导出当前菜单（Excel / CSV）
+ *
+ * **语言**：`?locale=` 优先，其次 Referer 的 `/[locale]/` 段。
+ * 表头与「是/否」「自制/外购」等单元格值都按该语言输出。
+ */
 export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const locale = requestLocale({
+    queryLocale: searchParams.get("locale"),
+    request,
+  });
+  const t = await serverT(locale);
+  const ctx = { locale, t };
+
   try {
     const admin = await requireAdmin(request);
     if (!admin) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { searchParams } = new URL(request.url);
     const format = searchParams.get("format") === "csv" ? "csv" : "xlsx";
 
     const items = await prisma.menuItem.findMany({
@@ -22,7 +37,7 @@ export async function GET(request: NextRequest) {
     const date = dateStamp();
 
     if (format === "csv") {
-      const csv = toCsv(buildExportRows(items as any));
+      const csv = toCsv(buildExportRows(items as any, ctx));
       return new NextResponse("\uFEFF" + csv, {
         headers: {
           "Content-Type": "text/csv; charset=utf-8",
@@ -32,8 +47,8 @@ export async function GET(request: NextRequest) {
     }
 
     const wb = new ExcelJS.Workbook();
-    const ws = wb.addWorksheet("Menu");
-    const rows = buildExportRows(items as any);
+    const ws = wb.addWorksheet(t("adminBulk.exportCurrent"));
+    const rows = buildExportRows(items as any, ctx);
     ws.addRows(rows);
     const buffer = await wb.xlsx.writeBuffer();
 
@@ -46,9 +61,9 @@ export async function GET(request: NextRequest) {
     });
   } catch (error: any) {
     console.error("Export menu error:", error);
-    return NextResponse.json(
-      { error: "导出失败" },
-      { status: 500 },
-    );
+    return downloadErrorPage(t("apiErr.exportFailed"), {
+      title: t("apiErr.exportFailed"),
+      back: t("adminBulk.backToMenu"),
+    });
   }
 }

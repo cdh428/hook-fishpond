@@ -12,6 +12,8 @@ import {
 import { makeOptionKey, normalizeOptionKey } from "@/lib/menu-options";
 import { syncPrepaidFromRecords } from "@/lib/payment-records";
 import { resolveOrderLines, OptionError } from "@/lib/menu-options-server";
+import { resolveTicketLocale, type TicketLocale } from "@/lib/ticket-locale";
+import { serverT } from "@/lib/server-t";
 import {
   computeOrderTotals,
   checkStaffChange,
@@ -88,6 +90,8 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  // 先按 Referer 定语言，拿到 body 后再用 body.locale 覆盖；错误文案按它渲染
+  let reqLocale: TicketLocale = resolveTicketLocale(null, request);
   try {
     const admin = await requireAdmin(request);
     if (!admin) {
@@ -96,6 +100,7 @@ export async function PATCH(
 
     const { id } = await params;
     const body = await request.json().catch(() => ({}));
+    reqLocale = resolveTicketLocale(body?.locale, request);
     const action = body?.action as string | undefined;
 
     const order = await prisma.order.findUnique({ where: { id } });
@@ -260,14 +265,25 @@ export async function PATCH(
         });
       } catch (e: any) {
         if (e instanceof OptionError) {
+          const t = await serverT(reqLocale);
           return NextResponse.json(
-            { error: e.humanMessage, code: e.code },
+            {
+              error: t(`apiErr.${e.messageKey}`, {
+                item: e.itemName ?? "",
+                group: e.groupName ?? "",
+              }),
+              code: e.code,
+            },
             { status: 400 },
           );
         }
         if (e instanceof InsufficientStockError) {
+          const t = await serverT(reqLocale);
           return NextResponse.json(
-            { error: `${e.itemName} 已售罄，无法增加数量` },
+            {
+              error: t("apiErr.soldOut", { item: e.itemName ?? "" }),
+              code: "INSUFFICIENT_STOCK",
+            },
             { status: 400 },
           );
         }
@@ -468,9 +484,10 @@ export async function PATCH(
         });
       } catch (e: any) {
         if (e instanceof InsufficientStockError) {
+          const t = await serverT(reqLocale);
           return NextResponse.json(
             {
-              error: `${e.itemName} 库存不足，无法恢复该订单`,
+              error: t("apiErr.restoreNoStock", { item: e.itemName ?? "" }),
               code: "INSUFFICIENT_STOCK",
             },
             { status: 400 },

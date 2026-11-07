@@ -87,7 +87,44 @@ export class OptionError extends Error {
     this.name = "OptionError";
   }
 
-  /** 给顾客/店员看的中文说明（三语页面由前端按 code 覆写） */
+  /**
+   * 对应 `messages/*.json` 里 `apiErr.<key>` 的 key。
+   *
+   * **API route 必须用这个 key 取词**，不要用下面的 `humanMessage` ——
+   * 后者是写死的中文，直接返回给 en/th 页面就是「英文页面弹中文」。
+   * 规则见 `docs/playbooks/language-consistency.md`。
+   */
+  get messageKey():
+    | "itemNotFound"
+    | "optionChanged"
+    | "optionRequired"
+    | "optionTooMany"
+    | "optionSingleOnly"
+    | "badQuantity"
+    | "optionInvalid" {
+    switch (this.code) {
+      case "ITEM_NOT_FOUND":
+        return "itemNotFound";
+      case "UNKNOWN_OPTION":
+        return "optionChanged";
+      case "REQUIRED_MISSING":
+        return "optionRequired";
+      case "TOO_MANY":
+        return "optionTooMany";
+      case "SINGLE_ONLY":
+        return "optionSingleOnly";
+      case "BAD_QUANTITY":
+        return "badQuantity";
+      default:
+        return "optionInvalid";
+    }
+  }
+
+  /**
+   * 中文说明 —— **仅作服务端日志 / 兜底**，不要直接返回给客户端。
+   *
+   * @deprecated 对外响应请用 `messageKey` + `serverT(locale)`。
+   */
   get humanMessage(): string {
     switch (this.code) {
       case "ITEM_NOT_FOUND":

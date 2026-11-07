@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { resolveTicketLocale } from "@/lib/ticket-locale";
+import { resolveTicketLocale, type TicketLocale } from "@/lib/ticket-locale";
+import { serverT } from "@/lib/server-t";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { runTx } from "@/lib/tx";
@@ -22,8 +23,12 @@ export const maxDuration = 60;
  *  - 正式扣库存发生在结算时点（后付=结清、先付=付款到账）。
  */
 export async function POST(request: NextRequest) {
+  // 语言：先按 Referer 取（页面发起的请求必带），拿到 body 后再用 body.locale 覆盖。
+  // ⚠️ 必须在 try 外声明 —— catch 里要按它渲染错误文案，而 body 在 try 内不可见。
+  let reqLocale: TicketLocale = resolveTicketLocale(null, request);
   try {
     const body = await request.json();
+    reqLocale = resolveTicketLocale(body.locale, request);
     const { userId, customerName, customerPhone, items, bookingId, note, tableCode } = body;
 
     if (!customerName || !customerPhone || !items || !Array.isArray(items) || items.length === 0) {
@@ -250,15 +255,26 @@ export async function POST(request: NextRequest) {
     }
     return NextResponse.json(fullOrder || order, { status: 201 });
   } catch (error: any) {
+    // 错误文案按本次请求的语言渲染（英文页不许弹中文）
+    const t = await serverT(reqLocale);
     if (error instanceof OptionError) {
       return NextResponse.json(
-        { error: error.humanMessage, code: error.code },
+        {
+          error: t(`apiErr.${error.messageKey}`, {
+            item: error.itemName ?? "",
+            group: error.groupName ?? "",
+          }),
+          code: error.code,
+        },
         { status: 400 },
       );
     }
     if (error instanceof InsufficientStockError) {
       return NextResponse.json(
-        { error: `${error.itemName} 已售罄，请调整购物车` },
+        {
+          error: t("apiErr.soldOut", { item: error.itemName ?? "" }),
+          code: "INSUFFICIENT_STOCK",
+        },
         { status: 400 },
       );
     }

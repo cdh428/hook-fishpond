@@ -9,6 +9,8 @@ import {
   maskPromptPayId,
 } from "@/lib/promptpay";
 import { recalcOrderTotals, settleOrder, round2 } from "@/lib/orders";
+import { resolveTicketLocale, type TicketLocale } from "@/lib/ticket-locale";
+import { serverT } from "@/lib/server-t";
 import {
   addPaymentRecord,
   syncPrepaidFromRecords,
@@ -47,6 +49,8 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  // 先按 Referer 定语言；body 拿到后再覆盖。回调里要用 t，必须在 try 外取好。
+  let reqLocale: TicketLocale = resolveTicketLocale(null, request);
   try {
     const admin = await requireAdmin(request);
     if (!admin) {
@@ -55,6 +59,8 @@ export async function POST(
 
     const { id } = await params;
     const body = await request.json().catch(() => ({}));
+    reqLocale = resolveTicketLocale(body?.locale, request);
+    const t = await serverT(reqLocale);
     const action = String(body?.action || "create");
     const method = String(body?.method || "PROMPTPAY") === "CASH" ? "CASH" : "PROMPTPAY";
 
@@ -66,11 +72,14 @@ export async function POST(
     if (body?.paidAt) {
       const d = new Date(String(body.paidAt));
       if (Number.isNaN(d.getTime())) {
-        return NextResponse.json({ error: "INVALID_PAIDAT", msg: "paidAt 不是合法时间" }, { status: 400 });
+        return NextResponse.json(
+          { error: "INVALID_PAIDAT", msg: t("apiErr.settleInvalidPaidAt") },
+          { status: 400 },
+        );
       }
       if (d.getTime() > Date.now() + 60_000) {
         return NextResponse.json(
-          { error: "FUTURE_DATE_REJECTED", msg: "补录时间不能是未来" },
+          { error: "FUTURE_DATE_REJECTED", msg: t("apiErr.settleFutureDate") },
           { status: 400 },
         );
       }
@@ -112,7 +121,11 @@ export async function POST(
             prepaidAmount: curPrepaid,
             remaining: allowed,
             refundDue: 0,
-            message: `最多可再记 ฿${allowed}（总应付 ฿${totals.totalPrice}，已记 ฿${curPrepaid}）`,
+            message: t("apiErr.settleMaxPrepaid", {
+              allowed,
+              total: totals.totalPrice,
+              paid: curPrepaid,
+            }),
           };
         }
         // 首笔记 DEPOSIT，之后算 PARTIAL；结清补差在 confirm / mark-paid 里写 FINAL
@@ -140,7 +153,11 @@ export async function POST(
           prepaidAmount: newPrepaid,
           remaining: round2(Math.max(0, totals.totalPrice - newPrepaid)),
           refundDue: 0,
-          message: `已记 ฿${amount}，累计已付 ฿${newPrepaid}，还需付 ฿${round2(Math.max(0, totals.totalPrice - newPrepaid))}`,
+          message: t("apiErr.settleRecorded", {
+            amount,
+            paid: newPrepaid,
+            due: round2(Math.max(0, totals.totalPrice - newPrepaid)),
+          }),
         };
       });
 
@@ -159,7 +176,7 @@ export async function POST(
         if (amount > curCollected + 1e-6) {
           return {
             ok: false,
-            message: `最多可退 ฿${curCollected}（已收合计）`,
+            message: t("apiErr.settleMaxRefund", { max: curCollected }),
             prepaidAmount: curCollected,
             remaining: 0,
             refundDue: 0,
@@ -181,7 +198,10 @@ export async function POST(
           prepaidAmount: newCollected,
           remaining: round2(Math.max(0, total - newCollected)),
           refundDue: round2(Math.max(0, newCollected - total)),
-          message: `已退 ฿${amount}，剩余已收 ฿${newCollected}`,
+          message: t("apiErr.settleRefunded", {
+            amount,
+            left: newCollected,
+          }),
         };
       });
       return NextResponse.json(result);

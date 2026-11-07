@@ -309,6 +309,36 @@ node scripts/dup-menu-scan.mjs   # 扫全站重名 MenuItem + 每条被哪些表
 
 ---
 
+### 3.14 非打印类输出也必须跟页面语言（报表导出 / Excel 导入导出 / 接口错误）
+
+**现象**（2026-11-07 审计）：打印票面修好后，其余输出仍然是「中文优先」——
+英文后台导出的 Excel 表头是「日期/点餐营收(净实收)」，泰文页面上传菜单看到的
+报错是「价格不是有效数字」，泰文顾客下单失败弹「XX 已售罄」。
+
+**根因分四层**（排查时按这个顺序看）：
+
+1. **L1 请求层**：前端没把 `useLocale()` 带出去（`reportExportUrl` / `menuExportUrl` /
+   `menuTemplateUrl` / `importMenuPreview` / `sendLineReport` 五个入口全漏）；
+2. **L2 声明层**：接口签名里根本没有 `locale` 参数；
+3. **L3 文案层**：服务端写死中文字符串（表头、状态、校验错误、结算提示）；
+4. **L4 透传层**：前端 `throw new Error(body.error)` 把中文原样渲染。
+
+还有一层更隐蔽的 **L5 资源层**：`messages/en.json` 里写
+`"Cottage / กระท่อม / 茅草屋"` —— 改 locale 永远修不好，只能改文案。
+
+**修法（已成体系，见 `docs/playbooks/language-consistency.md`）**：
+
+- 服务端统一 `requestLocale(...)` + `serverT(locale)`，复用 `messages/*.json`；
+- 枚举走 `enumLabel.*`，导出表格不出现 `SETTLED` 这种原始值；
+- 导入的**表头匹配集必须接受三语**，否则「自己导出的英文文件导不回去」；
+- 下载类接口失败返回 HTML（`downloadErrorPage`），不要返回 JSON 原文页。
+
+**最隐蔽的一条**：`collect/page.tsx` 原来用 `prepaidMsg.startsWith('已记')`
+判断显示绿色 —— 文案一翻译，颜色逻辑静默失效。**永远不要用文案内容当业务判断**，
+服务端返回 `ok` 布尔，前端读布尔。
+
+---
+
 ## 四、本机 / 工具链
 
 ### 4.1 Prisma 7 必须用 driver adapter

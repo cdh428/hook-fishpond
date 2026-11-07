@@ -1486,6 +1486,8 @@ export default function AdminReportsPage() {
                     grain,
                     content: exportContent,
                     sheet: exportFormat === 'csv' ? exportContent[0] : undefined,
+                    // 导出物的语言必须与当前页面一致，否则英文页导出的是中文表头
+                    locale,
                   })}
                   className="block w-full rounded-xl bg-primary-700 py-3 text-center text-sm font-semibold text-white"
                 >

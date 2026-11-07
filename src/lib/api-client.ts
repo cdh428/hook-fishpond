@@ -1159,13 +1159,23 @@ export interface MenuImportResult {
 }
 
 /** Build the export download URL (file download — no JSON parsing). */
-export function menuExportUrl(format: 'xlsx' | 'csv' = 'xlsx'): string {
-  return `/api/admin/menu/export?format=${format}`;
+export function menuExportUrl(
+  format: 'xlsx' | 'csv' = 'xlsx',
+  locale?: string,
+): string {
+  const qs = new URLSearchParams({ format });
+  if (locale) qs.set('locale', locale);
+  return `/api/admin/menu/export?${qs.toString()}`;
 }
 
 /** Build the blank template download URL (file download — no JSON parsing). */
-export function menuTemplateUrl(format: 'xlsx' | 'csv' = 'xlsx'): string {
-  return `/api/admin/menu/template?format=${format}`;
+export function menuTemplateUrl(
+  format: 'xlsx' | 'csv' = 'xlsx',
+  locale?: string,
+): string {
+  const qs = new URLSearchParams({ format });
+  if (locale) qs.set('locale', locale);
+  return `/api/admin/menu/template?${qs.toString()}`;
 }
 
 /**
@@ -1173,14 +1183,18 @@ export function menuTemplateUrl(format: 'xlsx' | 'csv' = 'xlsx'): string {
  * Uses a raw fetch with FormData — must NOT set Content-Type manually so the
  * browser can attach the multipart boundary. Does not use the `request()`
  * helper because that forces `application/json`.
+ *
+ * `locale` 决定预览里的表头、校验错误、变更描述用哪种语言。
  */
 export async function importMenuPreview(
   file: File,
   mode: 'translate' | 'keep',
+  locale?: string,
 ): Promise<MenuImportPreview> {
   const form = new FormData();
   form.append('file', file);
   form.append('mode', mode);
+  if (locale) form.append('locale', locale);
 
   const res = await fetch('/api/admin/menu/import', {
     method: 'POST',
@@ -1208,6 +1222,8 @@ export async function importMenuPreview(
 export async function commitMenuImport(input: {
   rows: MenuImportRow[];
   autoCreateCategories: boolean;
+  /** 跳过原因的语言（会显示在页面，也会写进 skip CSV） */
+  locale?: string;
 }): Promise<MenuImportResult> {
   return request<MenuImportResult>(`/api/admin/menu/import/commit`, {
     method: 'POST',
@@ -1762,6 +1778,8 @@ export function reportExportUrl(params: {
   grain?: TrendGrain;
   content?: string[];
   sheet?: string;
+  /** 导出语言：表头/Sheet 名/枚举都按它渲染（规则见 docs/playbooks/language-consistency.md） */
+  locale?: string;
 }): string {
   const qs = new URLSearchParams();
   qs.set('format', params.format || 'xlsx');
@@ -1771,6 +1789,7 @@ export function reportExportUrl(params: {
   if (params.grain) qs.set('grain', params.grain);
   if (params.content?.length) qs.set('content', params.content.join(','));
   if (params.sheet) qs.set('sheet', params.sheet);
+  if (params.locale) qs.set('locale', params.locale);
   return `/api/admin/reports/export?${qs.toString()}`;
 }
 

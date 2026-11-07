@@ -1,6 +1,6 @@
 'use client';
 
-import { useTranslations } from 'next-intl';
+import { useTranslations, useLocale } from 'next-intl';
 import { useState, useCallback, useRef } from 'react';
 import { Link } from '@/i18n/routing';
 import {
@@ -29,6 +29,8 @@ const NAME_FIELDS = [
 
 export default function AdminMenuBulkPage() {
   const t = useTranslations();
+  // 导出/模板/预览/提交全部带上当前页面语言，否则 en/th 页拿到的还是中文表头与中文报错
+  const locale = useLocale();
 
   const [step, setStep] = useState<Step>('home');
 
@@ -54,7 +56,7 @@ export default function AdminMenuBulkPage() {
       setBusy(true);
       setHomeError('');
       try {
-        const p = await importMenuPreview(f, m);
+        const p = await importMenuPreview(f, m, locale);
         setPreview(p);
         setAutoCreateCategories(true);
         setEdits({});
@@ -122,7 +124,7 @@ export default function AdminMenuBulkPage() {
     setPreviewError('');
     try {
       const rows = buildCommitRows();
-      const res = await commitMenuImport({ rows, autoCreateCategories });
+      const res = await commitMenuImport({ rows, autoCreateCategories, locale });
       setResult(res);
       setStep('done');
     } catch (err: any) {
@@ -199,13 +201,13 @@ export default function AdminMenuBulkPage() {
             <p className="mb-2 mt-0.5 text-xs text-neutral-400">{t('adminBulk.exportHint')}</p>
             <div className="flex gap-2">
               <button
-                onClick={() => window.location.assign(menuExportUrl('xlsx'))}
+                onClick={() => window.location.assign(menuExportUrl('xlsx', locale))}
                 className="rounded-lg bg-primary-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-600"
               >
                 .xlsx
               </button>
               <button
-                onClick={() => window.location.assign(menuExportUrl('csv'))}
+                onClick={() => window.location.assign(menuExportUrl('csv', locale))}
                 className="rounded-lg bg-primary-100 px-3 py-1.5 text-xs font-medium text-primary-700 hover:bg-primary-50"
               >
                 .csv
@@ -219,13 +221,13 @@ export default function AdminMenuBulkPage() {
             <p className="mb-2 mt-0.5 text-xs text-neutral-400">{t('adminBulk.templateHint')}</p>
             <div className="flex gap-2">
               <button
-                onClick={() => window.location.assign(menuTemplateUrl('xlsx'))}
+                onClick={() => window.location.assign(menuTemplateUrl('xlsx', locale))}
                 className="rounded-lg bg-accent-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-600"
               >
                 .xlsx
               </button>
               <button
-                onClick={() => window.location.assign(menuTemplateUrl('csv'))}
+                onClick={() => window.location.assign(menuTemplateUrl('csv', locale))}
                 className="rounded-lg bg-accent-50 px-3 py-1.5 text-xs font-medium text-accent-600 hover:bg-accent-500 hover:text-white"
               >
                 .csv

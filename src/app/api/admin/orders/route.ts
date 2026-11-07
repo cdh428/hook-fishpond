@@ -6,7 +6,8 @@ import { runTx } from "@/lib/tx";
 import { OPEN_ORDER_STATUSES, generateOrderNumber, recalcOrderTotals } from "@/lib/orders";
 import { bangkokDayRange, reserveStock, InsufficientStockError } from "@/lib/stock";
 import { resolveOrderLines, OptionError } from "@/lib/menu-options-server";
-import { resolveTicketLocale } from "@/lib/ticket-locale";
+import { resolveTicketLocale, type TicketLocale } from "@/lib/ticket-locale";
+import { serverT } from "@/lib/server-t";
 import {
   addPaymentRecord,
   syncPrepaidFromRecords,
@@ -153,6 +154,8 @@ export async function GET(request: NextRequest) {
  *  - printState 保持为空（从未尝试）→ 补录单若落在本机值守时刻之后，会触发自动出单；
  */
 export async function POST(request: NextRequest) {
+  // 先按 Referer 定语言，拿到 body 后再用 body.locale 覆盖；catch 里要用
+  let reqLocale: TicketLocale = resolveTicketLocale(null, request);
   try {
     const admin = await requireAdmin(request);
     if (!admin) {
@@ -160,6 +163,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
+    reqLocale = resolveTicketLocale(body.locale, request);
     const { items, note, tableCode, orderDate, orderType, settlementMode } = body;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
@@ -328,15 +332,25 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(fullOrder || order, { status: 201 });
   } catch (error: any) {
+    const t = await serverT(reqLocale);
     if (error instanceof OptionError) {
       return NextResponse.json(
-        { error: error.humanMessage, code: error.code },
+        {
+          error: t(`apiErr.${error.messageKey}`, {
+            item: error.itemName ?? "",
+            group: error.groupName ?? "",
+          }),
+          code: error.code,
+        },
         { status: 400 },
       );
     }
     if (error instanceof InsufficientStockError) {
       return NextResponse.json(
-        { error: `${error.itemName} 库存不足，请调整数量`, code: "INSUFFICIENT_STOCK" },
+        {
+          error: t("apiErr.insufficientStock", { item: error.itemName ?? "" }),
+          code: "INSUFFICIENT_STOCK",
+        },
         { status: 400 },
       );
     }

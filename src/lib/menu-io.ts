@@ -1,32 +1,127 @@
 import ExcelJS from "exceljs";
 import { prisma } from "@/lib/prisma";
 import { translateText } from "@/lib/translate";
-import { MENU_TYPES, type MenuTypeValue } from "@/lib/menu-types";
+import { type MenuTypeValue } from "@/lib/menu-types";
+import type { TicketLocale } from "@/lib/ticket-locale";
+
+/* ------------------------------------------------------------------ */
+/* 语言上下文                                                          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * 菜单导入导出的文案出口。
+ *
+ * ⚠️ 这里**不写任何中文字面量** —— 列名、枚举值、校验错误、变更描述
+ * 一律走 `messages/*.json` 的 `menuIo.*`，否则 en/th 页面上传/下载
+ * 看到的就是中文。规则见 `docs/playbooks/language-consistency.md`。
+ */
+export type MenuIoTranslator = (key: string, values?: any) => string;
+
+export interface MenuIoContext {
+  locale: TicketLocale;
+  t: MenuIoTranslator;
+}
 
 /* ------------------------------------------------------------------ */
 /* Column definition                                                   */
 /* ------------------------------------------------------------------ */
 
-export const MENU_COLUMNS: { key: string; header: string; required: boolean }[] = [
-  { key: "category", header: "分类", required: true },
-  { key: "menuType", header: "大类", required: false },
-  { key: "name_zh", header: "名称(中文)", required: true },
-  { key: "name_en", header: "名称(英文)", required: false },
-  { key: "name_th", header: "名称(ไทย)", required: false },
-  { key: "description_zh", header: "描述(中文)", required: false },
-  { key: "description_en", header: "描述(英文)", required: false },
-  { key: "description_th", header: "描述(ไทย)", required: false },
-  { key: "price", header: "价格(THB)", required: true },
-  { key: "spiceLevel", header: "辣度", required: false },
-  { key: "isPopular", header: "招牌", required: false },
-  { key: "isVegetarian", header: "素食", required: false },
-  { key: "isActive", header: "在售", required: false },
-  { key: "stockType", header: "库存类型", required: false },
-  { key: "dailyLimit", header: "每日限量", required: false },
-  { key: "costPrice", header: "成本价", required: false },
-  { key: "targetMargin", header: "目标毛利率(%)", required: false },
-  { key: "action", header: "操作", required: false },
+type ColumnKey =
+  | "category"
+  | "menuType"
+  | "name_zh"
+  | "name_en"
+  | "name_th"
+  | "description_zh"
+  | "description_en"
+  | "description_th"
+  | "price"
+  | "spiceLevel"
+  | "isPopular"
+  | "isVegetarian"
+  | "isActive"
+  | "stockType"
+  | "dailyLimit"
+  | "costPrice"
+  | "targetMargin"
+  | "action";
+
+/**
+ * 列定义 —— **三语表头的唯一真源**。
+ *
+ * 导入时三种语言的表头都认（用户在泰文页下载的模板，用英文页上传也能导入）；
+ * 导出时按当前页面语言写表头。
+ */
+export const MENU_COLUMNS: {
+  key: ColumnKey;
+  required: boolean;
+  header: Record<TicketLocale, string>;
+}[] = [
+  { key: "category", required: true, header: { zh: "分类", en: "Category", th: "หมวดหมู่" } },
+  { key: "menuType", required: false, header: { zh: "大类", en: "Type", th: "ประเภท" } },
+  { key: "name_zh", required: true, header: { zh: "名称(中文)", en: "Name (ZH)", th: "ชื่อ (ZH)" } },
+  { key: "name_en", required: false, header: { zh: "名称(英文)", en: "Name (EN)", th: "ชื่อ (EN)" } },
+  { key: "name_th", required: false, header: { zh: "名称(ไทย)", en: "Name (TH)", th: "ชื่อ (TH)" } },
+  {
+    key: "description_zh",
+    required: false,
+    header: { zh: "描述(中文)", en: "Description (ZH)", th: "คำอธิบาย (ZH)" },
+  },
+  {
+    key: "description_en",
+    required: false,
+    header: { zh: "描述(英文)", en: "Description (EN)", th: "คำอธิบาย (EN)" },
+  },
+  {
+    key: "description_th",
+    required: false,
+    header: { zh: "描述(ไทย)", en: "Description (TH)", th: "คำอธิบาย (TH)" },
+  },
+  { key: "price", required: true, header: { zh: "价格(THB)", en: "Price (THB)", th: "ราคา (THB)" } },
+  { key: "spiceLevel", required: false, header: { zh: "辣度", en: "Spice level", th: "ความเผ็ด" } },
+  { key: "isPopular", required: false, header: { zh: "招牌", en: "Signature", th: "เมนูแนะนำ" } },
+  { key: "isVegetarian", required: false, header: { zh: "素食", en: "Vegetarian", th: "มังสวิรัติ" } },
+  { key: "isActive", required: false, header: { zh: "在售", en: "On sale", th: "เปิดขาย" } },
+  { key: "stockType", required: false, header: { zh: "库存类型", en: "Stock type", th: "ประเภทสต็อก" } },
+  { key: "dailyLimit", required: false, header: { zh: "每日限量", en: "Daily limit", th: "จำกัดต่อวัน" } },
+  { key: "costPrice", required: false, header: { zh: "成本价", en: "Cost price", th: "ราคาทุน" } },
+  {
+    key: "targetMargin",
+    required: false,
+    header: { zh: "目标毛利率(%)", en: "Target margin (%)", th: "กำไรเป้าหมาย (%)" },
+  },
+  { key: "action", required: false, header: { zh: "操作", en: "Action", th: "การดำเนินการ" } },
 ];
+
+/** 表头归一化：全角括号 → 半角、去空白、小写。三语表头都用它建索引。 */
+function normHeader(raw: string): string {
+  return String(raw ?? "")
+    .replace(/（/g, "(")
+    .replace(/）/g, ")")
+    .replace(/\s+/g, "")
+    .toLowerCase();
+}
+
+/** 归一化表头 → 列 key（三语通用）。模块级构建一次。 */
+const HEADER_INDEX: Map<string, ColumnKey> = (() => {
+  const m = new Map<string, ColumnKey>();
+  for (const col of MENU_COLUMNS) {
+    for (const loc of ["zh", "en", "th"] as TicketLocale[]) {
+      m.set(normHeader(col.header[loc]), col.key);
+    }
+  }
+  // 历史别名（老模板可能用过这些写法）
+  m.set(normHeader("菜品(中)"), "name_zh");
+  m.set(normHeader("菜品(英)"), "name_en");
+  m.set(normHeader("菜品(泰)"), "name_th");
+  m.set(normHeader("名称"), "name_zh");
+  m.set(normHeader("name"), "name_zh");
+  return m;
+})();
+
+function headerOf(key: ColumnKey, locale: TicketLocale): string {
+  return MENU_COLUMNS.find((c) => c.key === key)!.header[locale];
+}
 
 /* ------------------------------------------------------------------ */
 /* Types                                                               */
@@ -38,10 +133,9 @@ export interface MenuImportRow {
   rowNumber: number; // 1-based spreadsheet row (header = 1)
   action: ImportAction;
   category: string; // category name_zh as given in the sheet
-  /** 大类：美食/饮品/钓具。新建分类时用它决定归到哪个页签；留空默认美食 */
   menuType?: MenuTypeValue;
-  categoryId?: string; // resolved when the category exists
-  itemId?: string; // matched MenuItem id (UPDATE/DELETE)
+  categoryId?: string;
+  itemId?: string;
   name_zh: string;
   name_en: string;
   name_th: string;
@@ -56,12 +150,13 @@ export interface MenuImportRow {
   stockType?: "NONE" | "MADE" | "PURCHASED";
   dailyLimit?: number | null;
   costPrice?: number | null;
-  /** 目标毛利率，小数（0.6 = 60%）；表格里填百分数，解析时 /100 */
   targetMargin?: number | null;
-  autoTranslated: string[]; // e.g. ['name_en','name_th']
-  changes: string[]; // human-readable diff for UPDATE
-  error?: string; // set when action === 'ERROR'
+  autoTranslated: string[];
+  changes: string[];
+  error?: string;
 }
+
+export type TranslateMode = "translate" | "keep";
 
 export interface MenuImportPreview {
   summary: {
@@ -73,31 +168,43 @@ export interface MenuImportPreview {
     translated: number;
   };
   rows: MenuImportRow[];
-  newCategories: string[]; // category names in the sheet but NOT in the DB
+  newCategories: string[];
 }
 
-export type TranslateMode = "translate" | "keep";
+interface CatRecord {
+  id: string;
+  name_zh: string;
+  name_en: string;
+  name_th: string;
+  type?: string;
+  sortOrder: number;
+  items: MenuItemRecord[];
+}
+
+interface MenuItemRecord {
+  id: string;
+  categoryId: string;
+  name_zh: string;
+  name_en: string;
+  name_th: string;
+  description_zh: string | null;
+  description_en: string | null;
+  description_th: string | null;
+  price: number;
+  spiceLevel: number;
+  isPopular: boolean;
+  isVegetarian: boolean;
+  isActive: boolean;
+  stockType: string;
+  dailyLimit: number | null;
+  costPrice: number | null;
+  targetMargin: number | null;
+  categoryId_ref?: string;
+}
 
 /* ------------------------------------------------------------------ */
 /* Small helpers                                                       */
 /* ------------------------------------------------------------------ */
-
-function boolZh(b: boolean): string {
-  return b ? "是" : "否";
-}
-
-function zhStockType(v: string | null | undefined): string {
-  if (v === "MADE") return "自制";
-  if (v === "PURCHASED") return "外购";
-  return "不管理";
-}
-
-/** 导出时的「大类」单元格：写中文标签，方便直接改 */
-function zhMenuType(v: string | null | undefined): string {
-  if (v === "DRINK") return "饮品";
-  if (v === "TOOL") return "钓具";
-  return "美食";
-}
 
 function fmtPrice(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(2);
@@ -110,8 +217,8 @@ function fmtPrice(n: number): string {
 function parseBool(v: string | null | undefined): boolean | undefined {
   const s = (v ?? "").trim().toLowerCase();
   if (s === "") return undefined;
-  if (["是", "true", "1", "y", "yes"].includes(s)) return true;
-  if (["否", "false", "0", "n", "no"].includes(s)) return false;
+  if (["是", "true", "1", "y", "yes", "ใช่", "ใช่ ", "มี"].includes(s)) return true;
+  if (["否", "false", "0", "n", "no", "ไม่", "ไม่ใช่", "ไม่มี"].includes(s)) return false;
   return undefined;
 }
 
@@ -140,66 +247,50 @@ export function toCsv(rows: (string | number)[][]): string {
 }
 
 export function dateStamp(): string {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}${m}${day}`;
+  const d = new Date(Date.now() + 7 * 3600 * 1000);
+  return d.toISOString().slice(0, 10).replace(/-/g, "");
 }
 
 /* ------------------------------------------------------------------ */
-/* CSV / XLSX parsing into a string[][]                                */
+/* Parsing                                                             */
 /* ------------------------------------------------------------------ */
 
 function parseCsv(text: string): string[][] {
-  // strip a leading UTF-8 BOM
-  if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
-
   const rows: string[][] = [];
   let row: string[] = [];
-  let field = "";
+  let cell = "";
   let inQuotes = false;
-  let started = false; // have we seen any content for the current field
-
   for (let i = 0; i < text.length; i++) {
-    const c = text[i];
+    const ch = text[i];
     if (inQuotes) {
-      if (c === '"') {
+      if (ch === '"') {
         if (text[i + 1] === '"') {
-          field += '"';
+          cell += '"';
           i++;
         } else {
           inQuotes = false;
         }
       } else {
-        field += c;
-        started = true;
+        cell += ch;
       }
+    } else if (ch === '"') {
+      inQuotes = true;
+    } else if (ch === ",") {
+      row.push(cell);
+      cell = "";
+    } else if (ch === "\r") {
+      // skip
+    } else if (ch === "\n") {
+      row.push(cell);
+      rows.push(row);
+      row = [];
+      cell = "";
     } else {
-      if (c === '"') {
-        inQuotes = true;
-        started = true;
-      } else if (c === ",") {
-        row.push(field);
-        field = "";
-        started = false;
-      } else if (c === "\r") {
-        // ignore; handled by \n
-      } else if (c === "\n") {
-        row.push(field);
-        rows.push(row);
-        row = [];
-        field = "";
-        started = false;
-      } else {
-        field += c;
-        started = true;
-      }
+      cell += ch;
     }
   }
-  // flush the final field / row
-  if (started || row.length > 0 || field !== "") {
-    row.push(field);
+  if (cell !== "" || row.length) {
+    row.push(cell);
     rows.push(row);
   }
   return rows;
@@ -207,63 +298,36 @@ function parseCsv(text: string): string[][] {
 
 async function xlsxToRows(buffer: Buffer): Promise<string[][]> {
   const wb = new ExcelJS.Workbook();
-  // exceljs typings expect a classic Node Buffer; the value is always a real
-  // Node Buffer at runtime, so this cast is safe.
   await wb.xlsx.load(buffer as any);
   const ws = wb.worksheets[0];
-  if (!ws) throw new Error("文件没有工作表");
-
+  if (!ws) throw new Error("no sheet");
   const rows: string[][] = [];
-  const maxRow = ws.rowCount || 0;
-  for (let rn = 1; rn <= maxRow; rn++) {
-    const row = ws.getRow(rn);
-    const maxCol = row.cellCount || 0;
-    const vals: string[] = [];
-    for (let cn = 1; cn <= maxCol; cn++) {
-      const cell = row.getCell(cn);
-      const t = cell.text;
-      vals.push(t === undefined || t === null ? "" : String(t));
-    }
-    rows.push(vals);
-  }
+  ws.eachRow({ includeEmpty: false }, (row) => {
+    const arr: string[] = [];
+    row.eachCell({ includeEmpty: true }, (cell) => {
+      const v = cell.value;
+      if (v === null || v === undefined) arr.push("");
+      else if (typeof v === "object" && "text" in (v as any)) arr.push(String((v as any).text ?? ""));
+      else if (typeof v === "object" && "result" in (v as any)) arr.push(String((v as any).result ?? ""));
+      else arr.push(String(v));
+    });
+    rows.push(arr);
+  });
   return rows;
 }
 
 /* ------------------------------------------------------------------ */
-/* buildPreview                                                        */
+/* Preview                                                             */
 /* ------------------------------------------------------------------ */
-
-type CatRecord = {
-  id: string;
-  name_zh: string;
-  sortOrder: number;
-  items: { id: string; name_zh: string; categoryId: string }[];
-};
-type MenuItemRecord = {
-  id: string;
-  name_zh: string;
-  name_en: string;
-  name_th: string;
-  description_zh: string | null;
-  description_en: string | null;
-  description_th: string | null;
-  price: number;
-  spiceLevel: number;
-  isPopular: boolean;
-  isVegetarian: boolean;
-  isActive: boolean;
-  stockType: string;
-  dailyLimit: number | null;
-  costPrice: number | null;
-  targetMargin: number | null;
-  categoryId: string;
-};
 
 export async function buildPreview(
   buffer: Buffer,
   filename: string,
   mode: TranslateMode,
+  ctx: MenuIoContext,
 ): Promise<MenuImportPreview> {
+  const { t, locale } = ctx;
+
   let sheetRows: string[][];
   try {
     if (filename.toLowerCase().endsWith(".csv")) {
@@ -273,27 +337,31 @@ export async function buildPreview(
       sheetRows = await xlsxToRows(buffer);
     }
   } catch (e: any) {
-    throw new Error("文件无法读取或已损坏：" + (e?.message || "未知错误"));
+    throw new Error(
+      t("menuIo.errFileBroken", { msg: e?.message || t("menuIo.errUnknown") }),
+    );
   }
 
   if (!sheetRows.length) {
-    throw new Error("文件为空");
+    throw new Error(t("menuIo.errFileEmpty"));
   }
 
-  // --- header row + mapping ---
+  // --- header row + mapping（三语表头都认）---
   const headerRow = sheetRows[0];
-  const keyForCol: (string | null)[] = headerRow.map((h) => {
-    const t = String(h ?? "").trim();
-    const col = MENU_COLUMNS.find((c) => c.header === t);
-    return col ? col.key : null;
+  const keyForCol: (ColumnKey | null)[] = headerRow.map((h) => {
+    return HEADER_INDEX.get(normHeader(String(h ?? ""))) ?? null;
   });
 
   // required columns must be present
   const missing = MENU_COLUMNS.filter(
     (c) => c.required && !keyForCol.includes(c.key),
-  ).map((c) => c.header);
+  ).map((c) => headerOf(c.key, locale));
   if (missing.length) {
-    throw new Error(`缺少必需的列：${missing.join("、")}`);
+    throw new Error(
+      t("menuIo.errMissingColumns", {
+        cols: missing.join(locale === "zh" ? "、" : ", "),
+      }),
+    );
   }
 
   // --- load DB state once ---
@@ -306,7 +374,12 @@ export async function buildPreview(
   const itemByKey = new Map<string, MenuItemRecord>();
   let maxCatSort = 0;
   for (const c of categories) {
-    catByName.set(c.name_zh.trim(), c);
+    // 三语名都进索引：用户可能下载英文模板、编辑后在中文页上传，
+    // 只认 name_zh 会匹配失败并凭空造出一个重复分类。
+    for (const nm of [c.name_zh, c.name_en, c.name_th]) {
+      const k = (nm ?? "").trim();
+      if (k) catByName.set(k, c);
+    }
     catById.set(c.id, c);
     if (c.sortOrder > maxCatSort) maxCatSort = c.sortOrder;
     for (const it of c.items) {
@@ -348,12 +421,12 @@ export async function buildPreview(
 
     // --- row-level validation ---
     if (!category || !name_zh) {
-      errorList.push("缺少分类或中文名称");
+      errorList.push(t("menuIo.errNeedName"));
     }
 
     const priceRaw = (raw.price ?? "").trim();
     if (priceRaw === "") {
-      errorList.push("价格不是有效数字");
+      errorList.push(t("menuIo.errBadPrice"));
     } else {
       // Tolerate a currency symbol, thousands separators and spaces — but do
       // NOT silently turn garbage (e.g. "abc") into 0: stripping every
@@ -361,7 +434,7 @@ export async function buildPreview(
       const cleaned = priceRaw.replace(/[,\s฿]/g, "");
       const p = Number(cleaned);
       if (cleaned === "" || !Number.isFinite(p) || p < 0) {
-        errorList.push("价格不是有效数字");
+        errorList.push(t("menuIo.errBadPrice"));
       } else {
         price = p;
       }
@@ -371,7 +444,7 @@ export async function buildPreview(
     if (spiceRaw !== "") {
       const s = Number(spiceRaw);
       if (!Number.isInteger(s) || s < 0 || s > 3) {
-        errorList.push("辣度应为 0-3 的整数");
+        errorList.push(t("menuIo.errBadSpice"));
       } else {
         spiceLevel = s;
       }
@@ -379,10 +452,17 @@ export async function buildPreview(
 
     const op = (raw.action ?? "").trim();
     if (op) {
-      if (op === "删除" || op.toLowerCase() === "delete" || op.toUpperCase() === "DELETE") {
+      const opLower = op.toLowerCase();
+      // 删除的写法：中文「删除」、英文 delete、泰文 ลบ
+      if (
+        op === "删除" ||
+        op === "ลบ" ||
+        opLower === "delete" ||
+        opLower === "del"
+      ) {
         deleteOp = true;
       } else {
-        errorList.push("无法识别的操作值");
+        errorList.push(t("menuIo.errBadAction"));
       }
     }
 
@@ -398,23 +478,30 @@ export async function buildPreview(
       if (["美食", "食品", "food", "อาหาร"].includes(norm)) menuType = "FOOD";
       else if (["饮品", "饮料", "drink", "drinks", "เครื่องดื่ม"].includes(norm))
         menuType = "DRINK";
-      else if (["钓具", "工具", "用具", "tackle", "tool", "tools", "อุปกรณ์ตกปลา", "อุปกรณ์"].includes(norm))
+      else if (
+        ["钓具", "工具", "用具", "tackle", "tool", "tools", "อุปกรณ์ตกปลา", "อุปกรณ์"].includes(norm)
+      )
         menuType = "TOOL";
-      else errorList.push(`大类无法识别（${MENU_TYPES.join("/")}，或 美食/饮品/钓具）`);
+      else errorList.push(t("menuIo.errBadMenuType"));
     }
 
     // --- stock columns ---
     let stockType: "NONE" | "MADE" | "PURCHASED" | undefined;
     const stockTypeRaw = (raw.stockType ?? "").trim();
     if (stockTypeRaw !== "") {
-      if (["自制", "made", "MADE", "ทำเอง"].includes(stockTypeRaw)) {
+      const normStock = stockTypeRaw.toLowerCase();
+      if (["自制", "made", "ทำเอง"].includes(normStock)) {
         stockType = "MADE";
-      } else if (["外购", "purchased", "PURCHASED", "ซื้อมา"].includes(stockTypeRaw)) {
+      } else if (
+        ["外购", "purchased", "ซื้อมา", "purchase"].includes(normStock)
+      ) {
         stockType = "PURCHASED";
-      } else if (["不管理", "none", "ไม่มี"].includes(stockTypeRaw)) {
+      } else if (
+        ["不管理", "none", "not tracked", "not_tracked", "ไม่จัดการ", "ไม่"].includes(normStock)
+      ) {
         stockType = "NONE";
       } else {
-        errorList.push("库存类型无法识别");
+        errorList.push(t("menuIo.errBadStockType"));
       }
     }
 
@@ -423,7 +510,7 @@ export async function buildPreview(
     if (dailyLimitRaw !== "") {
       const n = Number(dailyLimitRaw);
       if (!Number.isInteger(n) || n < 0) {
-        errorList.push("每日限量应为非负整数");
+        errorList.push(t("menuIo.errBadDailyLimit"));
       } else {
         dailyLimit = n;
       }
@@ -436,7 +523,7 @@ export async function buildPreview(
       const cleaned = costRaw.replace(/[,\s฿]/g, "");
       const n = Number(cleaned);
       if (cleaned === "" || !Number.isFinite(n) || n < 0) {
-        errorList.push("成本价不是有效数字");
+        errorList.push(t("menuIo.errBadCost"));
       } else {
         costPrice = n;
       }
@@ -448,14 +535,16 @@ export async function buildPreview(
       const cleaned = marginRaw.replace(/[%\s]/g, "");
       const n = Number(cleaned);
       if (cleaned === "" || !Number.isFinite(n) || n < 0 || n > 100) {
-        errorList.push("目标毛利率应为 0-100 的百分数");
+        errorList.push(t("menuIo.errBadMargin"));
       } else {
         targetMargin = n / 100;
       }
     }
 
-    // base action
-    const matchedItem = itemByKey.get(`${category.trim()}|${name_zh.trim()}`);
+    // base action（分类列可能写的是英文/泰文名，先归一到 name_zh 再查菜品）
+    const categoryRecord = catByName.get(category.trim());
+    const matchCatKey = categoryRecord?.name_zh.trim() ?? category.trim();
+    const matchedItem = itemByKey.get(`${matchCatKey}|${name_zh.trim()}`);
     let action: ImportAction;
     if (errorList.length) {
       action = "ERROR";
@@ -466,7 +555,7 @@ export async function buildPreview(
         // Marking a row for deletion that doesn't exist must never silently
         // CREATE it — surface it as a skipped row instead.
         action = "ERROR";
-        errorList.push("要删除的菜品不存在");
+        errorList.push(t("menuIo.errDeleteNotFound"));
       }
     } else if (matchedItem) {
       action = "UPDATE";
@@ -474,7 +563,6 @@ export async function buildPreview(
       action = "ADD";
     }
 
-    const categoryRecord = catByName.get(category.trim());
     const categoryId = categoryRecord?.id;
 
     // newCategories: ADD rows whose category is not in the DB
@@ -486,6 +574,15 @@ export async function buildPreview(
     const changes: string[] = [];
     let errorMsg: string | undefined;
 
+    const valYes = t("menuIo.valYes");
+    const valNo = t("menuIo.valNo");
+    const stockLabel = (v: string | null | undefined) => {
+      if (v === "MADE") return t("menuIo.valStockMade");
+      if (v === "PURCHASED") return t("menuIo.valStockPurchased");
+      return t("menuIo.valStockNone");
+    };
+    const boolLabel = (b: boolean) => (b ? valYes : valNo);
+
     // --- translation ---
     if (mode === "translate" && action !== "ERROR") {
       // Names group
@@ -495,15 +592,15 @@ export async function buildPreview(
           { field: "name_en", lang: "en" },
           { field: "name_th", lang: "th" },
         ];
-        for (const t of targets) {
-          if (t.lang === nameSource.lang) continue;
-          const current = t.field === "name_en" ? name_en : name_th;
+        for (const tg of targets) {
+          if (tg.lang === nameSource.lang) continue;
+          const current = tg.field === "name_en" ? name_en : name_th;
           if (!current) {
-            const res = await translateText(nameSource.text, nameSource.lang, t.lang);
+            const res = await translateText(nameSource.text, nameSource.lang, tg.lang);
             if (res) {
-              if (t.field === "name_en") name_en = res;
+              if (tg.field === "name_en") name_en = res;
               else name_th = res;
-              autoTranslated.push(t.field);
+              autoTranslated.push(tg.field);
             }
           }
         }
@@ -518,15 +615,15 @@ export async function buildPreview(
             { field: "description_en", lang: "en" },
             { field: "description_th", lang: "th" },
           ];
-          for (const t of targets) {
-            if (t.lang === descSource.lang) continue;
-            const current = t.field === "description_en" ? description_en : description_th;
+          for (const tg of targets) {
+            if (tg.lang === descSource.lang) continue;
+            const current = tg.field === "description_en" ? description_en : description_th;
             if (!current) {
-              const res = await translateText(descSource.text, descSource.lang, t.lang);
+              const res = await translateText(descSource.text, descSource.lang, tg.lang);
               if (res) {
-                if (t.field === "description_en") description_en = res;
+                if (tg.field === "description_en") description_en = res;
                 else description_th = res;
-                autoTranslated.push(t.field);
+                autoTranslated.push(tg.field);
               }
             }
           }
@@ -537,60 +634,77 @@ export async function buildPreview(
       if (action === "ADD") {
         if (!name_en || !name_th) {
           action = "ERROR";
-          errorList.push("缺少英文或泰文名称，且自动翻译失败");
+          errorList.push(t("menuIo.errNoOtherLang"));
         }
       } else if (action === "UPDATE") {
         // leave the field blank; note it in changes
-        if (!name_en) changes.push("英文名翻译失败，已保留原值");
-        if (!name_th) changes.push("泰文名翻译失败，已保留原值");
+        if (!name_en) changes.push(t("menuIo.warnTransEn"));
+        if (!name_th) changes.push(t("menuIo.warnTransTh"));
       }
     }
 
     // --- UPDATE diff (after translation) ---
     if (action === "UPDATE" && matchedItem) {
       if (price !== undefined && price !== matchedItem.price) {
-        changes.push(`价格 ฿${fmtPrice(matchedItem.price)}→฿${fmtPrice(price)}`);
+        changes.push(
+          t("menuIo.diffPrice", { from: fmtPrice(matchedItem.price), to: fmtPrice(price) }),
+        );
       }
       if (name_zh && name_zh !== matchedItem.name_zh) {
-        changes.push(`中文名 ${matchedItem.name_zh}→${name_zh}`);
+        changes.push(t("menuIo.diffNameZh", { from: matchedItem.name_zh, to: name_zh }));
       }
       if (name_en && name_en !== matchedItem.name_en) {
-        changes.push(`英文名 ${matchedItem.name_en}→${name_en}`);
+        changes.push(t("menuIo.diffNameEn", { from: matchedItem.name_en, to: name_en }));
       }
       if (name_th && name_th !== matchedItem.name_th) {
-        changes.push(`泰文名 ${matchedItem.name_th}→${name_th}`);
+        changes.push(t("menuIo.diffNameTh", { from: matchedItem.name_th, to: name_th }));
       }
       if (description_zh && description_zh !== (matchedItem.description_zh ?? "")) {
-        changes.push(`中文描述 ${matchedItem.description_zh ?? ""}→${description_zh}`);
+        changes.push(t("menuIo.diffDescZh"));
       }
       if (description_en && description_en !== (matchedItem.description_en ?? "")) {
-        changes.push(`英文描述 ${matchedItem.description_en ?? ""}→${description_en}`);
+        changes.push(t("menuIo.diffDescEn"));
       }
       if (description_th && description_th !== (matchedItem.description_th ?? "")) {
-        changes.push(`泰文描述 ${matchedItem.description_th ?? ""}→${description_th}`);
+        changes.push(t("menuIo.diffDescTh"));
       }
       if (spiceLevel !== undefined && spiceLevel !== matchedItem.spiceLevel) {
-        changes.push(`辣度 ${matchedItem.spiceLevel}→${spiceLevel}`);
+        changes.push(t("menuIo.diffSpice", { from: matchedItem.spiceLevel, to: spiceLevel }));
       }
       if (isPopular !== undefined && isPopular !== matchedItem.isPopular) {
-        changes.push(`招牌 ${boolZh(matchedItem.isPopular)}→${boolZh(isPopular)}`);
+        changes.push(
+          t("menuIo.diffPopular", {
+            from: boolLabel(matchedItem.isPopular),
+            to: boolLabel(isPopular),
+          }),
+        );
       }
       if (isVegetarian !== undefined && isVegetarian !== matchedItem.isVegetarian) {
-        changes.push(`素食 ${boolZh(matchedItem.isVegetarian)}→${boolZh(isVegetarian)}`);
+        changes.push(
+          t("menuIo.diffVegetarian", {
+            from: boolLabel(matchedItem.isVegetarian),
+            to: boolLabel(isVegetarian),
+          }),
+        );
       }
       if (isActive !== undefined && isActive !== matchedItem.isActive) {
-        changes.push(`在售 ${boolZh(matchedItem.isActive)}→${boolZh(isActive)}`);
+        changes.push(
+          t("menuIo.diffActive", {
+            from: boolLabel(matchedItem.isActive),
+            to: boolLabel(isActive),
+          }),
+        );
       }
       if (stockType !== undefined && stockType !== matchedItem.stockType) {
         changes.push(
-          `库存类型 ${zhStockType(matchedItem.stockType)}→${zhStockType(stockType)}`,
+          t("menuIo.diffStockType", {
+            from: stockLabel(matchedItem.stockType),
+            to: stockLabel(stockType),
+          }),
         );
       }
-      if (
-        dailyLimit !== undefined &&
-        dailyLimit !== (matchedItem.dailyLimit ?? null)
-      ) {
-        changes.push(`每日限量 ${dailyLimit}`);
+      if (dailyLimit !== undefined && dailyLimit !== (matchedItem.dailyLimit ?? null)) {
+        changes.push(t("menuIo.diffDailyLimit", { value: dailyLimit }));
       }
       if (
         costPrice !== undefined &&
@@ -598,7 +712,13 @@ export async function buildPreview(
         costPrice !== (matchedItem.costPrice ?? null)
       ) {
         changes.push(
-          `成本价 ${matchedItem.costPrice == null ? "未设" : "฿" + fmtPrice(matchedItem.costPrice)}→฿${fmtPrice(costPrice)}`,
+          t("menuIo.diffCostPrice", {
+            from:
+              matchedItem.costPrice == null
+                ? t("menuIo.notSet")
+                : "฿" + fmtPrice(matchedItem.costPrice),
+            to: "฿" + fmtPrice(costPrice),
+          }),
         );
       }
       if (
@@ -607,12 +727,18 @@ export async function buildPreview(
         targetMargin !== (matchedItem.targetMargin ?? null)
       ) {
         changes.push(
-          `目标毛利 ${matchedItem.targetMargin == null ? "默认" : Math.round(matchedItem.targetMargin * 100) + "%"}→${Math.round(targetMargin * 100)}%`,
+          t("menuIo.diffTargetMargin", {
+            from:
+              matchedItem.targetMargin == null
+                ? t("menuIo.isDefault")
+                : Math.round(matchedItem.targetMargin * 100) + "%",
+            to: Math.round(targetMargin * 100) + "%",
+          }),
         );
       }
       const catName = catById.get(matchedItem.categoryId)?.name_zh;
       if (catName && category && category !== catName) {
-        changes.push(`分类 ${catName}→${category}`);
+        changes.push(t("menuIo.diffCategory", { from: catName, to: category }));
       }
     }
 
@@ -666,20 +792,49 @@ export async function buildPreview(
 /* ------------------------------------------------------------------ */
 
 export function buildExportRows(
-  items: ({ category: { name_zh: string; type?: string } } & Record<string, any>)[],
+  items: ({
+    category: {
+      name_zh: string;
+      name_en?: string | null;
+      name_th?: string | null;
+      type?: string;
+    };
+  } & Record<string, any>)[],
+  ctx: MenuIoContext,
 ): (string | number)[][] {
+  const { t, locale } = ctx;
+  const valYes = t("menuIo.valYes");
+  const valNo = t("menuIo.valNo");
+
+  // 分类名也按当前语言输出 —— 分类表本来就有三语字段，导出中文名会让
+  // 英文/泰文用户看不懂。导入端已能识别三语分类名，可以原样导回。
+  const catName = (c: any): string => {
+    if (!c) return "";
+    if (locale === "en") return c.name_en || c.name_zh || "";
+    if (locale === "th") return c.name_th || c.name_zh || "";
+    return c.name_zh || c.name_en || "";
+  };
+
   const rows: (string | number)[][] = [];
-  rows.push(MENU_COLUMNS.map((c) => c.header));
+  rows.push(MENU_COLUMNS.map((c) => headerOf(c.key, locale)));
   for (const item of items) {
     const line: (string | number)[] = [];
     for (const col of MENU_COLUMNS) {
       switch (col.key) {
         case "category":
-          line.push(item.category?.name_zh ?? "");
+          line.push(catName(item.category));
           break;
-        case "menuType":
-          line.push(zhMenuType(item.category?.type));
+        case "menuType": {
+          const ty = item.category?.type;
+          line.push(
+            ty === "DRINK"
+              ? t("menuIo.valTypeDrink")
+              : ty === "TOOL"
+                ? t("menuIo.valTypeTool")
+                : t("menuIo.valTypeFood"),
+          );
           break;
+        }
         case "name_zh":
           line.push(item.name_zh ?? "");
           break;
@@ -705,16 +860,22 @@ export function buildExportRows(
           line.push(item.spiceLevel ?? 0);
           break;
         case "isPopular":
-          line.push(item.isPopular ? "是" : "否");
+          line.push(item.isPopular ? valYes : valNo);
           break;
         case "isVegetarian":
-          line.push(item.isVegetarian ? "是" : "否");
+          line.push(item.isVegetarian ? valYes : valNo);
           break;
         case "isActive":
-          line.push(item.isActive ? "是" : "否");
+          line.push(item.isActive ? valYes : valNo);
           break;
         case "stockType":
-          line.push(zhStockType(item.stockType));
+          line.push(
+            item.stockType === "MADE"
+              ? t("menuIo.valStockMade")
+              : item.stockType === "PURCHASED"
+                ? t("menuIo.valStockPurchased")
+                : t("menuIo.valStockNone"),
+          );
           break;
         case "dailyLimit":
           line.push(item.dailyLimit ?? "");
@@ -739,23 +900,60 @@ export function buildExportRows(
   return rows;
 }
 
-export function buildTemplateRows(): (string | number)[][] {
+export function buildTemplateRows(ctx: MenuIoContext): (string | number)[][] {
+  const { t, locale } = ctx;
   const rows: (string | number)[][] = [];
-  rows.push(MENU_COLUMNS.map((c) => c.header));
+  rows.push(MENU_COLUMNS.map((c) => headerOf(c.key, locale)));
+
+  // 示例行按当前语言给，让用户照着改
+  const sample =
+    locale === "th"
+      ? {
+          cat: "อาหารจานเดียว",
+          type: t("menuIo.valTypeFood"),
+          zh: "泰式打抛饭",
+          en: "Pad Krapow Rice",
+          th: "ข้าวผัดกะเพรา",
+          descZh: "香辣下饭",
+          descEn: "Spicy basil rice",
+          descTh: "ข้าวผัดกะเพรากับไข่ดาว",
+        }
+      : locale === "en"
+        ? {
+            cat: "Main",
+            type: t("menuIo.valTypeFood"),
+            zh: "泰式打抛饭",
+            en: "Pad Krapow Rice",
+            th: "ข้าวผัดกะเพรา",
+            descZh: "香辣下饭",
+            descEn: "Spicy basil rice",
+            descTh: "ข้าวผัดกะเพรากับไข่ดาว",
+          }
+        : {
+            cat: "主食",
+            type: t("menuIo.valTypeFood"),
+            zh: "泰式打抛饭",
+            en: "Pad Krapow Rice",
+            th: "ข้าวผัดกะเพรา",
+            descZh: "香辣下饭",
+            descEn: "Spicy basil rice",
+            descTh: "ข้าวผัดกะเพรากับไข่ดาว",
+          };
+
   rows.push([
-    "主食",
-    "美食",
-    "泰式打抛饭",
-    "Pad Krapow Rice",
-    "ข้าวผัดกะเพรา",
-    "香辣下饭",
-    "Spicy basil rice",
-    "ข้าวผัดกะเพรา",
+    sample.cat,
+    sample.type,
+    sample.zh,
+    sample.en,
+    sample.th,
+    sample.descZh,
+    sample.descEn,
+    sample.descTh,
     80,
     1,
-    "是",
-    "否",
-    "是",
+    t("menuIo.valYes"),
+    t("menuIo.valNo"),
+    t("menuIo.valYes"),
     "",
     "",
     26,

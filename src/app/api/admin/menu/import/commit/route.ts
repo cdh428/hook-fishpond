@@ -4,10 +4,19 @@ import { runTx } from "@/lib/tx";
 import { requireAdmin } from "@/lib/auth";
 import type { MenuImportRow } from "@/lib/menu-io";
 import type { MenuTypeValue } from "@/lib/menu-types";
+import { serverT, requestLocale } from "@/lib/server-t";
 
 type Skipped = { rowNumber: number; name: string; reason: string };
 
+/**
+ * POST /api/admin/menu/import/commit —— 落库执行导入
+ *
+ * **语言**：body 里的 `locale` 优先，其次 Referer。
+ * `skipped[].reason` 会显示在页面上、也会写进用户下载的 skip CSV，
+ * 所以必须按该语言返回（写死中文会让 en/th 的清单里混中文）。
+ */
 export async function POST(request: NextRequest) {
+  let reqLocale = requestLocale({ request });
   try {
     const admin = await requireAdmin(request);
     if (!admin) {
@@ -17,14 +26,17 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as {
       rows?: MenuImportRow[];
       autoCreateCategories?: boolean;
+      locale?: string;
     };
+    reqLocale = requestLocale({ bodyLocale: body.locale, request });
+    const t = await serverT(reqLocale);
 
     const rows = body.rows;
     const autoCreateCategories = body.autoCreateCategories === true;
 
     if (!Array.isArray(rows) || rows.length === 0) {
       return NextResponse.json(
-        { error: "缺少有效的行数据" },
+        { error: t("apiErr.noValidRows") },
         { status: 400 },
       );
     }
@@ -43,7 +55,12 @@ export async function POST(request: NextRequest) {
       const catById = new Map<string, (typeof categories)[number]>();
       let maxCatSort = 0;
       for (const c of categories) {
-        catByName.set(c.name_zh.trim(), c);
+        // 三语名都索引：导出的分类列会按页面语言写名字，只认 name_zh 会把
+        // 英文/泰文分类名当成「新分类」重复创建。
+        for (const nm of [c.name_zh, c.name_en, c.name_th]) {
+          const k = (nm ?? "").trim();
+          if (k) catByName.set(k, c);
+        }
         catById.set(c.id, c);
         if (c.sortOrder > maxCatSort) maxCatSort = c.sortOrder;
       }
@@ -90,7 +107,7 @@ export async function POST(request: NextRequest) {
             skipped.push({
               rowNumber: r.rowNumber,
               name: r.name_zh,
-              reason: "分类不存在",
+              reason: t("apiErr.categoryNotExist"),
             });
             continue;
           }
@@ -126,7 +143,7 @@ export async function POST(request: NextRequest) {
             skipped.push({
               rowNumber: r.rowNumber,
               name: r.name_zh,
-              reason: "未找到对应菜品",
+              reason: t("apiErr.itemNotExist"),
             });
             continue;
           }
@@ -161,7 +178,7 @@ export async function POST(request: NextRequest) {
             skipped.push({
               rowNumber: r.rowNumber,
               name: r.name_zh,
-              reason: "未找到对应菜品",
+              reason: t("apiErr.itemNotExist"),
             });
             continue;
           }
@@ -173,7 +190,7 @@ export async function POST(request: NextRequest) {
             skipped.push({
               rowNumber: r.rowNumber,
               name: r.name_zh,
-              reason: "未找到对应菜品",
+              reason: t("apiErr.itemNotExist"),
             });
             continue;
           }
@@ -181,7 +198,7 @@ export async function POST(request: NextRequest) {
             skipped.push({
               rowNumber: r.rowNumber,
               name: r.name_zh,
-              reason: "该菜品存在历史订单，未删除（可改为下架）",
+              reason: t("apiErr.itemHasOrders"),
             });
             continue;
           }
@@ -202,8 +219,9 @@ export async function POST(request: NextRequest) {
     });
   } catch (error: any) {
     console.error("Menu import commit error:", error);
+    const t = await serverT(reqLocale);
     return NextResponse.json(
-      { error: error?.message || "导入失败" },
+      { error: error?.message || t("apiErr.importFailed") },
       { status: 500 },
     );
   }
