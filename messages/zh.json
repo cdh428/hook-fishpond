@@ -1300,7 +1300,10 @@
     "itemNotExist": "未找到对应菜品",
     "itemHasOrders": "该菜品存在历史订单，未删除（可改为下架）",
     "unauthorized": "登录状态已失效，请重新登录",
-    "badJson": "请求体不是合法 JSON"
+    "badJson": "请求体不是合法 JSON",
+    "readFailed": "读取失败",
+    "saveFailed": "保存失败",
+    "pinFormat": "PIN 必须是 6 位数字"
   },
   "reportExport": {
     "sheetSummary": "营收汇总",

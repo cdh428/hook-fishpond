@@ -1001,29 +1001,6 @@ export function tableOrderUrl(code: string, baseUrl?: string): string {
 }
 
 /**
- * Admin — 回写某订单的「出单状态」。
- *
- * 收银台自动打完客户票+后厨票+播报后立刻调本函数，服务端置 `printState=PRINTED`，
- * 保证同一张单**只自动打一次**：刷新页面 / 换收银机 / 加菜都不会重复出纸，
- * 页面只显示「已打印 时间」+ 新订单提示。
- *
- * 打不出来时传 `state:'FAILED'`：不再自动重试，改挂「未打印」角标等人工补打。
- * 幂等：已 PRINTED 的单不会被降级为 FAILED。
- */
-export async function markOrderAutoPrinted(
-  orderId: string,
-  opts?: { state?: 'PRINTED' | 'FAILED'; error?: string },
-): Promise<{ id: string; printState: string | null; printedAt: string | null }> {
-  return request<{ id: string; printState: string | null; printedAt: string | null }>(
-    `/api/admin/orders/${orderId}/auto-print`,
-    {
-      method: 'POST',
-      body: JSON.stringify({ state: opts?.state ?? 'PRINTED', error: opts?.error }),
-    },
-  );
-}
-
-/**
  * Admin — 行级送餐确认 / 取消送餐。
  *
  * 送餐时勾选「还没送出」的菜品行 → served=true（servedAt=now）；

@@ -96,8 +96,9 @@ SSR 阶段 `document` 不存在 → 回退 `'zh'` → 水合前后语言不一�
 **这是设计，不是 bug** —— 与厨房单的语言规则不冲突。
 
 ### 4.5 死代码别当成活路径
-`src/lib/auto-printer.ts`（`useAutoPrinter`）已无调用点（commit `48d1a7c7` 停用），
-`print-receipt.ts` 的 `printHtml()`（436-500）同样无人调用。
+`src/lib/auto-printer.ts`（`useAutoPrinter`）+ `src/lib/speech.ts` + `/api/admin/orders/[id]/auto-print`
+（浏览器自动出单整条链路）已在 commit `48d1a7c7` 停用、2026-11-07 整体删除 ——
+现行自动出单只有**打印桥 watch**（`api/admin/print/watch` → 桥 → `api/admin/print/mark`）一条路径。
 审计时**先 grep 调用点**再判断，否则会浪费时间修死代码。
 
 ---

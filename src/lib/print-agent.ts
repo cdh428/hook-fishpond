@@ -398,17 +398,16 @@ export async function printViaBridge(
  *
  * 不再回退浏览器打印对话框 —— 桥不可用/失败时直接返回失败结果，
  * 由调用方提示「打印服务不可用」，绝不弹系统对话框让店员手选。
- * （自动出单场景早已用 noFallback 走这条路，现在手动打印也统一。）
+ * （浏览器回退路径 `printHtml()` 与自动出单器已于 2026-11-07 删除。）
  *
  * 调用方只需关心「要打什么」，不用管走哪条路；但要看 `outcome.via` / `outcome.error`。
  */
 export async function submitPrint(
   html: string,
   purpose: PrintPurpose,
-  opts?: { copies?: number; feedLines?: number; cutMode?: string; cut?: boolean; noFallback?: boolean },
+  opts?: { copies?: number; feedLines?: number; cutMode?: string; cut?: boolean },
 ): Promise<PrintOutcome> {
   const started = Date.now();
-  // noFallback 参数保留以兼容调用方；现在一律走桥，浏览器回退已移除，无区分意义。
 
   const health = await probeBridge();
   if (!health) {

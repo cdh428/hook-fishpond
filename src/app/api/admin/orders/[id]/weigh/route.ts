@@ -99,7 +99,9 @@ export async function POST(
             error: "FREE_TIER_EXCEEDED",
             freeKg: totalIncludedKg,
             priorFreeKg: priorFree,
-            msg: `免重超出：本桌免重共 ${totalIncludedKg}kg，已填 ${priorFree}kg，本条 ${weightKg}kg 超出`,
+            // 前端按 code 判断（adminOrders.freeOverMsg 出本地化文案），这里只留
+            // 机器可读明细，保证响应体里不出现中文。
+            msg: `free tier exceeded: included ${totalIncludedKg}kg, prior ${priorFree}kg, this ${weightKg}kg`,
           },
           { status: 400 },
         );

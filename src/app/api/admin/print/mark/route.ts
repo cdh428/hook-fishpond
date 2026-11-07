@@ -24,9 +24,11 @@ function checkToken(request: NextRequest): boolean {
  *
  * body: { id: string, state?: "PRINTED" | "FAILED", error?: string }
  *
- * 语义与 /api/admin/orders/[id]/auto-print 一致：
+ * 语义：
  *  - 两联都成功 → PRINTED（不可降级）
  *  - 失败 → FAILED（等人工补打）
+ *
+ * 这是 **唯一** 的出单状态回写入口（浏览器侧 `auto-printer` 已于 2026-11-07 删除）。
  */
 export async function POST(request: NextRequest) {
   if (!checkToken(request)) {

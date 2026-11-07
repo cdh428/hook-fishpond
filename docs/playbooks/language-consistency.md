@@ -42,7 +42,7 @@ const t = await serverT(locale);                                    // 复用 me
 | LINE webhook 回复 | `LINE_REPORT_LOCALE`（无页面，缺省中文） | `api/webhooks/line/route.ts` |
 | 库存台账 / 进货 / 盘点错误 | `i18nKey` + 路由出口 `t()` | `lib/stock-ledger.ts` `ledgerErrorResponse` |
 | cron 鉴权提示 | `Referer` / `Accept-Language`（管理员在浏览器打开时看） | `api/cron/*/route.ts` |
-| 收银机语音播报 | 泰语固定第一句 + 第二句跟 `Order.locale`（en → 英语，其余中文） | `lib/speech.ts` |
+| 收银机语音播报 | 桥侧 `sound_announcer.py`（泰语第一句 + 中文第二句，固定双播） | `tools/print-bridge/` |
 | 下载失败提示 | 同上（返回 HTML，不是 JSON） | `src/lib/download-error.ts` |
 
 ---

@@ -562,12 +562,13 @@ prisma.order.updateMany({
 });
 ```
 
-**语音播报**：`src/lib/speech.ts` 走浏览器 `speechSynthesis`。
+**语音播报**（2026-11-07 起只在桥侧，`src/lib/speech.ts` 已删除；以下为当年浏览器方案的坑，
+留着是因为桥侧 `sound_announcer.py` 同样受 Windows 语音包影响）：
 - 本机实测**没有泰语音色**（只有 David/Zira/Huihui）→ 泰文只能退化播中文。
-  代码已做兜底：无泰语音色就只播中文，不硬读乱码音。
   要真正双语，得在 Windows 里装泰语语音包（设置 → 时间和语言 → 添加泰语 → 语音）。
-- Chrome 的 voices 是**异步就绪**，不预热首次 `pickVoice` 常返回 null → `announceOrder` 入口调 `primeVoices()`。
-- 浏览器要求页面有过用户交互才允许发声；收银台页面**先点一下屏幕**再等单。
+- 浏览器方案还受「voices 异步就绪」「必须先有用户交互」两条限制 —— 桥侧用系统 TTS，不受此限。
+- 现行实现：`bridge.py` 打印成功 → 写 `pending_announce.json` → Session 1 的
+  `audio_announce.py` → `sound_announcer.py`。**排查没声音先看 Session 1 的音频设备。**
 
 ### 6.7a 出单状态必须是三元，不是布尔
 
@@ -643,9 +644,11 @@ schtasks /create /tn HookFishpondBridgeWatchdog /tr "wscript.exe //nologo <vbs>"
 **⚠️ 不要拿空 body 打 `/print` 试探鉴权**（`curl -d '{}'`）—— 实测会把桥搞挂，
 得重启任务。想验鉴权就发一张真票，或者直接看前端是否带 `X-Print-Key`。
 
-**播报链路与桥无关**：`src/lib/speech.ts` 走的是**浏览器** `speechSynthesis`，
-在收银机 Chrome（Session 1，有音频设备）里播；桥跑在 Session 0 不影响播报。
-所以「打印成功但没声音」要查 Chrome 的扬声器/音量/静音标签页，不要去查桥。
+**播报链路**：现在只有**桥侧**一条 —— `bridge.py` 打印成功后写 `pending_announce.json`
+并触发 Session 1 的 `audio_announce.py` → `sound_announcer.py`（泰中双语）。
+浏览器侧 `src/lib/speech.ts` 已于 2026-11-07 随 `auto-printer` 一起删除
+（当年「打印成功但没声音」查的是 Chrome 扬声器；现在要查 Session 1 的音频设备与
+`HookFishpondAudioNotify` 任务，不要再去查浏览器）。
 
 ### 6.10 ⚠️ 同一功能被「网站脚本」和「本地服务器脚本」重复调用（2026-11-05 定案）
 
@@ -666,6 +669,12 @@ schtasks /create /tn HookFishpondBridgeWatchdog /tr "wscript.exe //nologo <vbs>"
 
 **处置**：自动出单**只留一条路径**（现在的定案是只留桥 `--watch`），
 `useAutoPrinter` 的调用**注释掉**（保留手动打印按钮 `doPrintKitchen`/`doPrintBill`）。
+
+**2026-11-07 收尾（已物理删除，不是注释）**：`src/lib/auto-printer.ts`、`src/lib/speech.ts`、
+`api-client.markOrderAutoPrinted()`、`/api/admin/orders/[id]/auto-print/route.ts`、
+`print-receipt.printHtml()` 全部删除 —— 这条链路从 `48d1a7c7` 起就没有调用点，
+留着只会在审计时被误认为活路径。**现行自动出单唯一入口**：
+`api/admin/print/watch`（桥轮询领取）→ 桥打印 → `api/admin/print/mark`（回写 printState）。
 
 **教训（写代码前必查）**：
 > 任何「自动/后台触发」的功能，都先问一句：**还有没有第二个调用点？**

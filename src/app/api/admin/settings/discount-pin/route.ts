@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
+import { requestLocale, serverT } from "@/lib/server-t";
 
 /**
  * 折扣确认 PIN —— 网站内自设的 6 位数字。
@@ -13,37 +14,41 @@ import { requireAdmin } from "@/lib/auth";
  *
  * 为什么明文：6 位内部 PIN 强度有限，哈希意义不大；且需求明确要求
  * 「admin 进设置页能看到当前值」。存储在本库 AdminUser.discountPin。
+ *
+ * 错误文案按请求语言渲染（`apiErr.*`）—— 见 `docs/playbooks/language-consistency.md`
  */
 
 const PIN_RE = /^\d{6}$/;
 
 export async function GET(request: NextRequest) {
   const admin = await requireAdmin(request);
-  if (!admin) return NextResponse.json({ error: "未登录" }, { status: 401 });
+  const t = await serverT(requestLocale({ request }));
+  if (!admin) return NextResponse.json({ error: t("apiErr.unauthorized") }, { status: 401 });
 
   try {
     const me = await prisma.adminUser.findUnique({ where: { id: admin.id } });
     // 明文返回给设置页展示（需求明确要求 admin 可见当前值）
     return NextResponse.json({ pin: me?.discountPin ?? null });
   } catch {
-    return NextResponse.json({ error: "读取失败" }, { status: 500 });
+    return NextResponse.json({ error: t("apiErr.readFailed") }, { status: 500 });
   }
 }
 
 export async function PUT(request: NextRequest) {
   const admin = await requireAdmin(request);
-  if (!admin) return NextResponse.json({ error: "未登录" }, { status: 401 });
+  const t = await serverT(requestLocale({ request }));
+  if (!admin) return NextResponse.json({ error: t("apiErr.unauthorized") }, { status: 401 });
 
   let body: unknown;
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "请求体不是合法 JSON" }, { status: 400 });
+    return NextResponse.json({ error: t("apiErr.badJson") }, { status: 400 });
   }
 
   const pin = String((body as Record<string, unknown>)?.pin ?? "").trim();
   if (!PIN_RE.test(pin)) {
-    return NextResponse.json({ error: "PIN 必须是 6 位数字" }, { status: 400 });
+    return NextResponse.json({ error: t("apiErr.pinFormat") }, { status: 400 });
   }
 
   try {
@@ -53,6 +58,6 @@ export async function PUT(request: NextRequest) {
     });
     return NextResponse.json({ ok: true, pin });
   } catch {
-    return NextResponse.json({ error: "保存失败" }, { status: 500 });
+    return NextResponse.json({ error: t("apiErr.saveFailed") }, { status: 500 });
   }
 }

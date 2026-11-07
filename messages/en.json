@@ -1300,7 +1300,10 @@
     "itemNotExist": "Matching item not found",
     "itemHasOrders": "This item has order history, so it was not deleted (consider deactivating it instead)",
     "unauthorized": "Your session has expired — please sign in again",
-    "badJson": "Request body is not valid JSON"
+    "badJson": "Request body is not valid JSON",
+    "readFailed": "Failed to read",
+    "saveFailed": "Failed to save",
+    "pinFormat": "PIN must be 6 digits"
   },
   "reportExport": {
     "sheetSummary": "Revenue Summary",
