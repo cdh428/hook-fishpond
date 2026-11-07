@@ -183,9 +183,10 @@ export default function AdminTablesPage() {
   };
 
   // Render a printable QR sticker: QR code + table label underneath (Trilingual: ZH, EN, TH)
+  // 底部三语联系电话（桌贴固定三语都印，供所有语言客人参考）
   const buildStickerDataUrl = async (row: TableRow): Promise<string> => {
     const width = 600;
-    const height = 690;
+    const height = 820;
     const qrSize = 460;
     const qrDataUrl = await QRCode.toDataURL(
       tableOrderUrlByLocale(row.code, locale),
@@ -231,6 +232,16 @@ export default function AdminTablesPage() {
     // 3. 泰文名 (Leelawadee UI 原生高清加粗)
     ctx.font = 'bold 34px "Leelawadee UI", "Noto Sans Thai", Tahoma, sans-serif';
     ctx.fillText(row.name_th, width / 2, qrY + qrSize + 138);
+
+    // 三语联系电话（桌贴固定三语全印）
+    const nameBottom = qrY + qrSize + 138;
+    ctx.fillStyle = '#333333';
+    ctx.font = 'bold 28px "Microsoft YaHei", sans-serif';
+    ctx.fillText('有疑问请致电 080-620-9539', width / 2, nameBottom + 52);
+    ctx.font = 'bold 26px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+    ctx.fillText('Any questions, call 080-620-9539', width / 2, nameBottom + 90);
+    ctx.font = 'bold 28px "Leelawadee UI", "Noto Sans Thai", Tahoma, sans-serif';
+    ctx.fillText('มีข้อสงสัย โทร. 080-620-9539', width / 2, nameBottom + 130);
 
     return canvas.toDataURL('image/png');
   };
@@ -298,6 +309,7 @@ export default function AdminTablesPage() {
   </div>
   <div class="qr"><img src="${qrDataUrl}" alt="QR ${esc(code)}" /></div>
   <div class="hint">${esc(hint)}</div>
+  <div class="hint" style="border-top:none;padding-top:1mm;">${esc(t('admin.tableQrPhone'))}</div>
 </div></body></html>`;
       const outcome = await submitPrint(html, 'bill', { feedLines: 2, cut: true, cutMode: 'full' });
       flash(describeOutcome(outcome, t));

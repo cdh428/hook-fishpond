@@ -392,6 +392,7 @@
     "tableCodePlaceholder": "Table code, e.g. A11",
     "qrPointsTo": "QR points to",
     "tableQrOrderHint": "Scan to order",
+    "tableQrPhone": "Any questions, call 080-620-9539",
     "activate": "Activate",
     "deactivate": "Deactivate",
     "popupBlocked": "Your browser blocked the popup. Please allow popups and try again.",

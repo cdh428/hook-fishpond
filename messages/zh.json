@@ -392,6 +392,7 @@
     "tableCodePlaceholder": "桌号，如 A11",
     "qrPointsTo": "二维码指向",
     "tableQrOrderHint": "扫码点餐",
+    "tableQrPhone": "有疑问请致电 080-620-9539",
     "activate": "启用",
     "deactivate": "停用",
     "popupBlocked": "浏览器阻止了弹窗，请允许弹窗后重试",
