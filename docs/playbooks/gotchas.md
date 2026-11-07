@@ -599,6 +599,68 @@ schtasks /create /tn HookFishpondBridgeWatchdog /tr "wscript.exe //nologo <vbs>"
 在收银机 Chrome（Session 1，有音频设备）里播；桥跑在 Session 0 不影响播报。
 所以「打印成功但没声音」要查 Chrome 的扬声器/音量/静音标签页，不要去查桥。
 
+### 6.10 ⚠️ 同一功能被「网站脚本」和「本地服务器脚本」重复调用（2026-11-05 定案）
+
+**踩过**：自动出单有**两条并行路径**同时在跑——
+
+| 路径 | 实现 | 行为 |
+|---|---|---|
+| ① 网站端 | `useAutoPrinter`（挂 `admin/orders/page.tsx`） | 浏览器轮询 → 打**两联**(客户票+后厨票) **带 QR** |
+| ② 本地服务器 | 打印桥 `--watch`（`bridge.py` 在目标机常驻） | 桥轮询服务端 → 打**一份** 无 QR |
+
+**症状**：同一单打出 **3 张纸**（桥 1 张 + 浏览器 2 张）；
+`bridge.log` 里同一时刻出现两条 `打印成功`（高度不同 = 两联）。
+实测 007 单打出 `464x872px` + `464x631px` 两联 + 桥那一份。
+
+**根因**：把「自动出单」从浏览器搬到桥时，**没有关掉浏览器那条旧路径**。
+两边的去重凭证还不一样（浏览器用 localStorage `seen` 指纹，桥用服务端 `printState`），
+**互相看不见对方打过** → 必然重复。
+
+**处置**：自动出单**只留一条路径**（现在的定案是只留桥 `--watch`），
+`useAutoPrinter` 的调用**注释掉**（保留手动打印按钮 `doPrintKitchen`/`doPrintBill`）。
+
+**教训（写代码前必查）**：
+> 任何「自动/后台触发」的功能，都先问一句：**还有没有第二个调用点？**
+> 常见第二调用点：① 网站前端 hook/useEffect ② 本地常驻进程（桥/计划任务/看门狗）
+> ③ 手动按钮 ④ 定时任务 ⑤ 别的会话加的旧实现（同一仓库多会话并行！）
+>
+> 查法：`grep -rn "<功能关键词>" src tools scripts` —— **跨 `src/` 和 `tools/` 一起搜**，
+> 只搜 `src/` 会漏掉桥里的第二路径。
+
+**打印路径特有的坑**：`bridge.log` 里 `打印成功` 那行日志在 **`/print` HTTP handler** 里，
+**不在** `watch_loop` 里。所以看到两条「打印成功」不代表桥打了两次——
+可能是「桥 watch 一次 + 浏览器 POST /print 一次」。**判断谁打的要看上下文**：
+`[watch] 命中 xxx` 是桥打的；没有这行、只有「打印成功」= 浏览器打的。
+
+### 6.11 改一个功能前，必须检查关联功能的影响面
+
+**踩过**：为了「只打一份 + 取消 QR」，只改了桥的 `watch_loop` 和服务端的 watch API，
+结果同一单仍打两联 —— 因为**浏览器那条路径没改**（见 §6.10）。
+
+**改功能前的三步检查**：
+1. **列出所有入口**：谁能让这个功能被触发？（页面按钮 / 自动 hook / 本地进程 / 定时器 / API）
+2. **列出所有出口**：这个功能会写什么？（DB 字段 / 状态位 / 打印 / 播报 / 通知）
+   出口要**全链路一致** —— 改了一处判定（如「两联都成功才算 PRINTED」→「一份成功就算」），
+   另一处判定（`printState` 三元语义）不改，就会出现「打成功但标记失败」这类错位。
+3. **grep 交叉验证**：改完后 `grep -rn "<关键字段/函数名>" src tools scripts`，
+   确认**没有第二处**还在用旧逻辑。
+
+**半改比不改更糟**：只改一半会出现「看起来生效了，其实还有旧路径在跑」——
+本次就是「桥改了一份，浏览器仍打两联」，日志上看像桥的问题，实际是浏览器那条没关。
+
+**⚠️ 状态位语义要一起改**：本次把「两联都成功才算 PRINTED」改成「一份成功就算 PRINTED」，
+服务端 `mark` 路由的 `PRINTED 不可降级` 语义、`printState` 三元（§6.7a）都得对齐，
+否则会出现「纸出了但页面显示未打印」。
+
+**⚠️ 本地日志是查错的关键**：桥原来只有零散的 `bridge.log`（跨天追加、时间戳无日期，
+过滤 `09:xx` 会把前几天同时间段也捞进来 → **误判成"今天打的"**）。
+现在加了结构化 `print.log`：`ISO时间 | 单号 | 动作 | 结果`，
+一行一次动作（`HIT` / `PRINT` / `MARK`），查「何时打了哪张单」直接 grep。
+
+**⚠️ 日志文件跨天追加的坑**：`bridge.log` 是**追加**的，多天混在一起。
+按时间戳 grep 会拿到历史记录 —— 判断"今天打了什么"要**用启动 banner 行号定位**：
+`Select-String 'v1.1.0'` 找最后一次启动的行号，`Get-Content | Select-Object -Skip <行号>` 取之后的全部。
+
 ---
 
 ## 七、改动前的自检清单
@@ -615,3 +677,22 @@ schtasks /create /tn HookFishpondBridgeWatchdog /tr "wscript.exe //nologo <vbs>"
 - [ ] 推完？→ 抓页面内容验证，而不是只看「推送成功」
 - [ ] 动了打印/自动出单？→ 桥在跑吗（`/health`）？`widthDots` 是 464（50mm）吗？`printError` 写的是什么？
 - [ ] 有临时脚本 / 临时文件？→ 用完删掉，别提交
+
+### 7.1 🔍 改「自动触发类」功能前（新增，必查）
+
+- [ ] **这个功能有第二个调用点吗？** → `grep -rn "<关键词>" src tools scripts`（**跨 src 和 tools 搜**）
+- [ ] 网站端 hook（`use*`/`useEffect`）和本地常驻进程（桥/计划任务）**是不是都在跑**？
+- [ ] 两边的去重凭证是同一个吗？（localStorage 指纹 vs 服务端 `printState` → 互相看不见）
+- [ ] 出口状态位语义对齐了吗？（改「几联算成功」→ 同步改 mark 路由 + 状态三元语义）
+- [ ] 改完端到端验证：**数一数实际出了几张纸**，别只看 `printState=PRINTED`
+- [ ] 日志能定位到「谁打的」吗？（有 `[watch] 命中` = 桥打的；只有「打印成功」= 浏览器打的）
+- [ ] 桥的日志是跨天追加的 → 判断"今天"要用启动 banner 行号定位，别只按时间戳 grep
+
+### 7.2 🧾 桥侧运维（新增）
+
+- [ ] 桥在 POS80 那台机上？（`C:\hookfishpond-bridge\`，别用已删的 `C:\print-bridge`）
+- [ ] 三个任务都在？`HookFishpondPrintBridge`(onstart) / `HookFishpondBridgeWatchdog`(5min) /
+      `HookFishpondAudioNotify`(InteractiveToken=McIntosh，播报要 Session 1 有音频)
+- [ ] `config.json`：`widthDots=464`、`watchUrl`、`watchToken`（DATABASE_URL 派生）、`authToken` 空
+- [ ] 查错先看 `C:\hookfishpond-bridge\print.log`（结构化：时间|单号|动作|结果），再看 `bridge.log`
+- [ ] 桥跑在 **Session 0（SYSTEM）**：能打印，**不能播报**（SAPI 无音频设备）→ 播报靠 AudioNotify 委托
