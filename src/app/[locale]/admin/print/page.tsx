@@ -1,62 +1,50 @@
 'use client';
 
 /**
- * 打印设置与测试
+ * 打印设置页 —— 简化版（2026-11-17）
  * ==============
  *
- * 收银机上打开这一页，就能：
- *   1. 看到本地打印桥是否在线；
- *   2. 给「后厨单 / 预结单 / 收据」分别指定走哪条通道（USB / 蓝牙 / 自动）；
- *   3. 打测试页，确认纸宽 80mm、泰文/中文、二维码、切纸都正常。
+ * 只保留两个核心配置：
+ *   1. 纸宽（50mm / 80mm）
+ *   2. 水平偏移（校正热敏机驱动物理左边距）
  *
- * 关键变化：**配置存数据库，不再存浏览器**。
- * 手机上打开这一页看到的是同一份配置 —— 以前各存各的，手机存 `COM8`、电脑存
- * `POS80`，两边永远对不上。现在存的是「通道偏好」而不是端口号，所以换设备也成立。
- *
- * 唯一留在本机的是「打印服务地址」：手机要填电脑的局域网 IP，收银机用
- * 127.0.0.1 —— 这本来就该按设备而定，共用反而会坏。
+ * 已移除的过时功能：
+ *   · 蓝牙连接（现在只走 POS80 USB 热敏机）
+ *   · 通道偏好（usb/bluetooth/auto）—— 只有 USB 一条路
+ *   · 切纸模式（全切/半切）—— 桥端自动切
+ *   · 走纸行数 —— 桥端固定值
+ *   · 浏览器打印回退 —— 一律走桥
+ *   · 打印目标清单展示 —— 只有一台 POS80，意义不大
  */
 
 import { useTranslations, useLocale } from 'next-intl';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   DEFAULT_PREFERENCES,
   clearBridgeCache,
   getBridgeUrl,
   getBridgeKey,
   getPreferences,
-  getPrintMode,
   loadPreferences,
-  pickAutoTarget,
   paperWidthToDots,
   printViaBridge,
   probeBridge,
   savePreferences,
   setPreferences as cachePreferences,
-  setBridgeUrl,
   setBridgeKey,
-  setPrintMode,
-  targetId,
+  setBridgeUrl,
   type BridgeHealth,
-  type BridgeTarget,
-  type ChannelPreference,
-  type CutMode,
   type PaperWidthMm,
-  type PrintMode,
   type PrintPreferences,
-  type PrintPurpose,
 } from '@/lib/print-agent';
-import { buildKitchenTicketHtml, buildBillHtml, type PrintLabels, type ReceiptOrder } from '@/lib/print-receipt';
+import { buildBillHtml, type PrintLabels, type ReceiptOrder } from '@/lib/print-receipt';
 
 type Health = BridgeHealth | null;
 type ProbeState = 'checking' | 'online' | 'offline';
 
-const PURPOSES: PrintPurpose[] = ['kitchen', 'bill', 'receipt'];
-const CHANNELS: ChannelPreference[] = ['usb', 'bluetooth', 'auto'];
-const CUT_MODES: CutMode[] = ['full', 'partial', 'full-feed', 'partial-feed'];
 const PAPER_WIDTHS: PaperWidthMm[] = ['50', '80'];
 
-/** 设置页测试用的假订单 —— 只为验证链路，不进数据库 */
+/** 设置页测试用的假订单 */
 function demoOrder(locale: string): ReceiptOrder {
   const pick = (zh: string, en: string, th: string) =>
     locale === 'th' ? th : locale === 'en' ? en : zh;
@@ -84,21 +72,16 @@ function demoOrder(locale: string): ReceiptOrder {
 
 export default function AdminPrintPage() {
   const t = useTranslations();
-  // ⚠️ 不要读 document.documentElement.lang：SSR 阶段不存在 → 回退 'zh' →
-  // 水合前后语言不一致（测试打单会打错语言）。一律用 next-intl 的 useLocale()，
-  // 与服务端渲染同源。见 docs/playbooks/print-language.md 4.2
   const locale = useLocale();
 
   const [probe, setProbe] = useState<ProbeState>('checking');
   const [health, setHealth] = useState<Health>(null);
-  const [targets, setTargets] = useState<BridgeTarget[]>([]);
-  const [mode, setMode] = useState<PrintMode>('bridge');
   const [bridgeAddr, setBridgeAddr] = useState('');
   const [bridgeKey, setBridgeKeyState] = useState('');
   const [prefs, setPrefs] = useState<PrintPreferences>(DEFAULT_PREFERENCES);
   const [prefsSaving, setPrefsSaving] = useState(false);
   const [prefsSaved, setPrefsSaved] = useState('');
-  const [testing, setTesting] = useState<string | null>(null);
+  const [testing, setTesting] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
@@ -108,24 +91,15 @@ export default function AdminPrintPage() {
     clearBridgeCache();
     try {
       const h = await probeBridge(true);
-      if (h) {
-        setHealth(h);
-        setProbe('online');
-        setTargets(h.targets ?? []);
-      } else {
-        setHealth(null);
-        setProbe('offline');
-        setTargets([]);
-      }
+      setHealth(h);
+      setProbe(h ? 'online' : 'offline');
     } catch {
       setHealth(null);
       setProbe('offline');
-      setTargets([]);
     }
   }, []);
 
   useEffect(() => {
-    setMode(getPrintMode());
     setBridgeAddr(getBridgeUrl());
     setBridgeKeyState(getBridgeKey());
     setPrefs(getPreferences());
@@ -133,56 +107,42 @@ export default function AdminPrintPage() {
     void refresh();
   }, [refresh]);
 
-  const labels: PrintLabels = useMemo(
-    () => ({
-      brand: t('common.siteName'),
-      brandSub: t('printLabels.brandSub'),
-      kitchenTicket: t('printLabels.kitchenTicket'),
-      bill: t('printLabels.bill'),
-      receipt: t('printLabels.receipt'),
-      orderNo: t('orders.orderNumber'),
-      table: t('printLabels.table'),
-      takeaway: t('orderType.takeaway'),
-      dineIn: t('orderType.dineIn'),
-      customer: t('admin.customer'),
-      time: t('printLabels.time'),
-      item: t('printLabels.item'),
-      qty: t('printLabels.qty'),
-      amount: t('admin.amount'),
-      subtotal: t('adminOrders.subtotal'),
-      fishCharge: t('adminOrders.fishCharge'),
-      fishWeight: t('adminOrders.weightKg'),
-      discount: t('adminOrders.discount'),
-      total: t('payment.total'),
-      note: t('cart.orderNote'),
-      status: t('orders.status'),
-      settlementMode: t('adminOrders.settlementMode'),
-      prepaid: t('adminOrders.prepaid'),
-      postpaid: t('adminOrders.postpaid'),
-      scanToPay: t('adminOrders.scanToPay'),
-      paidAt: t('adminOrders.settledAt'),
-      thanks: t('printLabels.thanks'),
-      // 行级送餐状态与分批标题（渲染库不硬编码中文）
-      served: t('printLabels.served'),
-      notServed: t('printLabels.notServed'),
-      batchAt: t('printLabels.batchAt'),
-      itemCount: t('printLabels.itemCount'),
-      paidStamp: t('printLabels.paidStamp'),
-    }),
-    [t],
-  );
-
-  const applyMode = (m: PrintMode) => {
-    setPrintMode(m);
-    setMode(m);
+  const labels: PrintLabels = {
+    brand: t('common.siteName'),
+    brandSub: t('printLabels.brandSub'),
+    kitchenTicket: t('printLabels.kitchenTicket'),
+    bill: t('printLabels.bill'),
+    receipt: t('printLabels.receipt'),
+    orderNo: t('orders.orderNumber'),
+    table: t('printLabels.table'),
+    takeaway: t('orderType.takeaway'),
+    dineIn: t('orderType.dineIn'),
+    customer: t('admin.customer'),
+    time: t('printLabels.time'),
+    item: t('printLabels.item'),
+    qty: t('printLabels.qty'),
+    amount: t('admin.amount'),
+    subtotal: t('adminOrders.subtotal'),
+    fishCharge: t('adminOrders.fishCharge'),
+    fishWeight: t('adminOrders.weightKg'),
+    discount: t('adminOrders.discount'),
+    total: t('payment.total'),
+    note: t('cart.orderNote'),
+    status: t('orders.status'),
+    settlementMode: t('adminOrders.settlementMode'),
+    prepaid: t('adminOrders.prepaid'),
+    postpaid: t('adminOrders.postpaid'),
+    scanToPay: t('adminOrders.scanToPay'),
+    paidAt: t('adminOrders.settledAt'),
+    thanks: t('printLabels.thanks'),
+    served: t('printLabels.served'),
+    notServed: t('printLabels.notServed'),
+    batchAt: t('printLabels.batchAt'),
+    itemCount: t('printLabels.itemCount'),
+    paidStamp: t('printLabels.paidStamp'),
   };
 
-  const applyBridgeAddr = () => {
-    setBridgeUrl(bridgeAddr);
-    void refresh();
-  };
-
-  /** 改偏好后立刻写库 —— 手机马上就能读到，不用再点保存 */
+  /** 改偏好后立刻写库 */
   const updatePrefs = async (patch: Partial<PrintPreferences>) => {
     const next = { ...prefs, ...patch };
     setPrefs(next);
@@ -202,62 +162,42 @@ export default function AdminPrintPage() {
     }
   };
 
-  const runTest = async (purpose: 'kitchen' | 'bill') => {
+  const runTest = async () => {
     if (!health) {
       setError(t('adminPrint.needBridge'));
       return;
     }
-    const target = pickAutoTarget(health, purpose, prefs);
-    if (!target) {
-      setError(t('adminPrint.needTarget'));
-      return;
-    }
-    setTesting(purpose);
+    setTesting(true);
     setError('');
     setMessage('');
     try {
       const order = demoOrder(locale);
       const paperWidthMm = Number(prefs.paperWidth) || 80;
-      const html =
-        purpose === 'kitchen'
-          ? buildKitchenTicketHtml(order, labels, undefined, paperWidthMm)
-          : buildBillHtml(order, { qrDataUrl: null, labels, paperWidthMm });
+      const html = buildBillHtml(order, { qrDataUrl: null, labels, paperWidthMm });
+      const target = health.defaultPrinter || health.targets[0]?.name || 'POS80';
       const r = await printViaBridge(html, target, {
         copies: 1,
-        cutMode: prefs.cutMode,
-        feedLines: prefs.feedLines,
+        cut: true,
         width: paperWidthToDots(prefs.paperWidth),
-        paperWidthMm: paperWidthMm,
+        paperWidthMm,
+        leftShiftMm: prefs.leftShiftMm,
       });
       if (r.ok) {
-        setMessage(
-          t('adminPrint.testSent', {
-            purpose: t(`adminPrint.${purpose}` as never),
-            target: health.targets.find((x) => targetId(x) === target)?.name || target,
-            ms: Math.round(r.ms ?? 0),
-          }),
-        );
+        setMessage(t('adminPrint.testSent', { target, ms: Math.round(r.ms ?? 0) }));
       } else {
         setError(t('adminPrint.testFailed', { error: r.error || '' }));
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
-      setTesting(null);
+      setTesting(false);
     }
   };
 
-  const statusDot = (kind: 'blue' | 'green' | 'red' | 'grey') => {
+  const statusDot = (kind: 'blue' | 'green' | 'red') => {
     const color =
-      kind === 'green' ? 'bg-success-500' : kind === 'red' ? 'bg-error-500' : kind === 'blue' ? 'bg-primary-500' : 'bg-neutral-300';
+      kind === 'green' ? 'bg-success-500' : kind === 'red' ? 'bg-error-500' : 'bg-primary-500';
     return <span className={`inline-block h-2 w-2 rounded-full ${color}`} />;
-  };
-
-  /** 当前偏好在这台机器上会落到哪个目标 —— 让人一眼看出「配了但打不到」的情况 */
-  const effectiveTarget = (p: PrintPurpose): BridgeTarget | undefined => {
-    if (!health) return undefined;
-    const id = pickAutoTarget(health, p, prefs);
-    return health.targets.find((x) => targetId(x) === id);
   };
 
   return (
@@ -304,7 +244,7 @@ export default function AdminPrintPage() {
             </div>
             <div className="flex justify-between">
               <span>{t('adminPrint.widthDots')}</span>
-              <span className="font-mono text-neutral-700">{health.widthDots} dots (80mm)</span>
+              <span className="font-mono text-neutral-700">{health.widthDots} dots</span>
             </div>
             <div className="flex justify-between">
               <span>{t('adminPrint.targetCount')}</span>
@@ -316,124 +256,11 @@ export default function AdminPrintPage() {
         {probe === 'offline' && (
           <div className="mt-3 rounded-xl bg-warning-50 p-3 text-xs leading-relaxed text-warning-700">
             <p className="font-semibold">{t('adminPrint.offlineTitle')}</p>
-            <p className="mt-1">{t('adminPrint.offlineHint')}</p>
             <code className="mt-2 block break-all rounded bg-white/70 px-2 py-1.5 font-mono text-[11px] text-neutral-700">
               python tools/print-bridge/bridge.py
             </code>
-            <p className="mt-2">{t('adminPrint.offlinePhoneHint')}</p>
           </div>
         )}
-      </div>
-
-      {/* 打印方式 */}
-      <div className="rounded-2xl bg-white p-4 shadow-sm">
-        <p className="text-sm font-semibold text-neutral-900">{t('adminPrint.mode')}</p>
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          {(['bridge', 'browser'] as PrintMode[]).map((m) => (
-            <button
-              key={m}
-              onClick={() => applyMode(m)}
-              className={`rounded-xl border px-3 py-2.5 text-xs font-medium transition ${
-                mode === m
-                  ? 'border-primary-500 bg-primary-50 text-primary-700'
-                  : 'border-neutral-200 text-neutral-500 hover:border-neutral-300'
-              }`}
-            >
-              {m === 'bridge' ? t('adminPrint.modeBridge') : t('adminPrint.modeBrowser')}
-            </button>
-          ))}
-        </div>
-        <p className="mt-2 text-xs leading-relaxed text-neutral-400">{t('adminPrint.modeHint')}</p>
-      </div>
-
-      {/* 通道偏好 —— 存数据库，手机电脑通用 */}
-      <div className="rounded-2xl bg-white p-4 shadow-sm">
-        <div className="flex items-center justify-between">
-          <p className="text-sm font-semibold text-neutral-900">{t('adminPrint.assign')}</p>
-          {prefsSaving ? (
-            <span className="text-[11px] text-neutral-400">{t('adminPrint.saving')}</span>
-          ) : prefsSaved ? (
-            <span className="text-[11px] text-success-600">{prefsSaved}</span>
-          ) : null}
-        </div>
-        <p className="mt-1 text-xs leading-relaxed text-neutral-400">{t('adminPrint.assignHint')}</p>
-
-        <div className="mt-3 space-y-3">
-          {PURPOSES.map((p) => {
-            const eff = effectiveTarget(p);
-            return (
-              <div key={p}>
-                <div className="mb-1 flex items-baseline justify-between">
-                  <label className="text-xs font-medium text-neutral-600">
-                    {t(`adminPrint.${p}` as never)}
-                  </label>
-                  {probe === 'online' && (
-                    <span className={`text-[11px] ${eff ? 'text-neutral-400' : 'text-error-500'}`}>
-                      {eff ? `→ ${eff.name}` : t('adminPrint.noMatch')}
-                    </span>
-                  )}
-                </div>
-                <div className="grid grid-cols-3 gap-1.5">
-                  {CHANNELS.map((ch) => (
-                    <button
-                      key={ch}
-                      onClick={() => void updatePrefs({ [p]: ch } as Partial<PrintPreferences>)}
-                      className={`rounded-lg border px-2 py-2 text-[11px] font-medium transition ${
-                        prefs[p] === ch
-                          ? 'border-primary-500 bg-primary-50 text-primary-700'
-                          : 'border-neutral-200 text-neutral-500 hover:border-neutral-300'
-                      }`}
-                    >
-                      {ch === 'usb'
-                        ? t('adminPrint.chUsb')
-                        : ch === 'bluetooth'
-                          ? t('adminPrint.chBluetooth')
-                          : t('adminPrint.chAuto')}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* 切纸 */}
-      <div className="rounded-2xl bg-white p-4 shadow-sm">
-        <p className="text-sm font-semibold text-neutral-900">{t('adminPrint.cut')}</p>
-        <p className="mt-1 text-xs leading-relaxed text-neutral-400">{t('adminPrint.cutHint')}</p>
-        <div className="mt-3 grid grid-cols-2 gap-1.5">
-          {CUT_MODES.map((c) => (
-            <button
-              key={c}
-              onClick={() => void updatePrefs({ cutMode: c })}
-              className={`rounded-lg border px-2 py-2 text-[11px] font-medium transition ${
-                prefs.cutMode === c
-                  ? 'border-primary-500 bg-primary-50 text-primary-700'
-                  : 'border-neutral-200 text-neutral-500 hover:border-neutral-300'
-              }`}
-            >
-              {t(`adminPrint.cut_${c.replace('-', '_')}` as never)}
-            </button>
-          ))}
-        </div>
-
-        <div className="mt-3">
-          <div className="mb-1 flex items-baseline justify-between">
-            <label className="text-xs font-medium text-neutral-600">{t('adminPrint.feedLines')}</label>
-            <span className="font-mono text-xs text-neutral-700">{prefs.feedLines}</span>
-          </div>
-          <input
-            type="range"
-            min={0}
-            max={12}
-            step={1}
-            value={prefs.feedLines}
-            onChange={(e) => void updatePrefs({ feedLines: Number(e.target.value) })}
-            className="w-full"
-          />
-          <p className="mt-1 text-[11px] leading-relaxed text-neutral-400">{t('adminPrint.feedLinesHint')}</p>
-        </div>
       </div>
 
       {/* 纸宽 */}
@@ -456,73 +283,63 @@ export default function AdminPrintPage() {
           ))}
         </div>
         <p className="mt-2 text-[11px] leading-relaxed text-neutral-400">
-          {t('adminPrint.paperWidthDots', { dots: prefs.paperWidth === '50' ? 384 : 576 })}
+          {t('adminPrint.paperWidthDots', { dots: paperWidthToDots(prefs.paperWidth) })}
         </p>
+      </div>
+
+      {/* 水平偏移 */}
+      <div className="rounded-2xl bg-white p-4 shadow-sm">
+        <p className="text-sm font-semibold text-neutral-900">{t('adminPrint.leftShift')}</p>
+        <p className="mt-1 text-xs leading-relaxed text-neutral-400">{t('adminPrint.leftShiftHint')}</p>
+
+        <div className="mt-3">
+          <div className="mb-1 flex items-baseline justify-between">
+            <span className="text-xs font-medium text-neutral-600">
+              {t('adminPrint.leftShiftPositive')}
+            </span>
+            <span className="font-mono text-sm text-neutral-700">
+              {prefs.leftShiftMm > 0 ? '+' : ''}
+              {prefs.leftShiftMm} {t('adminPrint.leftShiftUnit')}
+            </span>
+            <span className="text-xs font-medium text-neutral-600">
+              {t('adminPrint.leftShiftNegative')}
+            </span>
+          </div>
+          <input
+            type="range"
+            min={-20}
+            max={20}
+            step={1}
+            value={prefs.leftShiftMm}
+            onChange={(e) => void updatePrefs({ leftShiftMm: Number(e.target.value) })}
+            className="w-full"
+          />
+          <div className="mt-1 flex justify-between text-[10px] text-neutral-400">
+            <span>-20 mm</span>
+            <button
+              onClick={() => void updatePrefs({ leftShiftMm: 0 })}
+              className="font-medium text-neutral-600 hover:text-primary-700"
+            >
+              {t('adminPrint.leftShiftZero')}
+            </button>
+            <span>+20 mm</span>
+          </div>
+        </div>
       </div>
 
       {/* 测试打印 */}
       <div className="rounded-2xl bg-white p-4 shadow-sm">
         <p className="text-sm font-semibold text-neutral-900">{t('adminPrint.test')}</p>
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <button
-            onClick={() => void runTest('kitchen')}
-            disabled={!!testing || probe !== 'online'}
-            className="rounded-xl bg-primary-700 py-2.5 text-xs font-semibold text-white transition hover:bg-primary-800 disabled:opacity-50"
-          >
-            {testing === 'kitchen' ? t('adminPrint.testing') : `🖨️ ${t('adminPrint.kitchen')}`}
-          </button>
-          <button
-            onClick={() => void runTest('bill')}
-            disabled={!!testing || probe !== 'online'}
-            className="rounded-xl bg-accent-500 py-2.5 text-xs font-semibold text-white transition hover:bg-accent-600 disabled:opacity-50"
-          >
-            {testing === 'bill' ? t('adminPrint.testing') : `🧾 ${t('adminPrint.bill')}`}
-          </button>
-        </div>
+        <button
+          onClick={() => void runTest()}
+          disabled={testing || probe !== 'online'}
+          className="mt-3 w-full rounded-xl bg-primary-700 py-2.5 text-sm font-semibold text-white transition hover:bg-primary-800 disabled:opacity-50"
+        >
+          {testing ? t('adminPrint.testing') : `🧾 ${t('adminPrint.test')}`}
+        </button>
         {message && <p className="mt-3 text-xs text-success-600">{message}</p>}
         {error && <p className="mt-3 text-xs text-error-600">{error}</p>}
-        <p className="mt-2 text-xs leading-relaxed text-neutral-400">{t('adminPrint.testHint')}</p>
       </div>
-
-      {/* 目标清单 */}
-      {targets.length > 0 && (
-        <div className="rounded-2xl bg-white p-4 shadow-sm">
-          <p className="text-sm font-semibold text-neutral-900">{t('adminPrint.targetList')}</p>
-          <div className="mt-3 space-y-2">
-            {targets.map((x) => (
-              <div
-                key={`${x.kind}-${targetId(x)}`}
-                className="flex items-center justify-between rounded-xl bg-neutral-50 px-3 py-2.5"
-              >
-                <div className="min-w-0">
-                  <p className="truncate text-xs font-semibold text-neutral-800">{x.name}</p>
-                  <p className="mt-0.5 font-mono text-[11px] text-neutral-400">
-                    {x.kind === 'serial' ? `SPP ${x.port}` : x.driver || x.port}
-                    {x.mac ? ` · ${x.mac}` : ''}
-                  </p>
-                </div>
-                <div className="flex shrink-0 gap-1">
-                  {x.isThermal && (
-                    <span className="rounded bg-accent-50 px-1.5 py-0.5 text-[10px] font-medium text-accent-700">
-                      {t('adminPrint.thermal')}
-                    </span>
-                  )}
-                  {x.isBluetooth && (
-                    <span className="rounded bg-primary-50 px-1.5 py-0.5 text-[10px] font-medium text-primary-700">
-                      {t('adminPrint.bluetooth')}
-                    </span>
-                  )}
-                  {x.kind === 'winspool' && (
-                    <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium text-neutral-500">
-                      {t('adminPrint.usb')}
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* 高级：桥地址（本机，不共用） */}
       <div className="rounded-2xl bg-white p-4 shadow-sm">
@@ -537,7 +354,10 @@ export default function AdminPrintPage() {
             className="min-w-0 flex-1 rounded-xl border border-neutral-200 px-3 py-2.5 font-mono text-xs"
           />
           <button
-            onClick={applyBridgeAddr}
+            onClick={() => {
+              setBridgeUrl(bridgeAddr);
+              void refresh();
+            }}
             className="shrink-0 rounded-xl bg-neutral-100 px-3 py-2.5 text-xs font-medium text-neutral-600 hover:bg-neutral-200"
           >
             {t('common.save')}
@@ -568,25 +388,18 @@ export default function AdminPrintPage() {
           </button>
         </div>
         <p className="mt-2 text-xs leading-relaxed text-neutral-400">{t('adminPrint.authKeyHint')}</p>
-
-        {health?.lanUrls && health.lanUrls.length > 0 && (
-          <div className="mt-3 rounded-xl bg-primary-50 p-3">
-            <p className="text-[11px] font-semibold text-primary-800">{t('adminPrint.lanTitle')}</p>
-            <p className="mt-1 text-[11px] leading-relaxed text-primary-700">{t('adminPrint.lanHint')}</p>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {health.lanUrls.map((u) => (
-                <button
-                  key={u}
-                  onClick={() => setBridgeAddr(u)}
-                  className="rounded-lg bg-white px-2 py-1 font-mono text-[11px] text-primary-700 shadow-sm"
-                >
-                  {u}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
+
+      {/* 保存状态提示 */}
+      {(prefsSaving || prefsSaved) && (
+        <div className="flex justify-end text-[11px]">
+          {prefsSaving ? (
+            <span className="text-neutral-400">{t('adminPrint.saving')}</span>
+          ) : prefsSaved ? (
+            <span className="text-success-600">{prefsSaved}</span>
+          ) : null}
+        </div>
+      )}
     </div>
   );
 }

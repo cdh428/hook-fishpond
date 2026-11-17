@@ -317,7 +317,7 @@ export default function AdminTablesPage() {
     setError('');
     try {
       const html = await buildQrTicketHtml(row);
-      const outcome = await submitPrint(html, 'bill', { feedLines: 2, cut: true, cutMode: 'full' });
+      const outcome = await submitPrint(html, 'bill', { cut: true });
       flash(describeOutcome(outcome, t));
     } catch (err: any) {
       setError(err?.message || t('common.error'));
@@ -342,7 +342,7 @@ export default function AdminTablesPage() {
       setDownloading(row.id); // 用同一状态位显示进度（当前正在打哪张桌）
       try {
         const html = await buildQrTicketHtml(row);
-        const outcome = await submitPrint(html, 'bill', { feedLines: 2, cut: true, cutMode: 'full' });
+        const outcome = await submitPrint(html, 'bill', { cut: true });
         if (outcome.via === 'bridge' && !outcome.fallbackReason) ok++;
         else fail++;
       } catch {

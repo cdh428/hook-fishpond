@@ -76,6 +76,10 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "feedLines": 6,         # 切纸前走纸行数（一行≈4mm）；走不够会切在字上或切不断
     "baudRate": 9600,       # 仅蓝牙串口用；SPP 是虚拟链路，此值对吞吐无影响
     "authToken": "",        # 安全通信秘钥（为空时不校验，配上后必须 Header 带 X-Print-Key）
+    # ⚠️ 2026-11-17：GDI 左边距偏移（mm，正数=往左移）。
+    # 热敏机驱动常有物理左边距，导致内容整体偏右；用此值微调往左平移。
+    # 5mm @203dpi ≈ 40px。改 config.json 后需重启桥生效。
+    "gdiLeftShiftMm": 0,
     # 自动出单 watch（桥自己轮询服务端，不依赖浏览器）
     "watchUrl": "",         # 服务端基地址，如 https://www.hookfishpond.com
     "watchToken": "",       # 与服务端 expectedToken 一致的内部 token（从 DATABASE_URL 派生）
@@ -208,6 +212,9 @@ def do_print(payload: dict[str, Any]) -> dict[str, Any]:
     # ⚠️ 2026-11-05：纸宽（mm）用于决定 Chrome 渲染视口宽度。
     # 不传时按 width 点推算：576 点→80mm，384 点→50mm（或按默认 80mm）。
     paper_mm = int(payload.get("paperWidthMm") or 0) or round(width / 576 * 80)
+    # ⚠️ 2026-11-17：水平偏移（mm）可从网站请求覆盖 config.json 默认值。
+    # 网站设置页把 leftShiftMm 存在数据库，每次打印随请求下发。
+    left_shift_mm = float(payload.get("leftShiftMm") or 0) or float(CONFIG.get("gdiLeftShiftMm", 0))
 
     started = time.time()
     with _PRINT_LOCK:
@@ -236,11 +243,22 @@ def do_print(payload: dict[str, Any]) -> dict[str, Any]:
 
         # 如果目标是 Windows 驱动打印机 (非串口，如 POS80)，走高保真 GDI 驱动渲染
         if not escpos.is_serial_target(printer):
-            # ⚠️ 2026-11-05：GDI 直接使用桥已按纸宽渲染好的点宽（384/576），
-            # 不再二次缩放；左边距按纸宽物理点居中，确保 50/80mm 都不超出纸边。
-            # 203 DPI：80mm≈640px，50mm≈400px。
-            phys_w = round(paper_mm / 25.4 * 203)
-            left_margin = max(0, (phys_w - img.width) // 2)
+            # ⚠️ 2026-11-17：热敏打印机驱动常有物理左边距，导致内容整体偏右。
+            # 修正方法：在**图像内部**把内容往左平移（右边补白），不受 GDI
+            # left_margin clamp 限制。
+            # left_shift_mm 来自网站请求 leftShiftMm 或 config.json gdiLeftShiftMm。
+            shift_px = round(left_shift_mm / 25.4 * 203)
+            if shift_px > 0:
+                from PIL import Image as _PILImage
+                w, h = img.size
+                shifted = _PILImage.new("L", (w, h), 255)  # 白底
+                shifted.paste(img, (-shift_px, 0))         # 内容往左搬
+                img = shifted
+                left_margin = 0
+            else:
+                # 默认按纸宽物理点居中（80mm≈639px，内容576px → 左边距31px）
+                phys_w = round(paper_mm / 25.4 * 203)
+                left_margin = max(0, (phys_w - img.width) // 2)
             for i in range(copies):
                 escpos.send_image_gdi(
                     printer, img,

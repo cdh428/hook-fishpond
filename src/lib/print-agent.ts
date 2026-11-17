@@ -2,53 +2,35 @@
  * 网页端打印代理
  * ==============
  *
- * 目标：在收银机上做到「点一下就出纸」，不弹系统打印对话框。
+ * 收银机上「点一下就出纸」，不弹系统打印对话框。
  *
- * 两条路：
- *   1. 本地打印桥（`tools/print-bridge`）—— 探测得到就走它，能按目标静默打印，
- *      支持 USB 打印机（`POS80`）和蓝牙小票机（GLPrinter，走 SPP 串口 `COM8`）。
- *      **手机/平板也能用**：桥默认监听 0.0.0.0，手机在同一 Wi-Fi 下把「打印服务
- *      地址」填成电脑的局域网 IP 即可（桥的 /health 里会回报自己的 lanUrls）。
- *   2. 浏览器打印 —— 探测不到桥（比如员工在店外打开）就自动回退到
- *      `window.print()`，弹系统对话框让人手选打印机。功能不中断。
+ * 打印一律走本地打印桥（`tools/print-bridge`，监听 `127.0.0.1:17777`）：
+ * 桥把 HTML 渲染成 1-bit 位图后经 Windows GDI 驱动送到 POS80 热敏机。
+ * 手机/平板在同一 Wi-Fi 下把「打印服务地址」填成收银机的局域网 IP 也能用。
  *
- * 注意：**手机不能直接连这台蓝牙打印机**。GLPrinter 是经典蓝牙 SPP
- * （服务 UUID 00001101），而 Web Bluetooth 只支持 BLE（低功耗）设备，iPhone 的
- * Safari 更是完全不支持。所以手机也必须经过打印桥转发，不能指望网页直连。
- *
- * 配置分层：
- *   · 通道偏好（usb / bluetooth / auto）+ 切纸参数 → 存**数据库**，手机与收银机共用
- *   · 打印桥地址 → 存本机 localStorage（它本来就是「这台设备怎么找到桥」，不该共用）
+ * 配置分层（2026-11-17 简化）：
+ *   · 纸宽 + 水平偏移 → 存**数据库**，收银机/手机共用同一份
+ *   · 打印桥地址 / 鉴权 Key → 存本机 localStorage（本来就跟设备相关）
  */
 
-// 打印一律走桥（2026-10-31 起），不再需要浏览器打印回退，因此不再 import printHtml。
-
 export type PrintPurpose = 'kitchen' | 'bill' | 'receipt';
-export type PrintMode = 'bridge' | 'browser';
 
-/** 通道偏好：不是具体端口号，因此手机/电脑可以共用同一份配置 */
-export type ChannelPreference = 'usb' | 'bluetooth' | 'auto';
-export type CutMode = 'full' | 'partial' | 'full-feed' | 'partial-feed';
 /** 纸宽：50mm 或 80mm（决定打印点宽与 CSS 渲染宽度） */
 export type PaperWidthMm = '50' | '80';
 
 export interface PrintPreferences {
-  kitchen: ChannelPreference;
-  bill: ChannelPreference;
-  receipt: ChannelPreference;
-  cutMode: CutMode;
-  feedLines: number;
   /** 纸宽（mm）。80mm 默认。50mm 用于较窄的小票机。 */
   paperWidth: PaperWidthMm;
+  /**
+   * 打印内容水平偏移（mm）。正数往左，负数往右。
+   * 用于校正热敏打印机驱动常有的物理左边距。
+   */
+  leftShiftMm: number;
 }
 
 export const DEFAULT_PREFERENCES: PrintPreferences = {
-  kitchen: 'usb',
-  bill: 'usb',
-  receipt: 'usb',
-  cutMode: 'full',
-  feedLines: 6,
   paperWidth: '80',
+  leftShiftMm: 10,
 };
 
 /** 纸宽 → 输出点宽（203dpi 热敏机）。80mm=576 点，50mm=384 点。 */
@@ -57,9 +39,9 @@ export function paperWidthToDots(mm: PaperWidthMm): number {
 }
 
 export interface BridgeTarget {
-  /** 显示名，如 `GLPrinter (COM8)` */
+  /** 显示名，如 `POS80` */
   name: string;
-  /** 实际投递目标：Windows 队列是打印机名；蓝牙串口是 `COM8` */
+  /** 实际投递目标：Windows 队列是打印机名 */
   port: string;
   kind: 'winspool' | 'serial';
   isBluetooth?: boolean;
@@ -80,23 +62,20 @@ export interface BridgeHealth {
   widthDots: number;
   printerCount: number;
   targets: BridgeTarget[];
-  serialPorts?: string[];
   chrome: boolean;
   /** 桥所在机器的局域网地址，手机填地址时照抄 */
   lanUrls?: string[];
-  cutMode?: string;
-  feedLines?: number;
 }
 
 export interface PrintOutcome {
   /** 实际走通的通道 */
-  via: 'bridge' | 'browser';
-  /** 走桥时的目标（打印机名或 COM 口） */
+  via: 'bridge';
+  /** 走桥时的目标（打印机名） */
   target?: string;
   /** 目标显示名 */
   targetLabel?: string;
-  /** 回退到浏览器时的原因，便于界面提示 */
-  fallbackReason?: 'mode-browser' | 'bridge-offline' | 'no-target' | 'bridge-error' | 'bt-offline';
+  /** 失败原因，便于界面提示 */
+  fallbackReason?: 'bridge-offline' | 'no-target' | 'bridge-error';
   error?: string;
   ms?: number;
 }
@@ -108,8 +87,7 @@ const LS_BRIDGE_KEY = 'hf.print.bridgeKey';
 const LS_PREFS_CACHE = 'hf.print.prefs.cache';
 
 export function getBridgeKey(): string {
-  const ls = safeLocalStorage();
-  return (ls?.getItem(LS_BRIDGE_KEY) || '').trim();
+  return (safeLocalStorage()?.getItem(LS_BRIDGE_KEY) || '').trim();
 }
 
 export function setBridgeKey(key: string): void {
@@ -121,7 +99,7 @@ let prefsCache: PrintPreferences | null = null;
 
 /** 探测超时要短：桥在就在，不在就立刻回退，别让收银员干等 */
 const PROBE_TIMEOUT_MS = 1800;
-/** 打印超时要长：蓝牙只有十几 KB/s，一张预结单要 10 秒左右 */
+/** 打印超时要长：给桥渲染和驱动出纸留足时间 */
 const PRINT_TIMEOUT_MS = 120000;
 /** 探测结果缓存，避免每次打印都多一次往返 */
 const HEALTH_TTL_MS = 15000;
@@ -140,27 +118,12 @@ function safeLocalStorage(): Storage | null {
 // --------------------------------------------------------------------------- #
 
 export function getBridgeUrl(): string {
-  const ls = safeLocalStorage();
-  return (ls?.getItem(LS_BRIDGE_URL) || '').trim() || DEFAULT_BRIDGE_URL;
+  return (safeLocalStorage()?.getItem(LS_BRIDGE_URL) || '').trim() || DEFAULT_BRIDGE_URL;
 }
 
 export function setBridgeUrl(url: string): void {
   safeLocalStorage()?.setItem(LS_BRIDGE_URL, url.trim());
   healthCache = null;
-}
-
-/**
- * 打印方式已**锁定为桥**（2026-10-31 用户明确：固化后网站所有打印一律走桥接）。
- * 不再允许切回浏览器对话框——「打印方式」设置项随之失效，这里永远返回 'bridge'。
- * 保留函数签名只是为了不破坏既有调用方（设置页仍读它做展示）。
- */
-export function getPrintMode(): PrintMode {
-  return 'bridge';
-}
-
-/** 锁定为桥：忽略任何传入值，写死 'bridge'。调用方（设置页）传 'browser' 也无效。 */
-export function setPrintMode(_mode: PrintMode): void {
-  safeLocalStorage()?.setItem('hf.print.mode', 'bridge');
 }
 
 /** 目标标识：串口用端口号，Windows 队列用打印机名 */
@@ -170,21 +133,14 @@ export function targetId(t: BridgeTarget): string {
 
 function normalizePrefs(raw: unknown): PrintPreferences {
   const o = (raw ?? {}) as Record<string, unknown>;
-  const ch = (v: unknown): ChannelPreference =>
-    v === 'usb' || v === 'bluetooth' || v === 'auto' ? v : DEFAULT_PREFERENCES.kitchen;
-  const cut: CutMode =
-    o.cutMode === 'partial' || o.cutMode === 'full-feed' || o.cutMode === 'partial-feed'
-      ? (o.cutMode as CutMode)
-      : 'full';
-  const feed = Number(o.feedLines);
-  const paper = o.paperWidth === '50' || o.paperWidth === '80' ? o.paperWidth : DEFAULT_PREFERENCES.paperWidth;
+  const paper =
+    o.paperWidth === '50' || o.paperWidth === '80' ? o.paperWidth : DEFAULT_PREFERENCES.paperWidth;
+  const shift = Number(o.leftShiftMm);
   return {
-    kitchen: ch(o.kitchen),
-    bill: ch(o.bill),
-    receipt: ch(o.receipt),
-    cutMode: cut,
-    feedLines: Number.isFinite(feed) ? Math.min(12, Math.max(0, Math.round(feed))) : 6,
     paperWidth: paper,
+    leftShiftMm: Number.isFinite(shift)
+      ? Math.min(20, Math.max(-20, Math.round(shift)))
+      : DEFAULT_PREFERENCES.leftShiftMm,
   };
 }
 
@@ -209,7 +165,7 @@ export function setPreferences(prefs: PrintPreferences): void {
 }
 
 /**
- * 从服务端拉取偏好（手机与收银机共用同一份）。
+ * 从服务端拉取偏好（收银机/手机共用同一份）。
  * 拉不到就沿用本地缓存 —— 打印不能因为后台短暂不可用而停摆。
  */
 export async function loadPreferences(force = false): Promise<PrintPreferences> {
@@ -306,45 +262,22 @@ export async function fetchBridgeTargets(): Promise<BridgeTarget[]> {
 // --------------------------------------------------------------------------- #
 
 /**
- * 按「通道偏好」挑一个实际目标。
+ * 挑一个实际打印目标。
  *
- * 偏好是 `usb` / `bluetooth` / `auto`，跨设备通用 —— 因为存的是**通道类型**，
- * 不是端口号。同一份配置拿到手机上、拿到另一台收银机上都能用。
- *
- * 优先级：
- *   1. 桥自己声明的默认目标（= 这台机器配置的默认打印机）
- *   2. 偏好通道里的热敏票据机
- *   3. 任意热敏票据机
- *   4. 任意打印机
- *
- * 通道不可用（比如偏好了蓝牙但蓝牙没连、没有 COM 口）时自动降级到另一条，
- * 而不是直接报错 —— 收银台不能因为「今天蓝牙没开」就整晚打不出单。
+ * 现在只有一台 POS80（Windows USB 队列），逻辑简化为：
+ *   1. 桥声明的默认目标
+ *   2. 任意热敏票据机（winspool 优先）
+ *   3. 任意打印机
  */
-export function pickAutoTarget(
-  health: BridgeHealth,
-  purpose: PrintPurpose,
-  prefs: PrintPreferences = getPreferences(),
-): string {
-  const want = prefs[purpose] ?? 'usb';
-  const thermal = health.targets.filter((t) => t.isThermal);
-
-  const byChannel = (ch: ChannelPreference) => {
-    if (ch === 'usb') return thermal.find((t) => t.kind === 'winspool');
-    if (ch === 'bluetooth') return thermal.find((t) => t.kind === 'serial');
-    // auto：票据机里优先 USB（更稳），没有再蓝牙
-    return thermal.find((t) => t.kind === 'winspool') || thermal.find((t) => t.kind === 'serial');
-  };
-
-  if (want !== 'auto') {
-    const hit = byChannel(want);
-    if (hit) return targetId(hit);
-  }
-
-  // 偏好通道没有可用目标 → 看桥声明的默认，再退到任意票据机
+export function pickAutoTarget(health: BridgeHealth): string {
   const declared = health.defaultPrinter
     ? health.targets.find((t) => targetId(t) === health.defaultPrinter)
     : undefined;
   if (declared) return targetId(declared);
+
+  const thermal = health.targets.filter((t) => t.isThermal);
+  const winspoolThermal = thermal.find((t) => t.kind === 'winspool');
+  if (winspoolThermal) return targetId(winspoolThermal);
 
   if (thermal.length) return targetId(thermal[0]);
   if (health.targets.length) return targetId(health.targets[0]);
@@ -354,7 +287,7 @@ export function pickAutoTarget(
 export async function printViaBridge(
   html: string,
   target: string,
-  opts?: { copies?: number; cut?: boolean; feedLines?: number; cutMode?: string; width?: number; paperWidthMm?: number },
+  opts?: { copies?: number; cut?: boolean; width?: number; paperWidthMm?: number; leftShiftMm?: number },
 ): Promise<{ ok: boolean; width?: number; height?: number; bytes?: number; ms?: number; transport?: string; error?: string }> {
   try {
     const key = getBridgeKey();
@@ -373,10 +306,9 @@ export async function printViaBridge(
           html,
           copies: opts?.copies ?? 1,
           cut: opts?.cut ?? true,
-          ...(opts?.feedLines != null ? { feedLines: opts.feedLines } : {}),
-          ...(opts?.cutMode ? { cutMode: opts.cutMode } : {}),
           ...(opts?.width ? { width: opts.width } : {}),
           ...(opts?.paperWidthMm ? { paperWidthMm: opts.paperWidthMm } : {}),
+          ...(opts?.leftShiftMm != null ? { leftShiftMm: opts.leftShiftMm } : {}),
         }),
       },
       PRINT_TIMEOUT_MS,
@@ -394,18 +326,13 @@ export async function printViaBridge(
 }
 
 /**
- * 统一打印入口：**一律走打印桥**（2026-10-31 用户明确：固化后网站所有打印命令都走桥接）。
- *
- * 不再回退浏览器打印对话框 —— 桥不可用/失败时直接返回失败结果，
- * 由调用方提示「打印服务不可用」，绝不弹系统对话框让店员手选。
- * （浏览器回退路径 `printHtml()` 与自动出单器已于 2026-11-07 删除。）
- *
- * 调用方只需关心「要打什么」，不用管走哪条路；但要看 `outcome.via` / `outcome.error`。
+ * 统一打印入口：**一律走打印桥**。
+ * 桥不可用/失败时直接返回失败结果，由调用方提示「打印服务不可用」。
  */
 export async function submitPrint(
   html: string,
-  purpose: PrintPurpose,
-  opts?: { copies?: number; feedLines?: number; cutMode?: string; cut?: boolean },
+  _purpose: PrintPurpose,
+  opts?: { copies?: number; cut?: boolean },
 ): Promise<PrintOutcome> {
   const started = Date.now();
 
@@ -419,9 +346,9 @@ export async function submitPrint(
     };
   }
 
-  // 偏好从服务端拿（手机与收银机共用）；拿不到就用本地缓存
+  // 偏好从服务端拿（收银机/手机共用）；拿不到就用本地缓存
   const prefs = await loadPreferences();
-  const target = pickAutoTarget(health, purpose, prefs);
+  const target = pickAutoTarget(health);
   if (!target) {
     return {
       via: 'bridge',
@@ -431,17 +358,14 @@ export async function submitPrint(
     };
   }
 
-  const cutOpts = {
+  const r = await printViaBridge(html, target, {
     copies: opts?.copies ?? 1,
     cut: opts?.cut,
-    cutMode: opts?.cutMode ?? prefs.cutMode,
-    feedLines: opts?.feedLines ?? prefs.feedLines,
-    // ⚠️ 2026-11-05：纸宽偏好 → 输出点宽 + 桥端渲染视口宽。
-    // 80mm=576 点，50mm=384 点；桥用 paperWidthMm 决定 Chrome 视口 mm。
     width: paperWidthToDots(prefs.paperWidth),
     paperWidthMm: Number(prefs.paperWidth) || 80,
-  };
-  const r = await printViaBridge(html, target, cutOpts);
+    leftShiftMm: prefs.leftShiftMm,
+  });
+
   if (r.ok) {
     return {
       via: 'bridge',
@@ -449,30 +373,6 @@ export async function submitPrint(
       targetLabel: health.targets.find((t) => targetId(t) === target)?.name,
       ms: r.ms ?? Date.now() - started,
     };
-  }
-
-  // 蓝牙目标失败（打印机关机 / 断链 / 被占用）→ 先自动改投同机的 USB 票据机，
-  // 别让店员在收银台干等一张出不来的单子。
-  // 只在「失败目标是蓝牙」且「存在别的热敏票据机」时才降级，
-  // 避免 USB 机故障时来回重试。
-  const failedIsBt = health.targets.find((t) => targetId(t) === target)?.kind === 'serial';
-  if (failedIsBt) {
-    const fallback = health.targets.find(
-      (t) => t.kind === 'winspool' && t.isThermal && targetId(t) !== target,
-    );
-    if (fallback) {
-      const fb = await printViaBridge(html, targetId(fallback), cutOpts);
-      if (fb.ok) {
-        return {
-          via: 'bridge',
-          target: targetId(fallback),
-          targetLabel: fallback.name,
-          fallbackReason: 'bt-offline',
-          error: r.error,
-          ms: Date.now() - started,
-        };
-      }
-    }
   }
 
   // 桥在但打印失败：不静默吞掉，返回失败结果，调用方提示「打印失败」。
@@ -489,28 +389,13 @@ export async function submitPrint(
 type TranslateFn = (key: string, values?: Record<string, string | number | Date>) => string;
 
 export function describeOutcome(o: PrintOutcome, t: TranslateFn): string {
-  // 一律走桥后，失败时 via 仍可能为 'bridge'（带 fallbackReason + error）。
-  // 必须优先判失败，不能只凭 via==='bridge' 就当成功。
-  if (o.fallbackReason && o.fallbackReason !== 'bt-offline') {
-    switch (o.fallbackReason) {
-      case 'mode-browser':
-        return t('printAgent.browserMode');
-      case 'bridge-offline':
-        return t('printAgent.bridgeOffline');
-      case 'no-target':
-        return t('printAgent.noTarget');
-      case 'bridge-error':
-        return t('printAgent.bridgeError', { error: o.error || '' });
-      default:
-        return t('printAgent.bridgeError', { error: o.error || '' });
-    }
+  switch (o.fallbackReason) {
+    case 'bridge-offline':
+      return t('printAgent.bridgeOffline');
+    case 'no-target':
+      return t('printAgent.noTarget');
+    case 'bridge-error':
+      return t('printAgent.bridgeError', { error: o.error || '' });
   }
-  if (o.via === 'bridge') {
-    // 蓝牙失败改投了 USB：明确说出来，否则店员会以为蓝牙机在正常工作
-    if (o.fallbackReason === 'bt-offline') {
-      return t('printAgent.btFallback', { target: o.targetLabel || o.target || '' });
-    }
-    return t('printAgent.sentTo', { target: o.targetLabel || o.target || '' });
-  }
-  return t('printAgent.browserMode');
+  return t('printAgent.sentTo', { target: o.targetLabel || o.target || '' });
 }

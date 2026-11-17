@@ -4,64 +4,39 @@ import { requireAdmin } from "@/lib/auth";
 import { requestLocale, serverT } from "@/lib/server-t";
 
 /**
- * 打印偏好 —— 存在数据库，手机和电脑共用同一份。
+ * 打印偏好 —— 存数据库，收银机/手机共用。
  *
- * 为什么不用 localStorage：设置原先按设备各存各的，手机存 `COM8`、收银机存
- * `POS80`，两边永远对不上。现在改成「按单据角色存偏好」，与具体机器解耦：
+ * 2026-11-17 简化：只保留纸宽 + 水平偏移两个设置项。
+ * 蓝牙/通道偏好/切纸模式已随硬件更新移除（现在只走 POS80 一台 USB 热敏机）。
  *
- *   kitchen / bill / receipt → "usb" | "bluetooth" | "auto"
- *
- * 实际投递时由本机打印桥决定走哪条通道 —— 手机连的是哪台收银机的桥，
- * 就按那台机器的通道发；偏好只是「优先用哪条」。
- *
- * 例外：如果某台机器的目标就是不可用的（比如被指到已断开的 COM 口），
- * 桥自己会报错，前端再自动改投同机另一条通道。
+ * leftShiftMm 存这里，前端每次打印把它作为请求参数发给桥，
+ * 桥按请求值渲染图像（覆盖 config.json 里的默认值）。
  */
 
 const SETTING_KEY = "print.preferences";
 
-export type ChannelPreference = "usb" | "bluetooth" | "auto";
-
 export interface PrintPreferences {
-  kitchen: ChannelPreference;
-  bill: ChannelPreference;
-  receipt: ChannelPreference;
-  /** 纸张切法：full 全切 / partial 半切（留一点连着）/ full-feed 全切+多走纸 */
-  cutMode: "full" | "partial" | "full-feed" | "partial-feed";
-  /** 切纸前走纸行数，切在字上就调大 */
-  feedLines: number;
   /** 纸宽（mm）：80 标准 / 50 窄 */
   paperWidth: "50" | "80";
+  /** 打印内容水平偏移（mm）。正数往左，负数往右，用于校正热敏机物理左边距。 */
+  leftShiftMm: number;
 }
 
 export const DEFAULT_PREFERENCES: PrintPreferences = {
-  kitchen: "usb",
-  bill: "usb",
-  receipt: "usb",
-  cutMode: "full",
-  feedLines: 6,
   paperWidth: "80",
+  leftShiftMm: 10,
 };
-
-const VALID_CHANNEL: ChannelPreference[] = ["usb", "bluetooth", "auto"];
-const VALID_CUT = ["full", "partial", "full-feed", "partial-feed"] as const;
 
 function normalize(raw: unknown): PrintPreferences {
   const o = (raw ?? {}) as Record<string, unknown>;
-  const ch = (v: unknown): ChannelPreference =>
-    VALID_CHANNEL.includes(v as ChannelPreference) ? (v as ChannelPreference) : "usb";
-  const cut = VALID_CUT.includes(o.cutMode as never)
-    ? (o.cutMode as PrintPreferences["cutMode"])
-    : DEFAULT_PREFERENCES.cutMode;
-  const feed = Number(o.feedLines);
-  const paper = o.paperWidth === "50" || o.paperWidth === "80" ? o.paperWidth : DEFAULT_PREFERENCES.paperWidth;
+  const paper =
+    o.paperWidth === "50" || o.paperWidth === "80" ? o.paperWidth : DEFAULT_PREFERENCES.paperWidth;
+  const shift = Number(o.leftShiftMm);
   return {
-    kitchen: ch(o.kitchen),
-    bill: ch(o.bill),
-    receipt: ch(o.receipt),
-    cutMode: cut,
-    feedLines: Number.isFinite(feed) ? Math.min(12, Math.max(0, Math.round(feed))) : DEFAULT_PREFERENCES.feedLines,
     paperWidth: paper,
+    leftShiftMm: Number.isFinite(shift)
+      ? Math.min(20, Math.max(-20, Math.round(shift)))
+      : DEFAULT_PREFERENCES.leftShiftMm,
   };
 }
 
