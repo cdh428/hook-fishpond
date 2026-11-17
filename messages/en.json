@@ -884,7 +884,10 @@
     "postpaidHint": "Sent to the kitchen. Settle once at the counter when you are done.",
     "prepaidHint": "Please complete payment — the kitchen starts right after.",
     "seat": "Table",
-    "print": "Print"
+    "print": "Print",
+    "pdfSaved": "PDF saved — keep or share as proof",
+    "pdfTitle": "Download proof",
+    "pdfHint": "Save your order receipt to your phone or share it"
   },
   "adminOrders": {
     "entry": "Orders",

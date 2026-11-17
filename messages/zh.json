@@ -884,7 +884,10 @@
     "postpaidHint": "已通知后厨。用完餐后到收银台一次结清即可。",
     "prepaidHint": "请完成付款，后厨随后开始备餐。",
     "seat": "桌号",
-    "print": "打印"
+    "print": "打印",
+    "pdfSaved": "已生成 PDF 存证，请保存或转发",
+    "pdfTitle": "下载存证",
+    "pdfHint": "保存订单凭证，可存到手机或转发给朋友"
   },
   "adminOrders": {
     "entry": "订单",

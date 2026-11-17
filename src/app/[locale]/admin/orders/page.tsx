@@ -276,28 +276,14 @@ export default function AdminOrdersPage() {
 
   // ---------- 动作 ----------
   const doPrintKitchen = async (order: any) => {
-    // 厨房小票固定出 2 联：第一联厨房留存制作，第二联备餐后送给客户
+    // ⚠️ 2026-11-17：后厨票统一只打一份（与桥 --watch 自动出单的「只打一份」口径一致）
     const receiptOrder = toReceiptOrder(order, locale);
-    // ⚠️ 2026-11-05：打印纸宽（50/80mm）从偏好读取，决定 HTML 渲染宽度与输出点宽
+    // 打印纸宽（50/80mm）从偏好读取，决定 HTML 渲染宽度与输出点宽
     const prefs = await loadPreferences();
     const pw = Number(prefs.paperWidth) || 80;
-    const html1 = buildKitchenTicketHtml(
-      receiptOrder,
-      printLabels,
-      printLabels.kitchenCopy1 || '【 ครัว / 厨房留存联 】',
-      pw,
-    );
-    const html2 = buildKitchenTicketHtml(
-      receiptOrder,
-      printLabels,
-      printLabels.kitchenCopy2 || '【 ส่งอาหาร / 备餐传菜联 】',
-      pw,
-    );
-    const outcome1 = await submitPrint(html1, 'kitchen');
-    const outcome2 = await submitPrint(html2, 'kitchen');
-    flash(
-      `${describeOutcome(outcome1, t)} (厨房联) + ${describeOutcome(outcome2, t)} (传菜联)`,
-    );
+    const html = buildKitchenTicketHtml(receiptOrder, printLabels, printLabels.kitchenCopy1 || '【 ครัว / 厨房联 】', pw);
+    const outcome = await submitPrint(html, 'kitchen');
+    flash(describeOutcome(outcome, t));
   };
 
   const doPrintBill = async (order: any, qrString?: string | null) => {

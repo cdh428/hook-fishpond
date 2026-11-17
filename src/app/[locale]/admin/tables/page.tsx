@@ -273,17 +273,16 @@ export default function AdminTablesPage() {
    * 80mm 小票版式（纯黑白二维码 + 三语桌名 + 扫码点餐提示），
    * 经打印桥 GDI/USB 通道出纸，固定 2 行走纸后全切。
    */
-  const printTableQr = async (row: TableRow) => {
-    setPrinting(row.id);
-    setError('');
-    try {
-      // 纯黑白、M 级容错的二维码（黑块足够大，热敏 1-bit 打印不会糊）
-      // 按当前界面语言锁定，扫码即进入对应语言的点单页
-      const qrDataUrl = await makeQrDataUrl(tableOrderUrlByLocale(row.code, locale));
-      const brand = t('common.siteName');
-      const hint = t('admin.tableQrOrderHint');
-      const code = row.code;
-      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>QR ${esc(code)}</title>
+  /**
+   * 构造单桌 QR 小票 HTML（80mm 版式：纯黑白二维码 + 三语桌名 + 扫码点餐提示 + 电话）。
+   * 单桌打印和批量打印共用同一版式，保证出纸效果一致。
+   */
+  const buildQrTicketHtml = async (row: TableRow): Promise<string> => {
+    const qrDataUrl = await makeQrDataUrl(tableOrderUrlByLocale(row.code, locale));
+    const brand = t('common.siteName');
+    const hint = t('admin.tableQrOrderHint');
+    const code = row.code;
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>QR ${esc(code)}</title>
 <style>
   * { box-sizing: border-box; }
   @page { size: 80mm auto; margin: 0; }
@@ -311,6 +310,13 @@ export default function AdminTablesPage() {
   <div class="hint">${esc(hint)}</div>
   <div class="hint" style="border-top:none;padding-top:1mm;">${esc(t('admin.tableQrPhone'))}</div>
 </div></body></html>`;
+  };
+
+  const printTableQr = async (row: TableRow) => {
+    setPrinting(row.id);
+    setError('');
+    try {
+      const html = await buildQrTicketHtml(row);
       const outcome = await submitPrint(html, 'bill', { feedLines: 2, cut: true, cutMode: 'full' });
       flash(describeOutcome(outcome, t));
     } catch (err: any) {
@@ -320,39 +326,35 @@ export default function AdminTablesPage() {
     }
   };
 
-  // Open a print-ready sheet with every active table's QR sticker
+  // 批量打印：逐桌走桥（与单桌打印同一条链路，统一出纸版式）
+  // ⚠️ 2026-11-17：不再弹浏览器打印对话框，统一走打印桥 POS80 出纸
   const printAll = async () => {
-    setDownloading('__all__');
-    try {
-      const active = tables.filter((x) => x.isActive);
-      const stickers = await Promise.all(active.map((row) => buildStickerDataUrl(row)));
-      const w = window.open('', '_blank');
-      if (!w) {
-        setError(t('admin.popupBlocked'));
-        return;
-      }
-      w.document.write(`<!DOCTYPE html><html><head><title>Hook Fishpond — Table QR</title>
-        <style>
-          body { font-family: sans-serif; margin: 16px; }
-          .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
-          .item { border: 1px solid #ddd; border-radius: 12px; padding: 12px; text-align: center; page-break-inside: avoid; }
-          .item img { width: 100%; max-width: 320px; }
-          h1 { font-size: 18px; margin-bottom: 12px; }
-          @media print { .hint { display: none; } }
-        </style></head><body>
-        <h1>${t('admin.tableQrPrintTitle')} (${active.length})</h1>
-        <p class="hint">${t('admin.tableQrPrintHint')}</p>
-        <div class="grid">
-          ${stickers.map((src) => `<div class="item"><img src="${src}" /></div>`).join('')}
-        </div>
-        <script>window.onload = function(){ setTimeout(function(){ window.print(); }, 400); };</script>
-        </body></html>`);
-      w.document.close();
-    } catch (err: any) {
-      setError(err?.message || t('common.error'));
-    } finally {
-      setDownloading(null);
+    setError('');
+    const active = tables.filter((x) => x.isActive);
+    if (!active.length) {
+      setError(t('admin.popupBlocked'));
+      return;
     }
+    let ok = 0;
+    let fail = 0;
+    for (let i = 0; i < active.length; i++) {
+      const row = active[i];
+      setDownloading(row.id); // 用同一状态位显示进度（当前正在打哪张桌）
+      try {
+        const html = await buildQrTicketHtml(row);
+        const outcome = await submitPrint(html, 'bill', { feedLines: 2, cut: true, cutMode: 'full' });
+        if (outcome.via === 'bridge' && !outcome.fallbackReason) ok++;
+        else fail++;
+      } catch {
+        fail++;
+      }
+      // 张与张之间稍作间隔，避免热敏机连续进纸时错位/截断
+      if (i < active.length - 1) {
+        await new Promise((r) => setTimeout(r, 400));
+      }
+    }
+    setDownloading(null);
+    flash(`${t('admin.tableQrPrintTitle')} ${t('admin.tableQrPrintHint')} — ${ok}/${active.length}${fail ? ` (fail ${fail})` : ''}`);
   };
 
   const hutTables = tables.filter((x) => x.area === 'HUT');

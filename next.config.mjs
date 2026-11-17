@@ -37,6 +37,14 @@ const securityHeaders = [
 const nextConfig = {
   // 不再对外宣告技术栈（少一个版本指纹就少一个针对性扫描的理由）
   poweredByHeader: false,
+  // ⚠️ 2026-11-17：jsPDF 的依赖 fflate 有 node/browser 两套构建，
+  // Turbopack 默认在客户端 chunk 里也 resolve 到 node.cjs（用了 Worker）导致构建失败。
+  // 强制 fflate 走浏览器版，让 jsPDF 在客户手机上正常生成 PDF。
+  turbopack: {
+    resolveAlias: {
+      fflate: './node_modules/fflate/lib/browser.cjs',
+    },
+  },
   async headers() {
     return [
       {

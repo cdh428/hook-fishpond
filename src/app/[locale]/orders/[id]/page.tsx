@@ -16,15 +16,18 @@ import {
   buildBillHtml,
   type PrintLabels,
 } from '@/lib/print-receipt';
-import { submitPrint, describeOutcome, loadPreferences } from '@/lib/print-agent';
+import { loadPreferences } from '@/lib/print-agent';
 import { formatLineOptions } from '@/lib/menu-options';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
 
 /**
  * 顾客订单详情 —— 下单成功后落地页，也是「我的订单」点进来的详情页。
  * 显示客户下单的内容、当前进度与结算状态。
  *
- * 打印入口：收银机/前台电脑上开着本地打印桥时，可以一键静默打后厨单或预结单；
- * 没有桥（员工用手机打开）时自动退回浏览器打印对话框，功能不中断。
+ * ⚠️ 2026-11-17：客户侧不再直接调打印桥（客户手机上没有桥，点了必然失败）。
+ * 改为**生成 PDF 下载存证**到客户手机，客户可保存/转发。
+ * 真实打印由 POS80 那台机的打印桥 --watch 自动拉单完成，客户侧只负责存证。
  */
 export default function OrderDetailPage() {
   const t = useTranslations();
@@ -91,8 +94,36 @@ export default function OrderDetailPage() {
         purpose === 'kitchen'
           ? buildKitchenTicketHtml(ro, printLabels, undefined, pw)
           : buildBillHtml(ro, { qrDataUrl: null, labels: printLabels, paperWidthMm: pw });
-      const outcome = await submitPrint(html, purpose);
-      setPrintMsg(describeOutcome(outcome, t));
+
+      // 客户侧存证：把小票 HTML 离屏渲染成 PNG，再用 jsPDF 打包成 PDF 下载。
+      // （客户手机上没有打印桥，点了打印必然失败；改成 PDF 让客户存证/转发。）
+      const wrap = document.createElement('div');
+      wrap.style.cssText = `position:fixed;left:-10000px;top:0;width:${pw}mm;background:#fff;`;
+      wrap.innerHTML = html;
+      document.body.appendChild(wrap);
+      let pdf: jsPDF;
+      try {
+        const canvas = await html2canvas(wrap, {
+          scale: 2,
+          backgroundColor: '#ffffff',
+          useCORS: true,
+          windowWidth: wrap.scrollWidth,
+        });
+        const imgData = canvas.toDataURL('image/jpeg', 0.92);
+        const pwMm = wrap.scrollWidth * 25.4 / 96;
+        const phMm = canvas.height * pwMm / canvas.width;
+        pdf = new jsPDF({
+          orientation: phMm > pwMm ? 'portrait' : 'landscape',
+          unit: 'mm',
+          format: [pwMm, phMm],
+        });
+        pdf.addImage(imgData, 'JPEG', 0, 0, pwMm, phMm);
+      } finally {
+        document.body.removeChild(wrap);
+      }
+      const fileName = `${ro.orderNumber || 'order'}-${purpose}.pdf`;
+      pdf.save(fileName);
+      setPrintMsg(t('orderDetail.pdfSaved'));
     } catch (e: any) {
       setPrintMsg(e?.message || t('common.error'));
     } finally {
@@ -323,11 +354,12 @@ export default function OrderDetailPage() {
         )}
       </div>
 
-      {/* 打印（收银机上有本地打印桥时静默出纸） */}
+      {/* 存证 PDF（客户手机无打印桥，改下载 PDF 存证；真实打印由 POS80 桥 --watch 完成） */}
       <div className="mb-4 rounded-xl bg-white p-4 shadow-md">
         <h3 className="mb-3 text-sm font-semibold text-neutral-700">
-          🖨️ {t('orderDetail.print')}
+          📄 {t('orderDetail.pdfTitle')}
         </h3>
+        <p className="mb-3 text-xs text-neutral-500">{t('orderDetail.pdfHint')}</p>
         <div className="grid grid-cols-2 gap-2">
           <button
             onClick={() => void doPrint('kitchen')}
