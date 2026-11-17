@@ -65,11 +65,38 @@ Neon 生产库 + 打印桥跨网；另有顾客手机号，含个人信息。
 - [x] `.git/hooks/pre-commit` 已装（双层：gitleaks → check-secrets.sh）
 - [x] `.workbuddy/secrets/ROTATION.md` 存在
 - [x] （L3）`.github/workflows/secret-scan.yml` 已装（gitleaks 全历史 + 每周一 cron）
-- [ ] （L3）GitHub 分支保护已勾选 `secret-scan` ← **需网页操作，本机无凭据**
+- [x] （L3）分支规则集 `protect-main` 已启用（2026-11-17，ruleset id 27455981）
 
-> 分支保护路径：仓库 → Settings → Branches → Branch protection rules → `main`
-> → Require status checks to pass → 勾选 `gitleaks 全历史扫描`。
-> **不勾这一条，CI 失败也拦不住合并**，第四层等于摆设。
+### 4.1 分支规则集 `protect-main` 实际配置
+
+> 入口：仓库 → Settings → **Rules → Rulesets**（旧名 Branch protection rules，新版已并入 Rulesets）
+
+| 项 | 值 |
+|---|---|
+| Enforcement status | **Active** |
+| Target | `~DEFAULT_BRANCH`（= main） |
+| 规则 · deletion | 禁止删除 main |
+| 规则 · non_fast_forward | 禁止 force push 覆盖历史 |
+| 规则 · required_status_checks | 必须通过 `gitleaks 全历史扫描` |
+| strict（分支需先更新） | false —— 单人推送场景够用，开了反而每次要先 rebase |
+| Bypass 名单 | **空**（谁都不能绕过，含管理员） |
+
+**⚠️ 这套配置的真实边界（别误会它的能力）**
+
+本项目是**直接在 main 上推送**（单人开发，不开 PR）。而 `required_status_checks` 的检查是
+**push 之后**才跑的 —— 意味着：
+
+| 场景 | 规则集能管吗 |
+|---|---|
+| 开 PR → 检查失败 → 阻止合并 | ✅ 管得住 |
+| 直接 push 到 main，检查失败 | ❌ **代码已经进仓库了**，规则集只是事后标红 |
+
+所以**真正的第一道防线是本地 pre-commit**（提交前就拦），CI + 规则集是：
+1. 发现「有人绕过本地钩子 / 用了 `--no-verify` / 换了台没装钩子的机器」
+2. 让失败看得见（红叉 + 邮件通知）
+3. 万一将来开 PR 协作，立刻有强制力
+
+若将来要「直接 push 也拦得住」，唯一办法是改成 PR 流程（`pull_request` 规则）。
 
 ## 5. AI 会话的硬性禁令
 
