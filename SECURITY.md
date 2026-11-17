@@ -29,8 +29,9 @@ Neon 生产库 + 打印桥跨网；另有顾客手机号，含个人信息。
 > 自动判定的规则与理由是**下限**：人工可以把级别**升**上去（比如预判将来要接收款），
 > **不可以降**。要降必须写清理由并复核。
 
-**当前缺口**：CI 兜底扫描尚未安装（`templates/secret-scan.yml` 已备好，
-复制到 `.github/workflows/` 即可）。
+**当前缺口（2026-11-17 更新）**：`.github/workflows/secret-scan.yml` 已安装，
+四层闸门齐备。**剩下唯一动作是用户在 GitHub 网页启用分支保护**（见 §4 末条），
+本地代码侧已做不了。
 
 ## 2. 密钥在哪（只写位置，永不写值）
 
@@ -63,7 +64,12 @@ Neon 生产库 + 打印桥跨网；另有顾客手机号，含个人信息。
 - [x] `gitleaks.toml` 存在
 - [x] `.git/hooks/pre-commit` 已装（双层：gitleaks → check-secrets.sh）
 - [x] `.workbuddy/secrets/ROTATION.md` 存在
-- [ ] （L3）`.github/workflows/secret-scan.yml` 存在且分支保护已勾选 ← **待装**
+- [x] （L3）`.github/workflows/secret-scan.yml` 已装（gitleaks 全历史 + 每周一 cron）
+- [ ] （L3）GitHub 分支保护已勾选 `secret-scan` ← **需网页操作，本机无凭据**
+
+> 分支保护路径：仓库 → Settings → Branches → Branch protection rules → `main`
+> → Require status checks to pass → 勾选 `gitleaks 全历史扫描`。
+> **不勾这一条，CI 失败也拦不住合并**，第四层等于摆设。
 
 ## 5. AI 会话的硬性禁令
 
