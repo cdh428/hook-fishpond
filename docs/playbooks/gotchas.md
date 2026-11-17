@@ -794,8 +794,69 @@ const nextConfig = {
 **教训**：多会话并行是这个项目的常态，**每次提交前 `git diff <file>` 逐行看**，
 混了别人的东西就按上面流程只提交自己的。看到陌生改动：不代为提交、不 revert、不 stash。
 
+**灰度判断（2026-11-17 补）**：摘除流程针对的是**半成品代码**；如果别人的部分只是
+**闲置的三语 JSON key**（无代码引用、三语齐全、check:i18n 能过），整文件提交并无风险 ——
+关键是看「会不会被未完成代码引用」，不是机械摘除。拿不准就在 commit message 里注明
+「带入并行会话的 XX key（闲置）」并口头告知。
+
+### 6.16 commit 输出「ahead by 1 / no changes added」= 暂存区可能被并行会话吸走（2026-11-17 现场）
+
+**场景**：`git add` 明明成功（`git diff --cached --stat` 也列出了 13 个文件），
+随后 `git commit` 却输出 `no changes added to commit` + `Your branch is ahead of 'origin/main' by 1 commit`。
+
+**根因**：并行会话在同一窗口期执行了包含你暂存文件的提交（如 `commit -a` 或全路径提交），
+你的暂存区被清空、内容进了**它的** commit。
+
+**处置**：别急着重新 add/commit —— 先 `git log --oneline -3` + `git show --stat HEAD`
+确认那些文件**已经以完整改动进了最新提交**，归属清楚就直接接着 push；
+只有内容不完整或 message 归属错乱时才需要补救。本例（7aeeaf4d）内容完整、
+message 正确，直接推送即可。
+
+### 6.17 Prisma 7 一次性脚本的三个坑（2026-11-17）
+
+1. **裸 `new PrismaClient()` 直接抛 `PrismaClientInitializationError`** ——
+   Prisma 7 必须 driver adapter。一次性验证/清洗脚本要照抄 `src/lib/prisma.ts`
+   的构造方式（PrismaPg adapter + DATABASE_URL），别手写。
+2. **`db push` 遇到加 unique 约束会要求 `--accept-data-loss`**。放行前判断：
+   新约束列现有数据**全 null** → 安全（PG 允许多个 NULL）；已有重复值 → 先清洗。
+   别盲目带 flag，也别被警告吓住不敢动。
+3. **`db push` 之后必须 `npx prisma generate`**，否则 tsc 报新字段不存在
+   （push 不会自动重新生成客户端）。
+
 **顺带**：`messages/*.json` 是高频冲突区（每个功能都要加三语文案）。
 加泰文文案**别手打**（声调符号易丢/易错），用 Python 脚本按锚点插入并正则校验。
+
+### 6.16 Prisma/pg 裸 SQL 的列名必须带双引号（2026-11-17 踩）
+
+**踩过**：直接写 SQL 查询，用 `orderNumber` / `customerName` 报
+`column "ordernumber" does not exist` —— 查不到列，整条查询静默失败（只看到 exit 1）。
+
+**根因**：PostgreSQL 对**大写混合列名**区分大小写。Prisma schema 里 `orderNumber` 这种
+驼峰字段在 DB 里是 `"orderNumber"`（带引号才保留大小写）。裸 SQL 里**不带双引号**会被
+转成全小写 `ordernumber` → 找不到列。
+
+**处置**：写裸 SQL（`pg` Pool / `prisma.$queryRaw`）时，**所有驼峰列名/表名一律加双引号**：
+```sql
+SELECT "orderNumber", "customerName" FROM "Order" WHERE "printState" IS NULL
+```
+**别用 `information_schema` 去猜**——先 `prisma db pull` 或看 schema.prisma 确认真实列名。
+
+**排查口诀**：查询"静默失败/exit 1 无输出"，八成是列名没加引号，不是数据问题。
+先 `console.error` 把 SQL 报错打出来，别只看退出码。
+
+### 6.17 热敏机批量打印要加张间间隔（2026-11-17）
+
+**踩过**：批量打印桌号 QR（`admin/tables` 的 `printAll`）一次 `Promise.all` 并发几十张，
+热敏机连续进纸会**错位/截断/串行**。
+
+**处置**：批量打印改**串行 + 张间 `setTimeout` 400ms**：
+```js
+for (let i = 0; i < list.length; i++) {
+  await submitPrint(buildQrTicketHtml(list[i]), 'bill', {...});
+  if (i < list.length - 1) await new Promise(r => setTimeout(r, 400));
+}
+```
+**别用 `Promise.all` 并发** —— 打印机是串行设备，并发只会让队列乱序。
 
 ---
 
