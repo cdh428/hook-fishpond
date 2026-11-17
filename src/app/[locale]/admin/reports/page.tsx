@@ -1,38 +1,30 @@
 'use client';
 
 import { useTranslations, useLocale } from 'next-intl';
-import { Link } from '@/i18n/routing';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   fetchAdminReport,
   fetchAdminTransactions,
   fetchAdminOrder,
-  fetchLineTargets,
   reportExportUrl,
-  sendLineReport,
-  unbindLineTarget,
-  updateMenuItem,
-  type LineConfigStatus,
-  type LineSendOutcome,
-  type LineTargetRow,
   type ReportItemStat,
   type ReportPayload,
   type ReportRange,
   type TrendGrain,
 } from '@/lib/api-client';
 import { pickCategory } from '@/lib/report-category';
-
-type Segment =
-  | 'overview'
-  | 'trend'
-  | 'top'
-  | 'structure'
-  | 'margin'
-  | 'export'
-  | 'line'
-  | 'transaction';
-type TopSort = 'qty' | 'revenue' | 'profit';
-type MarginFilter = 'all' | 'below' | 'noCost' | 'top';
+import {
+  ResponsiveContainer,
+  LineChart,
+  BarChart,
+  Line,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+} from 'recharts';
 
 const RANGES: ReportRange[] = ['today', 'week', 'month', 'custom'];
 const GRAINS: TrendGrain[] = ['day', 'week', 'month'];
@@ -47,20 +39,6 @@ const GRAIN_LABEL_KEY: Record<TrendGrain, string> = {
   week: 'adminReports.grainWeek',
   month: 'adminReports.grainMonth',
 };
-/**
- * 枚举值 → 当前页面语言的「人话」。
- * 缺 key 时原样返回枚举值 —— 新增枚举值不该让报表页崩或显示 `enumLabel.xxx`。
- */
-function enumText(
-  t: (key: string) => string,
-  ns: 'orderStatus' | 'payMethod' | 'orderType',
-  v?: string | null,
-): string {
-  if (!v) return '—';
-  const key = `enumLabel.${ns}.${v}`;
-  const has = (t as unknown as { has?: (k: string) => boolean }).has;
-  return typeof has === 'function' && has(key) ? t(key) : v;
-}
 
 function money(n: number): string {
   return `฿${Math.round(n).toLocaleString('en-US')}`;
@@ -72,21 +50,35 @@ function pctText(r: number | null): string {
   return r == null ? '—' : `${(r * 100).toFixed(1)}%`;
 }
 
-const TX_METHOD_I18N: Record<string, string> = {
-  PROMPTPAY: 'payment.promptpay',
-  TRUEMONEY: 'payment.truemoney',
-  BANK_TRANSFER: 'payment.bankTransfer',
-  CREDIT_CARD: 'payment.creditCard',
-  ALIPAY: 'payment.alipay',
-  WECHAT_PAY: 'payment.wechatPay',
-  CASH: 'payment.cash',
-};
-const TX_STATUS_COLOR: Record<string, string> = {
-  RECORDED: 'bg-success-100 text-success-600',
-  SUCCESSFUL: 'bg-success-100 text-success-600',
-  PENDING: 'bg-warning-100 text-warning-600',
-  REFUNDED: 'bg-error-100 text-error-600',
-};
+// ---------- 可选指标定义 ----------
+
+interface MetricDef {
+  key: string;
+  labelKey: string;
+  color: string;
+  /** 从 overview 取值（用于 KPI 卡片） */
+  getValue: (o: ReportPayload['overview']) => number | null;
+  /** 从 TrendPoint 取值（用于趋势图） */
+  getTrend: (p: ReportPayload['trend'][number]) => number;
+  formatter: (n: number) => string;
+}
+
+const METRICS: MetricDef[] = [
+  { key: 'revenue', labelKey: 'adminReports.totalRevenue', color: '#185FA5', getValue: (o) => o.totalRevenue, getTrend: (p) => p.revenue, formatter: money },
+  { key: 'orders', labelKey: 'adminReports.orderCount', color: '#0F6E56', getValue: (o) => o.orderCount, getTrend: (p) => p.orders, formatter: (n) => String(n) },
+  { key: 'grossProfit', labelKey: 'adminReports.grossProfit', color: '#639922', getValue: (o) => o.grossProfit, getTrend: (p) => p.profit, formatter: money },
+  { key: 'avgTicket', labelKey: 'adminReports.avgTicket', color: '#D85A30', getValue: (o) => o.avgTicket, getTrend: () => 0, formatter: money },
+];
+
+const GROUP_OPTIONS = [
+  { key: 'time', labelKey: 'adminReports.groupByTime' },
+  { key: 'item', labelKey: 'adminReports.groupByItem' },
+  { key: 'payment', labelKey: 'adminReports.groupByPayment' },
+  { key: 'pond', labelKey: 'adminReports.groupByPond' },
+  { key: 'orderType', labelKey: 'adminReports.groupByOrderType' },
+] as const;
+
+type GroupKey = typeof GROUP_OPTIONS[number]['key'];
 
 interface LedgerProps {
   t: (key: string) => string;
@@ -114,17 +106,19 @@ interface LedgerProps {
   itemName: (it: any) => string;
 }
 
+const TX_METHOD_I18N: Record<string, string> = {
+  PROMPTPAY: 'payment.promptpay',
+  TRUEMONEY: 'payment.truemoney',
+  BANK_TRANSFER: 'payment.bankTransfer',
+  CREDIT_CARD: 'payment.creditCard',
+  ALIPAY: 'payment.alipay',
+  WECHAT_PAY: 'payment.wechatPay',
+  CASH: 'payment.cash',
+};
+
 function TransactionLedger(props: LedgerProps) {
   const { t, txData, txLoading, txError, txStart, txEnd, onFilter, onRetry, onOpenDetail, detailOrder, detailLoading, onCloseDetail, itemName } = props;
-
   const transactions = txData?.transactions || [];
-  const totalRevenue = txData?.totalRevenue || 0;
-  const bookingRevenue = txData?.bookingRevenue || 0;
-  const orderRevenue = txData?.orderRevenue || 0;
-  const transactionCount = txData?.transactionCount || 0;
-
-  // 按日期过滤（前端二次过滤，与 KPI 卡片一致口径）
-  // 落日用曼谷 +7h（旧版直接切 ISO 字符串是 UTC 日界，凌晨 7 小时收款会划错天）
   const bkkDay = (iso: string) => {
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return '';
@@ -136,16 +130,9 @@ function TransactionLedger(props: LedgerProps) {
     if (txEnd && txDate > txEnd) return false;
     return true;
   });
-  // 服务端只回有效流水（作废已排除），状态统一 RECORDED；全部计入
-  const successCount = filtered.length;
-  const methodRevenue: Record<string, number> = {};
-  filtered.forEach((tx: any) => {
-    methodRevenue[tx.method] = (methodRevenue[tx.method] || 0) + tx.amount;
-  });
 
   return (
     <>
-      {/* 日期过滤 */}
       <div className="mb-4 flex gap-2">
         <div className="flex-1">
           <label className="mb-1 block text-xs text-neutral-500">{t('admin.startDate')}</label>
@@ -171,109 +158,37 @@ function TransactionLedger(props: LedgerProps) {
           <button onClick={onRetry} className="mt-3 rounded-lg bg-primary-700 px-4 py-2 text-xs font-medium text-white">{t('common.retry')}</button>
         </div>
       ) : (
-        <>
-          {/* KPI 卡片 */}
-          <div className="mb-4 grid grid-cols-2 gap-3">
-            <div className="rounded-xl bg-success-50 p-4">
-              <p className="text-xs text-success-600 opacity-70">{t('admin.totalRevenue')}</p>
-              <p className="mt-1 text-2xl font-bold text-success-700">฿{totalRevenue.toLocaleString()}</p>
-            </div>
-            <div className="rounded-xl bg-primary-50 p-4">
-              <p className="text-xs text-primary-600 opacity-70">{t('admin.totalOrders')}</p>
-              <p className="mt-1 text-2xl font-bold text-primary-700">{successCount}/{transactionCount}</p>
-            </div>
-            <div className="rounded-xl bg-accent-50 p-4">
-              <p className="text-xs text-accent-600 opacity-70">{t('adminReports.bookingExpected')}</p>
-              <p className="mt-1 text-xl font-bold text-accent-700">฿{bookingRevenue.toLocaleString()}</p>
-            </div>
-            <div className="rounded-xl bg-neutral-100 p-4">
-              <p className="text-xs text-neutral-600 opacity-70">{t('menu.food')} &amp; {t('menu.drinks')}</p>
-              <p className="mt-1 text-xl font-bold text-neutral-700">฿{orderRevenue.toLocaleString()}</p>
-            </div>
-          </div>
-
-          {/* 按支付方式 */}
-          <div className="mb-4 rounded-xl bg-white p-4 shadow-md">
-            <h3 className="mb-3 font-semibold text-neutral-900">{t('admin.revenueByMethod')}</h3>
-            {Object.keys(methodRevenue).length === 0 ? (
-              <p className="text-sm text-neutral-400">{t('common.noData')}</p>
-            ) : (
-              <div className="space-y-2">
-                {Object.entries(methodRevenue).map(([method, amount]) => (
-                  <div key={method} className="flex items-center justify-between rounded-lg bg-neutral-50 px-3 py-2">
-                    <span className="text-sm font-medium text-neutral-700">{t(TX_METHOD_I18N[method] || method)}</span>
-                    <span className="text-sm font-bold text-neutral-900">฿{amount.toLocaleString()}</span>
-                  </div>
-                ))}
+        <div className="space-y-2">
+          {filtered.length === 0 ? (
+            <p className="py-4 text-center text-sm text-neutral-400">{t('common.noData')}</p>
+          ) : (
+            filtered.map((tx: any) => (
+              <div key={tx.id} className="flex items-center justify-between rounded-lg bg-neutral-50 px-3 py-2">
+                <button
+                  onClick={() => tx.orderId
+                    ? onOpenDetail(tx.orderId, { orderNumber: tx.orderNumber, customerName: tx.customerName, amount: tx.amount, method: tx.method, status: tx.status, paidAt: tx.paidAt })
+                    : undefined}
+                  className="min-w-0 flex-1 text-left"
+                >
+                  <p className="text-sm font-medium text-neutral-900">{tx.orderNumber || tx.orderId || tx.id}</p>
+                  <p className="text-xs text-neutral-500">{(tx.paidAt || '').slice(0, 10)} | {t(TX_METHOD_I18N[tx.method] || tx.method)}</p>
+                </button>
+                <div className="ml-2 shrink-0 text-right">
+                  <p className="text-sm font-bold text-neutral-900">฿{tx.amount?.toLocaleString()}</p>
+                </div>
               </div>
-            )}
-          </div>
-
-          {/* 流水明细（订单号可点 → 详情） */}
-          <div className="rounded-xl bg-white p-4 shadow-md">
-            <div className="mb-2 flex items-center justify-between">
-              <h3 className="font-semibold text-neutral-900">{t('admin.recentOrders')}</h3>
-              <span className="text-[11px] text-neutral-400">{t('adminReports.viewDetail')}</span>
-            </div>
-            {filtered.length === 0 ? (
-              <p className="py-4 text-center text-sm text-neutral-400">{t('common.noData')}</p>
-            ) : (
-              <div className="space-y-2">
-                {filtered.map((tx: any) => (
-                  <div key={tx.id} className="flex items-center justify-between rounded-lg bg-neutral-50 px-3 py-2">
-                    <button
-                      onClick={() =>
-                        tx.orderId
-                          ? onOpenDetail(tx.orderId, {
-                              orderNumber: tx.orderNumber,
-                              customerName: tx.customerName,
-                              amount: tx.amount,
-                              method: tx.method,
-                              status: tx.status,
-                              paidAt: tx.paidAt,
-                            })
-                          : undefined
-                      }
-                      className={
-                        tx.orderId
-                          ? 'min-w-0 flex-1 text-left'
-                          : 'min-w-0 flex-1 text-left cursor-default'
-                      }
-                    >
-                      <p className="text-sm font-medium text-neutral-900">
-                        {tx.orderNumber || tx.orderId || tx.id}{' '}
-                        <span className="text-neutral-400">—</span> {tx.customerName || '—'}
-                      </p>
-                      <p className="text-xs text-neutral-500">
-                        {(tx.paidAt || '').slice(0, 10)} | {t(TX_METHOD_I18N[tx.method] || tx.method)}
-                      </p>
-                    </button>
-                    <div className="ml-2 shrink-0 text-right">
-                      <p className="text-sm font-bold text-neutral-900">฿{tx.amount?.toLocaleString()}</p>
-                      <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${TX_STATUS_COLOR[tx.status] || 'bg-neutral-100 text-neutral-600'}`}>
-                        {tx.status === 'RECORDED' || tx.status === 'SUCCESSFUL' ? t('orders.successful') : tx.status === 'PENDING' ? t('orders.pending') : t('orders.refunded')}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </>
+            ))
+          )}
+        </div>
       )}
 
-      {/* 订单详情 Sheet（点订单号弹出） */}
       {detailOrder && (
         <div className="fixed inset-0 z-50 flex items-end bg-black/30" onClick={onCloseDetail}>
-          <div
-            className="max-h-[80vh] w-full overflow-auto rounded-t-2xl bg-white p-5"
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div className="max-h-[80vh] w-full overflow-auto rounded-t-2xl bg-white p-5" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <div className="text-sm font-bold text-neutral-900">{t('adminReports.orderDetailTitle')}</div>
               <button onClick={onCloseDetail} className="rounded-lg px-2 py-1 text-sm text-neutral-400">✕</button>
             </div>
-
             {detailLoading ? (
               <div className="py-10 text-center text-sm text-neutral-400">{t('common.loading')}</div>
             ) : (
@@ -286,19 +201,10 @@ function TransactionLedger(props: LedgerProps) {
   );
 }
 
-function OrderDetailCard({
-  order,
-  t,
-  itemName,
-}: {
-  order: any;
-  t: (key: string) => string;
-  itemName: (it: any) => string;
-}) {
+function OrderDetailCard({ order, t, itemName: _itemName }: { order: any; t: (key: string) => string; itemName: (it: any) => string }) {
   if (!order) return null;
-  const o = order?.order ?? order; // 兼容 {order:...} 包装
+  const o = order?.order ?? order;
   const items: any[] = o?.items || [];
-  const weighings: any[] = o?.weighings || [];
   const payments: any[] = o?.paymentRecords || [o?.payment].filter(Boolean) || [];
   const prepaid = o?.prepaidAmount || 0;
   const total = o?.totalPrice || 0;
@@ -306,61 +212,30 @@ function OrderDetailCard({
 
   return (
     <div className="space-y-4 text-sm">
-      {/* 抬头 */}
       <div className="flex items-center justify-between">
         <div>
-          <div className="font-bold text-neutral-900">{o?.orderNumber || order?.orderNumber || '—'}</div>
-          <div className="text-xs text-neutral-500">{o?.customerName || order?.customerName || '—'}</div>
+          <div className="font-bold text-neutral-900">{o?.orderNumber || '—'}</div>
+          <div className="text-xs text-neutral-500">{o?.customerName || '—'}</div>
         </div>
         <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${o?.status === 'SETTLED' ? 'bg-success-100 text-success-600' : o?.status === 'CANCELLED' ? 'bg-error-100 text-error-600' : 'bg-warning-100 text-warning-600'}`}>
-          {enumText(t, 'orderStatus', o?.status)}
+          {o?.status}
         </span>
       </div>
-
-      {/* 桌号 */}
-      {(o?.table?.code || o?.table) && (
-        <div className="flex justify-between rounded-lg bg-neutral-50 px-3 py-2 text-xs">
-          <span className="text-neutral-500">{t('adminReports.orderTable')}</span>
-          <b>{o.table?.code || String(o.table)}</b>
-        </div>
-      )}
-
-      {/* 菜品 */}
       {items.length > 0 && (
         <div>
           <div className="mb-1 text-xs font-semibold text-neutral-500">{t('adminReports.orderItems')}</div>
           <div className="space-y-1">
             {items.map((it: any, i: number) => (
               <div key={i} className="flex justify-between text-xs">
-                <span className="text-neutral-700">{itemName(it?.menuItem) || it?.name || '—'} × {it?.quantity}</span>
+                <span className="text-neutral-700">{it?.menuItem?.name_zh || it?.name || '—'} × {it?.quantity}</span>
                 <span className="text-neutral-900">฿{(it?.totalPrice ?? 0).toLocaleString()}</span>
               </div>
             ))}
           </div>
         </div>
       )}
-
-      {/* 称重 */}
-      {weighings.length > 0 && (
-        <div>
-          <div className="mb-1 text-xs font-semibold text-neutral-500">{t('adminReports.orderWeighing')}</div>
-          <div className="space-y-1">
-            {weighings.map((w: any, i: number) => (
-              <div key={i} className="flex justify-between text-xs">
-                <span className="text-neutral-700">{w?.weightKg ?? w?.fishTier}kg</span>
-                <span className="text-neutral-900">฿{(w?.amount ?? w?.total ?? 0).toLocaleString()}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* 金额汇总 */}
       <div className="space-y-1 rounded-lg bg-neutral-50 p-3 text-xs">
         <div className="flex justify-between"><span className="text-neutral-500">{t('adminOrders.subtotal')}</span><span>฿{(o?.subtotal ?? 0).toLocaleString()}</span></div>
-        {(o?.fishCharge || 0) > 0 && (
-          <div className="flex justify-between"><span className="text-neutral-500">{t('adminOrders.fishCharge')}</span><span>฿{(o?.fishCharge ?? 0).toLocaleString()}</span></div>
-        )}
         {prepaid > 0 && (
           <div className="flex justify-between"><span className="text-success-600">{t('adminOrders.prepaid')}</span><span className="text-success-600">−฿{prepaid.toLocaleString()}</span></div>
         )}
@@ -368,132 +243,65 @@ function OrderDetailCard({
           <span>{t('payment.total')}</span><span>฿{needPay.toLocaleString()}</span>
         </div>
       </div>
-
-      {/* 收款记录 */}
       {payments.length > 0 && (
         <div>
           <div className="mb-1 text-xs font-semibold text-neutral-500">{t('adminReports.orderPayment')}</div>
           <div className="space-y-1">
             {payments.map((p: any, i: number) => (
               <div key={i} className="flex justify-between text-xs text-neutral-600">
-                <span>{enumText(t, 'payMethod', p?.method)} {p?.voidedAt ? `· ${t('adminReports.voided')}` : ''}</span>
+                <span>{p?.method} {p?.voidedAt ? '· 作废' : ''}</span>
                 <span>฿{(p?.amount ?? 0).toLocaleString()}</span>
               </div>
             ))}
           </div>
         </div>
       )}
-
-      {order?._failed && (
-        <p className="text-xs text-error-500">⚠ {t('common.error')}</p>
-      )}
     </div>
   );
+}
+
+function enumText2(t: (key: string) => string, method: string): string {
+  const key = TX_METHOD_I18N[method];
+  if (!key) return method;
+  try {
+    return t(key);
+  } catch {
+    return method;
+  }
 }
 
 export default function AdminReportsPage() {
   const t = useTranslations();
   const locale = useLocale();
 
-  const [segment, setSegment] = useState<Segment>('overview');
   const [range, setRange] = useState<ReportRange>('today');
-  const [grain, setGrain] = useState<TrendGrain>('day');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
+  const [grain, setGrain] = useState<TrendGrain>('day');
+  const [selected, setSelected] = useState<string[]>(['revenue', 'orders', 'avgTicket']);
+  const [groupBy, setGroupBy] = useState<GroupKey>('time');
 
   const [data, setData] = useState<ReportPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const [topSort, setTopSort] = useState<TopSort>('qty');
-  const [marginFilter, setMarginFilter] = useState<MarginFilter>('all');
-
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [costInput, setCostInput] = useState('');
-  const [marginInput, setMarginInput] = useState('');
-  const [saving, setSaving] = useState(false);
-
-  const [exportContent, setExportContent] = useState<string[]>([
-    'summary',
-    'items',
-  ]);
-  const [exportFormat, setExportFormat] = useState<'xlsx' | 'csv'>('xlsx');
-
-  // LINE 日报
-  const [lineTargets, setLineTargets] = useState<LineTargetRow[]>([]);
-  const [lineConfig, setLineConfig] = useState<LineConfigStatus | null>(null);
-  const [lineBusy, setLineBusy] = useState(false);
-  const [lineResult, setLineResult] = useState<LineSendOutcome | null>(null);
-
-  // 收款流水（并入本段）
+  const [showLedger, setShowLedger] = useState(false);
   const [txData, setTxData] = useState<any>(null);
   const [txLoading, setTxLoading] = useState(false);
   const [txError, setTxError] = useState('');
   const [txStart, setTxStart] = useState('');
   const [txEnd, setTxEnd] = useState('');
-  // 订单详情弹窗（点订单号查看）
   const [detailOrder, setDetailOrder] = useState<any>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
-  const loadTransactions = useCallback(async () => {
-    setTxLoading(true);
-    setTxError('');
-    try {
-      const params: { startDate?: string; endDate?: string } = {};
-      if (txStart) params.startDate = txStart;
-      if (txEnd) params.endDate = txEnd;
-      const res = await fetchAdminTransactions(params);
-      setTxData(res);
-    } catch (err: any) {
-      setTxError(err?.message || t('common.error'));
-    } finally {
-      setTxLoading(false);
-    }
-  }, [txStart, txEnd, t]);
-
-  useEffect(() => {
-    if (segment === 'transaction' && !txData) loadTransactions();
-  }, [segment, txData, loadTransactions]);
-
-  const openOrderDetail = useCallback(
-    async (orderId: string, fallback: { orderNumber?: string; customerName?: string; amount?: number; method?: string; status?: string; paidAt?: string }) => {
-      setDetailLoading(true);
-      // 先用流水行数据占位，接口返回后覆盖为完整详情
-      setDetailOrder({ ...fallback, _loading: true });
-      try {
-        const o = await fetchAdminOrder(orderId);
-        setDetailOrder(o?.order ?? o ?? { ...fallback });
-      } catch {
-        setDetailOrder({ ...fallback, _failed: true });
-      } finally {
-        setDetailLoading(false);
-      }
-    },
-    [],
-  );
-
-  const loadLine = useCallback(async () => {
-    try {
-      const res = await fetchLineTargets();
-      setLineTargets(res.targets ?? []);
-      setLineConfig(res.configured);
-    } catch {
-      // 未配置时接口也可能直接失败，静默处理
-    }
-  }, []);
-
-  useEffect(() => {
-    loadLine();
-  }, [loadLine]);
+  const itemName = (it: any) =>
+    locale === 'en' ? it?.name_en : locale === 'th' ? it?.name_th : it?.name_zh;
 
   const load = useCallback(async () => {
     if (range === 'custom' && (!customFrom || !customTo)) {
-      setData(null);
-      setLoading(false);
-      return;
+      setData(null); setLoading(false); return;
     }
-    setLoading(true);
-    setError('');
+    setLoading(true); setError('');
     try {
       const res = await fetchAdminReport({
         range,
@@ -509,170 +317,82 @@ export default function AdminReportsPage() {
     }
   }, [range, grain, customFrom, customTo, t]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useEffect(() => { load(); }, [load]);
 
-  const itemName = (it: { name_zh: string; name_en: string; name_th: string }) =>
-    locale === 'en' ? it.name_en : locale === 'th' ? it.name_th : it.name_zh;
-
-  const groupedByCategory = useMemo(() => {
-    if (!data) return [] as { name: string; revenue: number }[];
-    const map = new Map<string, number>();
-    for (const it of data.topItems) {
-      // 分类名按页面语言取（SQL 已带 name_en / name_th）
-      const name = pickCategory(it, locale);
-      map.set(name, (map.get(name) ?? 0) + it.revenue);
-    }
-    return [...map.entries()]
-      .map(([name, revenue]) => ({ name, revenue }))
-      .sort((a, b) => b.revenue - a.revenue);
-  }, [data, locale]);
-
-  const marginRows = useMemo(() => {
-    if (!data) return [] as ReportItemStat[];
-    const list = data.margins;
-    if (marginFilter === 'below')
-      return list.filter((m) => m.marginRate != null && m.belowTarget);
-    if (marginFilter === 'noCost') return list.filter((m) => m.costPrice == null);
-    if (marginFilter === 'top')
-      return [...list]
-        .filter((m) => m.marginRate != null)
-        .sort((a, b) => (b.marginRate ?? 0) - (a.marginRate ?? 0));
-    return list;
-  }, [data, marginFilter]);
-
-  const sortedTop = useMemo(() => {
-    if (!data) return [] as ReportItemStat[];
-    const list = data.topItems.filter((i) => i.qty > 0);
-    if (topSort === 'qty') return [...list].sort((a, b) => b.qty - a.qty);
-    if (topSort === 'profit')
-      return [...list].sort((a, b) => (b.profit ?? -Infinity) - (a.profit ?? -Infinity));
-    return [...list].sort((a, b) => b.revenue - a.revenue);
-  }, [data, topSort]);
-
-  const startEdit = (m: ReportItemStat) => {
-    setEditingId(m.id);
-    setCostInput(m.costPrice == null ? '' : String(m.costPrice));
-    setMarginInput(
-      m.targetMargin == null ? '' : String(Math.round(m.targetMargin * 100)),
-    );
-  };
-
-  const saveCost = async (id: string) => {
-    setSaving(true);
+  const loadTransactions = useCallback(async () => {
+    setTxLoading(true); setTxError('');
     try {
-      await updateMenuItem(id, {
-        costPrice: costInput === '' ? null : Number(costInput),
-        targetMargin: marginInput === '' ? null : Number(marginInput) / 100,
-      });
-      setEditingId(null);
-      await load();
+      const params: { startDate?: string; endDate?: string } = {};
+      if (txStart) params.startDate = txStart;
+      if (txEnd) params.endDate = txEnd;
+      setTxData(await fetchAdminTransactions(params));
     } catch (err: any) {
-      setError(err?.message || t('common.error'));
+      setTxError(err?.message || t('common.error'));
     } finally {
-      setSaving(false);
+      setTxLoading(false);
     }
-  };
+  }, [txStart, txEnd, t]);
 
-  // ---------- LINE 日报 ----------
-  const sendLine = async (mode: 'demo' | 'real') => {
-    setLineBusy(true);
-    setLineResult(null);
+  const openOrderDetail = useCallback(async (orderId: string, fallback: any) => {
+    setDetailLoading(true);
+    setDetailOrder({ ...fallback, _loading: true });
     try {
-      const res = await sendLineReport({ mode, locale: locale as 'zh' | 'th' | 'en' });
-      setLineResult(res);
-      await loadLine();
-    } catch (err: any) {
-      setLineResult({
-        ok: false,
-        reason: 'no_token',
-        message: err?.message || t('common.error'),
-        demo: mode === 'demo',
-        locale: locale,
-        date: '',
-        total: 0,
-        sent: 0,
-        failed: 0,
-        results: [],
-        preview: '',
-      });
+      const o = await fetchAdminOrder(orderId);
+      setDetailOrder(o?.order ?? o ?? { ...fallback });
+    } catch {
+      setDetailOrder({ ...fallback, _failed: true });
     } finally {
-      setLineBusy(false);
+      setDetailLoading(false);
     }
-  };
+  }, []);
 
-  const removeLineTarget = async (id: string) => {
-    setLineBusy(true);
-    try {
-      await unbindLineTarget(id);
-      await loadLine();
-    } catch (err: any) {
-      setError(err?.message || t('common.error'));
-    } finally {
-      setLineBusy(false);
-    }
-  };
+  const toggleMetric = (key: string) =>
+    setSelected((p) => p.includes(key) ? p.filter((k) => k !== key) : [...p, key]);
 
-  // ---------- derived ----------
   const o = data?.overview;
   const trend = data?.trend ?? [];
-  const trendMax = Math.max(1, ...trend.map((p) => p.revenue));
-  const hourly = data?.structure.hourly ?? [];
-  const hourlyMax = Math.max(1, ...hourly.map((h) => h.orders));
+  const selectedDefs = METRICS.filter((m) => selected.includes(m.key));
 
-  const segBtn = (active: boolean) =>
-    `flex-1 rounded-lg px-2 py-2 text-xs font-medium transition ${
-      active ? 'bg-white text-primary-700 shadow-sm' : 'text-neutral-500'
-    }`;
+  const chartData = useMemo(() => {
+    if (!trend.length) return [];
+    return trend.map((p) => {
+      const row: any = { key: p.key.slice(5) || p.key };
+      selectedDefs.forEach((m) => { row[m.key] = Math.round(m.getTrend(p) * 100) / 100; });
+      return row;
+    });
+  }, [trend, selectedDefs]);
+
+  const tableRows = useMemo(() => {
+    if (!data) return [];
+    if (groupBy === 'item')
+      return data.topItems.slice(0, 20).map((it) => ({ key: it.id, label: itemName(it), values: [String(it.qty), money(it.revenue)], amount: it.revenue }));
+    if (groupBy === 'payment')
+      return data.structure.payments.map((p) => ({ key: p.method, label: enumText2(t, p.method), values: [String(p.count), money(p.amount)], amount: p.amount }));
+    if (groupBy === 'pond')
+      return data.structure.ponds.map((p) => ({ key: p.type, label: itemName(p), values: [String(p.bookings), money(p.revenue)], amount: p.revenue }));
+    if (groupBy === 'orderType')
+      return data.structure.orderTypes.map((ot) => ({ key: ot.type, label: ot.type === 'TAKEAWAY' ? t('orderType.takeaway') : t('orderType.dineIn'), values: [String(ot.orders), money(ot.revenue)], amount: ot.revenue }));
+    return trend.map((p) => ({ key: p.key, label: p.key.slice(5) || p.key, values: selectedDefs.map((m) => m.formatter(m.getTrend(p))), amount: p.revenue }));
+  }, [data, groupBy, selectedDefs, locale, t, trend]);
 
   return (
     <>
       {error && (
         <div className="mb-4 rounded-xl bg-error-50 px-4 py-2 text-sm text-error-600">
           {error}
-          <button onClick={load} className="ml-2 underline">
-            {t('common.retry')}
-          </button>
+          <button onClick={load} className="ml-2 underline">{t('common.retry')}</button>
         </div>
       )}
 
-      {/* Segment nav */}
-      <div className="mb-3 flex gap-1 overflow-x-auto rounded-xl bg-neutral-100 p-1">
-        {(
-          [
-            ['overview', 'adminReports.segOverview'],
-            ['trend', 'adminReports.segTrend'],
-            ['top', 'adminReports.segTop'],
-            ['structure', 'adminReports.segStructure'],
-            ['margin', 'adminReports.segMargin'],
-            ['export', 'adminReports.segExport'],
-            ['line', 'adminReports.segLine'],
-            ['transaction', 'adminReports.segTransaction'],
-          ] as [Segment, string][]
-        ).map(([key, labelKey]) => (
-          <button
-            key={key}
-            onClick={() => setSegment(key)}
-            className={`shrink-0 rounded-lg px-3 py-2 text-xs font-medium transition ${
-              segment === key
-                ? 'bg-white text-primary-700 shadow-sm'
-                : 'text-neutral-500'
-            }`}
-          >
-            {t(labelKey)}
-          </button>
-        ))}
+      <div className="mb-3">
+        <h2 className="text-base font-bold text-neutral-900">📊 {t('adminReports.pageTitle')}</h2>
+        <p className="mt-0.5 text-xs text-neutral-500">{t('adminReports.pageSubtitle')}</p>
       </div>
 
-      {/* Range picker */}
-      <div className="mb-4 flex rounded-xl bg-neutral-100 p-1">
+      <div className="mb-3 flex flex-wrap gap-1 rounded-xl bg-neutral-100 p-1">
         {RANGES.map((r) => (
-          <button
-            key={r}
-            onClick={() => setRange(r)}
-            className={segBtn(range === r)}
-          >
+          <button key={r} onClick={() => setRange(r)}
+            className={`flex-1 rounded-lg px-2 py-2 text-xs font-medium transition ${range === r ? 'bg-white text-primary-700 shadow-sm' : 'text-neutral-500'}`}>
             {t(RANGE_LABEL_KEY[r])}
           </button>
         ))}
@@ -680,1014 +400,156 @@ export default function AdminReportsPage() {
 
       {range === 'custom' && (
         <div className="mb-4 flex items-center gap-2">
-          <input
-            type="date"
-            value={customFrom}
-            onChange={(e) => setCustomFrom(e.target.value)}
-            className="flex-1 rounded-xl border border-neutral-200 px-3 py-2 text-sm"
-          />
+          <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} className="flex-1 rounded-xl border border-neutral-200 px-3 py-2 text-sm" />
           <span className="text-xs text-neutral-400">→</span>
-          <input
-            type="date"
-            value={customTo}
-            onChange={(e) => setCustomTo(e.target.value)}
-            className="flex-1 rounded-xl border border-neutral-200 px-3 py-2 text-sm"
-          />
+          <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} className="flex-1 rounded-xl border border-neutral-200 px-3 py-2 text-sm" />
         </div>
       )}
 
-      {segment === 'transaction' ? (
-        <TransactionLedger
-          t={t}
-          txData={txData}
-          txLoading={txLoading}
-          txError={txError}
-          txStart={txStart}
-          txEnd={txEnd}
-          onFilter={(s, e) => { setTxStart(s); setTxEnd(e); }}
-          onRetry={loadTransactions}
-          onOpenDetail={openOrderDetail}
-          detailOrder={detailOrder}
-          detailLoading={detailLoading}
-          onCloseDetail={() => setDetailOrder(null)}
-          itemName={(it: any) =>
-            locale === 'en' ? it?.name_en : locale === 'th' ? it?.name_th : it?.name_zh}
-        />
-      ) : loading ? (
-        <div className="py-20 text-center text-sm text-neutral-400">
-          {t('common.loading')}
-        </div>
-      ) : !data || !o ? (
-        <div className="py-16 text-center text-sm text-neutral-400">
-          {range === 'custom'
-            ? t('adminReports.pickCustomRange')
-            : t('common.noData')}
-        </div>
-      ) : (
-        <>
-          {/* ============ OVERVIEW ============ */}
-          {segment === 'overview' && (
-            <>
-              <div className="mb-3 rounded-2xl bg-gradient-to-br from-primary-700 to-primary-900 px-5 py-4 text-white shadow-md">
-                <div className="text-xs opacity-80">
-                  {t('adminReports.totalRevenue')} · {o.period.fromDate}
-                  {o.period.fromDate !== o.period.toDate &&
-                    ` → ${o.period.toDate}`}
-                </div>
-                <div className="mt-1 text-3xl font-bold">
-                  {money(o.totalRevenue)}
-                </div>
-                <div className="mt-1 text-xs">
-                  {t('adminReports.vsPrev')}{' '}
-                  {o.deltas.totalRevenue == null ? (
-                    <span className="opacity-70">{t('adminReports.noPrev')}</span>
-                  ) : (
-                    <b
-                      className={
-                        o.deltas.totalRevenue >= 0
-                          ? 'text-green-300'
-                          : 'text-red-300'
-                      }
-                    >
-                      {o.deltas.totalRevenue >= 0 ? '↑' : '↓'}{' '}
-                      {(Math.abs(o.deltas.totalRevenue) * 100).toFixed(1)}%
-                    </b>
-                  )}
-                </div>
-              </div>
+      <div className="grid gap-4 lg:grid-cols-[300px_1fr]">
+        <div className="space-y-4">
+          <div className="rounded-xl bg-white p-4 shadow-sm">
+            <p className="mb-3 text-sm font-bold text-neutral-700">{t('adminReports.pickMetrics')}</p>
+            <div className="space-y-2">
+              {METRICS.map((m) => {
+                const on = selected.includes(m.key);
+                return (
+                  <label key={m.key} className="flex cursor-pointer items-center gap-2 text-sm" onClick={() => toggleMetric(m.key)}>
+                    <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border text-[10px] ${on ? 'border-primary-700 bg-primary-700 text-white' : 'border-neutral-300 bg-white text-transparent'}`}>✓</span>
+                    <span className={on ? 'text-neutral-900' : 'text-neutral-500'}>{t(m.labelKey)}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
 
-              <div className="mb-3 grid grid-cols-2 gap-2">
-                <div className="rounded-xl bg-white p-3 shadow-sm">
-                  <div className="text-xs text-neutral-500">
-                    🍽️ {t('adminReports.orderRevenue')}
-                  </div>
-                  <div className="mt-0.5 text-lg font-bold text-neutral-900">
-                    {money(o.orderRevenue)}
-                  </div>
-                </div>
-                <div className="rounded-xl bg-white p-3 shadow-sm">
-                  <div className="text-xs text-neutral-500">
-                    🎣 {t('adminReports.bookingExpected')}
-                  </div>
-                  <div className="mt-0.5 text-lg font-bold text-neutral-900">
-                    {money(o.bookingRevenue)}
-                  </div>
-                </div>
-              </div>
-
-              <div className="mb-4 grid grid-cols-3 gap-2">
-                <div className="rounded-xl bg-white p-3 text-center shadow-sm">
-                  <div className="text-xl font-bold text-neutral-900">
-                    {o.orderCount}
-                  </div>
-                  <div className="mt-0.5 text-xs text-neutral-500">
-                    {t('adminReports.orderCount')}
-                  </div>
-                </div>
-                <div className="rounded-xl bg-white p-3 text-center shadow-sm">
-                  <div className="text-xl font-bold text-neutral-900">
-                    {money(o.avgTicket)}
-                  </div>
-                  <div className="mt-0.5 text-xs text-neutral-500">
-                    {t('adminReports.avgTicket')}
-                  </div>
-                </div>
-                <div className="rounded-xl bg-white p-3 text-center shadow-sm">
-                  <div className="text-xl font-bold text-success-600">
-                    {pctText(o.marginRate)}
-                  </div>
-                  <div className="mt-0.5 text-xs text-neutral-500">
-                    {t('adminReports.marginRate')}
-                  </div>
-                </div>
-              </div>
-
-              <div className="mb-2 text-sm font-bold text-neutral-700">
-                {t('adminReports.trendTitle')}
-              </div>
-              <div className="mb-4 flex h-24 items-end gap-1 rounded-xl bg-white p-3 shadow-sm">
-                {trend.map((p) => (
-                  <div
-                    key={p.key}
-                    className="flex flex-1 flex-col items-center justify-end gap-1"
-                    style={{ height: '100%' }}
-                  >
-                    <div
-                      className="w-full rounded-t bg-primary-500"
-                      style={{
-                        height: `${Math.max(3, (p.revenue / trendMax) * 100)}%`,
-                      }}
-                    />
-                    <span className="whitespace-nowrap text-[9px] text-neutral-400">
-                      {p.key.slice(5)}
-                    </span>
-                    <span className="whitespace-nowrap text-[9px] font-medium text-neutral-600">
-                      {money(p.revenue)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-
-              {data.structure.payments.length > 0 && (
-                <>
-                  <div className="mb-2 text-sm font-bold text-neutral-700">
-                    {t('adminReports.paymentTitle')}
-                  </div>
-                  <div className="mb-4 space-y-2 rounded-xl bg-white p-3 shadow-sm">
-                    {data.structure.payments.map((p) => {
-                      const total =
-                        data.structure.payments.reduce(
-                          (s, x) => s + x.amount,
-                          0,
-                        ) || 1;
-                      const share = p.amount / total;
-                      return (
-                        <div key={p.method}>
-                          <div className="mb-1 flex justify-between text-xs text-neutral-600">
-                            <span>{enumText(t, 'payMethod', p.method)}</span>
-                            <b>
-                              {(share * 100).toFixed(0)}% · {money(p.amount)}
-                            </b>
-                          </div>
-                          <div className="h-1.5 w-full overflow-hidden rounded-full bg-neutral-100">
-                            <div
-                              className="h-full rounded-full bg-primary-500"
-                              style={{ width: `${share * 100}%` }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </>
-              )}
-
-              {(o.fishRevenue > 0 || o.discountTotal > 0) && (
-                <div className="mb-3 rounded-xl bg-white p-4 shadow-md">
-                  <p className="mb-2 text-xs font-semibold text-neutral-700">
-                    🐟 {t('adminReports.fishTitle')}
-                  </p>
-                  <div className="space-y-1 text-xs">
-                    <div className="flex justify-between">
-                      <span className="text-neutral-500">{t('adminReports.fishWeight')}</span>
-                      <span className="font-medium">{o.fishWeightKg} kg</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-neutral-500">{t('adminReports.fishRevenue')}</span>
-                      <span className="font-medium text-primary-700">{money2(o.fishRevenue)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-neutral-500">{t('adminReports.discountTotal')}</span>
-                      <span className="font-medium text-error-600">−{money2(o.discountTotal)}</span>
-                    </div>
-                  </div>
-                  <p className="mt-2 text-[11px] leading-relaxed text-neutral-400">
-                    {t('adminReports.fishFootnote')}
-                  </p>
-                </div>
-              )}
-
-              {o.cancelledOrders > 0 && (
-                <div className="mb-3 rounded-xl bg-neutral-100 px-4 py-2 text-xs text-neutral-500">
-                  {t('adminReports.cancelledNote', { n: o.cancelledOrders })}
-                </div>
-              )}
-
-              {o.itemsWithoutCost > 0 && (
-                <button
-                  onClick={() => {
-                    setMarginFilter('noCost');
-                    setSegment('margin');
-                  }}
-                  className="mb-3 w-full rounded-xl bg-accent-50 px-4 py-2.5 text-left text-xs text-accent-600"
-                >
-                  ⚠️ {t('adminReports.noCostHint', { n: o.itemsWithoutCost })}
-                </button>
-              )}
-
-              <button
-                onClick={() => setSegment('export')}
-                className="w-full rounded-xl border border-primary-100 bg-white py-2.5 text-sm font-semibold text-primary-700"
-              >
-                ⬇ {t('adminReports.exportReport')}
-              </button>
-            </>
-          )}
-
-          {/* ============ TREND ============ */}
-          {segment === 'trend' && (
-            <>
-              <div className="mb-3 flex rounded-xl bg-neutral-100 p-1">
-                {GRAINS.map((g) => (
-                  <button
-                    key={g}
-                    onClick={() => setGrain(g)}
-                    className={segBtn(grain === g)}
-                  >
+          <div className="rounded-xl bg-white p-4 shadow-sm">
+            <p className="mb-3 text-sm font-bold text-neutral-700">{t('adminReports.groupBy')}</p>
+            <div className="space-y-2">
+              {GROUP_OPTIONS.map((g) => (
+                <label key={g.key} className="flex cursor-pointer items-center gap-2 text-sm">
+                  <input type="radio" name="groupBy" checked={groupBy === g.key} onChange={() => setGroupBy(g.key)} className="h-4 w-4 accent-primary-700" />
+                  <span className={groupBy === g.key ? 'text-neutral-900' : 'text-neutral-500'}>{t(g.labelKey)}</span>
+                </label>
+              ))}
+            </div>
+            {groupBy === 'time' && (
+              <div className="mt-3 flex rounded-lg bg-neutral-100 p-1">
+                {(['day', 'week', 'month'] as TrendGrain[]).map((g) => (
+                  <button key={g} onClick={() => setGrain(g)} className={`flex-1 rounded-md px-2 py-1.5 text-xs font-medium ${grain === g ? 'bg-white text-primary-700 shadow-sm' : 'text-neutral-500'}`}>
                     {t(GRAIN_LABEL_KEY[g])}
                   </button>
                 ))}
               </div>
+            )}
+          </div>
+        </div>
 
-              <div className="mb-4 grid grid-cols-3 gap-2">
-                <div className="rounded-xl bg-white p-3 text-center shadow-sm">
-                  <div className="text-lg font-bold text-neutral-900">
-                    {money(o.totalRevenue)}
+        <div className="space-y-4">
+          {o && selectedDefs.length > 0 && (
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+              {selectedDefs.map((m) => {
+                const val = m.getValue(o);
+                return (
+                  <div key={m.key} className="rounded-xl bg-white p-3 shadow-sm">
+                    <div className="text-xs text-neutral-500">{t(m.labelKey)}</div>
+                    <div className="mt-1 text-lg font-bold text-neutral-900">{val == null ? '—' : m.formatter(val)}</div>
                   </div>
-                  <div className="mt-0.5 text-xs text-neutral-500">
-                    {t('adminReports.totalRevenue')}
-                  </div>
-                </div>
-                <div className="rounded-xl bg-white p-3 text-center shadow-sm">
-                  <div className="text-lg font-bold text-success-600">
-                    {money(o.grossProfit)}
-                  </div>
-                  <div className="mt-0.5 text-xs text-neutral-500">
-                    {t('adminReports.grossProfit')}
-                  </div>
-                </div>
-                <div className="rounded-xl bg-white p-3 text-center shadow-sm">
-                  <div className="text-lg font-bold text-accent-600">
-                    {pctText(o.marginRate)}
-                  </div>
-                  <div className="mt-0.5 text-xs text-neutral-500">
-                    {t('adminReports.marginRate')}
-                  </div>
-                </div>
-              </div>
-
-              <div className="mb-4 rounded-xl bg-white p-3 shadow-sm">
-                <div className="flex h-32 items-end gap-1">
-                  {trend.map((p) => (
-                    <div
-                      key={p.key}
-                      className="flex flex-1 flex-col items-center justify-end gap-1"
-                      style={{ height: '100%' }}
-                    >
-                      <div
-                        className="w-full rounded-t bg-primary-500"
-                        style={{
-                          height: `${Math.max(3, (p.revenue / trendMax) * 100)}%`,
-                        }}
-                      />
-                      <span className="whitespace-nowrap text-[9px] text-neutral-400">
-                        {p.key.length > 7 ? p.key.slice(5) : p.key}
-                      </span>
-                      <span className="whitespace-nowrap text-[9px] font-medium text-neutral-600">
-                        {money(p.revenue)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                {trend.map((p) => (
-                  <div
-                    key={p.key}
-                    className="flex items-center justify-between rounded-lg bg-white px-3 py-2 text-xs shadow-sm"
-                  >
-                    <span className="text-neutral-500">{p.key}</span>
-                    <span className="flex gap-3">
-                      <b className="text-neutral-900">{money(p.revenue)}</b>
-                      <span className="text-success-600">
-                        {money(p.profit)}
-                      </span>
-                      <span className="text-neutral-400">{p.orders}</span>
-                    </span>
-                  </div>
-                ))}
-              </div>
-
-              <div className="mt-3 rounded-xl bg-primary-50 px-4 py-3 text-xs text-primary-700">
-                {t('adminReports.marginFootnote')}
-                <br />
-                {t('adminReports.wasteCost')}: {money2(o.wasteCost)}
-              </div>
-            </>
+                );
+              })}
+            </div>
           )}
 
-          {/* ============ TOP ITEMS ============ */}
-          {segment === 'top' && (
-            <>
-              <div className="mb-3 flex rounded-xl bg-neutral-100 p-1">
-                {(
-                  [
-                    ['qty', 'adminReports.sortQty'],
-                    ['revenue', 'adminReports.sortRevenue'],
-                    ['profit', 'adminReports.sortProfit'],
-                  ] as [TopSort, string][]
-                ).map(([k, labelKey]) => (
-                  <button
-                    key={k}
-                    onClick={() => setTopSort(k)}
-                    className={segBtn(topSort === k)}
-                  >
-                    {t(labelKey)}
-                  </button>
-                ))}
-              </div>
-
-              {sortedTop.length === 0 ? (
-                <div className="py-14 text-center text-sm text-neutral-400">
-                  {t('common.noData')}
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {sortedTop.map((it, idx) => (
-                    <div
-                      key={it.id}
-                      className="flex items-center gap-3 rounded-lg bg-white p-3 shadow-sm"
-                    >
-                      <span
-                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded text-[11px] font-bold ${
-                          idx < 3
-                            ? 'bg-accent-500 text-white'
-                            : 'bg-primary-50 text-primary-700'
-                        }`}
-                      >
-                        {idx + 1}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm font-semibold text-neutral-900">
-                          {itemName(it)}
-                        </div>
-                        <div className="truncate text-xs text-neutral-500">
-                          {pickCategory(it, locale)}
-                        </div>
-                      </div>
-                      <div className="shrink-0 text-right">
-                        <div className="text-sm font-bold text-primary-700">
-                          {topSort === 'qty'
-                            ? `${it.qty}`
-                            : topSort === 'revenue'
-                              ? money(it.revenue)
-                              : it.profit == null
-                                ? '—'
-                                : money(it.profit)}
-                        </div>
-                        <div className="text-xs text-neutral-500">
-                          {topSort === 'qty'
-                            ? money(it.revenue)
-                            : `${it.qty} ×`}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {groupedByCategory.length > 0 && (
-                <>
-                  <div className="mb-2 mt-5 text-sm font-bold text-neutral-700">
-                    {t('adminReports.categoryShare')}
-                  </div>
-                  <div className="space-y-2 rounded-xl bg-white p-3 shadow-sm">
-                    {groupedByCategory.map((c) => {
-                      const total =
-                        groupedByCategory.reduce((s, x) => s + x.revenue, 0) || 1;
-                      const share = c.revenue / total;
-                      return (
-                        <div key={c.name}>
-                          <div className="mb-1 flex justify-between text-xs text-neutral-600">
-                            <span>{c.name}</span>
-                            <b>{(share * 100).toFixed(0)}%</b>
-                          </div>
-                          <div className="h-1.5 w-full overflow-hidden rounded-full bg-neutral-100">
-                            <div
-                              className="h-full rounded-full bg-accent-500"
-                              style={{ width: `${share * 100}%` }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </>
-              )}
-            </>
-          )}
-
-          {/* ============ STRUCTURE ============ */}
-          {segment === 'structure' && (
-            <>
-              <div className="mb-2 text-sm font-bold text-neutral-700">
-                {t('adminReports.hourlyTitle')}
-              </div>
-              <div className="mb-4 flex h-28 items-end gap-1 rounded-xl bg-white p-3 shadow-sm">
-                {hourly.length === 0 ? (
-                  <div className="w-full text-center text-xs text-neutral-400">
-                    {t('common.noData')}
-                  </div>
-                ) : (
-                  hourly.map((h) => (
-                    <div
-                      key={h.hour}
-                      className="flex flex-1 flex-col items-center justify-end gap-1"
-                      style={{ height: '100%' }}
-                    >
-                      <div
-                        className="w-full rounded-t bg-primary-500"
-                        style={{
-                          height: `${Math.max(3, (h.orders / hourlyMax) * 100)}%`,
-                        }}
-                      />
-                      <span className="text-[9px] text-neutral-400">
-                        {h.hour}
-                      </span>
-                    </div>
-                  ))
-                )}
-              </div>
-
-              {data.structure.ponds.length > 0 && (
-                <>
-                  <div className="mb-2 text-sm font-bold text-neutral-700">
-                    {t('adminReports.pondTitle')}
-                  </div>
-                  <div className="mb-4 space-y-2 rounded-xl bg-white p-3 shadow-sm">
-                    {data.structure.ponds.map((p) => {
-                      const total =
-                        data.structure.ponds.reduce(
-                          (s, x) => s + x.revenue,
-                          0,
-                        ) || 1;
-                      const share = p.revenue / total;
-                      return (
-                        <div key={p.type}>
-                          <div className="mb-1 flex justify-between text-xs text-neutral-600">
-                            <span>🎣 {itemName(p)}</span>
-                            <b>
-                              {p.bookings} · {money(p.revenue)}
-                            </b>
-                          </div>
-                          <div className="h-1.5 w-full overflow-hidden rounded-full bg-neutral-100">
-                            <div
-                              className="h-full rounded-full bg-accent-500"
-                              style={{ width: `${share * 100}%` }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </>
-              )}
-
-              {data.structure.orderTypes.length > 0 && (
-                <>
-                  <div className="mb-2 text-sm font-bold text-neutral-700">
-                    {t('adminReports.orderTypeTitle')}
-                  </div>
-                  <div className="mb-4 grid grid-cols-2 gap-2">
-                    {data.structure.orderTypes.map((ot) => (
-                      <div
-                        key={ot.type}
-                        className="rounded-xl bg-white p-3 shadow-sm"
-                      >
-                        <div className="text-xs text-neutral-500">
-                          {ot.type === 'TAKEAWAY'
-                            ? t('orderType.takeaway')
-                            : t('orderType.dineIn')}
-                        </div>
-                        <div className="mt-0.5 text-base font-bold text-neutral-900">
-                          {money(ot.revenue)}
-                        </div>
-                        <div className="text-xs text-neutral-400">
-                          {ot.orders} {t('adminReports.ordersUnit')}
-                        </div>
-                      </div>
+          {groupBy === 'time' && chartData.length > 0 && selectedDefs.length > 0 && (
+            <div className="rounded-xl bg-white p-4 shadow-sm">
+              <p className="mb-3 text-sm font-bold text-neutral-700">{t('adminReports.trendTitle')}</p>
+              <div style={{ width: '100%', height: 240 }}>
+                <ResponsiveContainer>
+                  <LineChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" />
+                    <XAxis dataKey="key" fontSize={11} />
+                    <YAxis fontSize={11} tickFormatter={(v: number) => money(v)} />
+                    <Tooltip formatter={(v: any) => money(Number(v))} />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    {selectedDefs.map((m) => (
+                      <Line key={m.key} type="monotone" dataKey={m.key} name={t(m.labelKey)} stroke={m.color} strokeWidth={2} dot={false} />
                     ))}
-                  </div>
-                </>
-              )}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
 
-              {data.structure.tables.length > 0 && (
-                <>
-                  <div className="mb-2 text-sm font-bold text-neutral-700">
-                    {t('adminReports.tableHeat')}
-                  </div>
-                  <div className="space-y-1">
-                    {data.structure.tables.map((tb, i) => (
-                      <div
-                        key={tb.code}
-                        className="flex items-center justify-between rounded-lg bg-white px-3 py-2 text-sm shadow-sm"
-                      >
-                        <span className="flex items-center gap-2">
-                          <span className="flex h-5 w-5 items-center justify-center rounded bg-primary-50 text-[11px] font-bold text-primary-700">
-                            {i + 1}
-                          </span>
-                          <span className="font-medium text-neutral-900">
-                            {tb.name}
-                          </span>
-                          <span className="text-xs text-neutral-400">
-                            {tb.code}
-                          </span>
-                        </span>
-                        <b className="text-primary-700">{tb.orders}</b>
-                      </div>
+          {groupBy !== 'time' && tableRows.length > 0 && (
+            <div className="rounded-xl bg-white p-4 shadow-sm">
+              <p className="mb-3 text-sm font-bold text-neutral-700">{t('adminReports.chartTitle')}</p>
+              <div style={{ width: '100%', height: 240 }}>
+                <ResponsiveContainer>
+                  <BarChart data={tableRows.slice(0, 10)}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" />
+                    <XAxis dataKey="label" fontSize={11} interval={0} angle={-30} textAnchor="end" height={60} />
+                    <YAxis fontSize={11} />
+                    <Tooltip />
+                    <Bar dataKey="amount" fill="#185FA5" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+
+          <div className="rounded-xl bg-white p-4 shadow-sm">
+            <p className="mb-3 text-sm font-bold text-neutral-700">{t('adminReports.tableTitle')}</p>
+            {tableRows.length === 0 ? (
+              <p className="py-6 text-center text-sm text-neutral-400">{t('common.noData')}</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm" style={{ tableLayout: 'fixed' }}>
+                  <thead>
+                    <tr className="border-b border-neutral-200">
+                      <th className="p-2 text-left font-medium text-neutral-500">{t('adminReports.colLabel')}</th>
+                      {groupBy === 'time'
+                        ? selectedDefs.map((m) => (<th key={m.key} className="p-2 text-right font-medium text-neutral-500">{t(m.labelKey)}</th>))
+                        : (<><th className="p-2 text-right font-medium text-neutral-500">{t('adminReports.colCount')}</th><th className="p-2 text-right font-medium text-neutral-500">{t('adminReports.colAmount')}</th></>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tableRows.map((row) => (
+                      <tr key={row.key} className="border-b border-neutral-100">
+                        <td className="p-2 text-neutral-900">{row.label}</td>
+                        {row.values.map((v, i) => (<td key={i} className="p-2 text-right text-neutral-900">{v}</td>))}
+                      </tr>
                     ))}
-                  </div>
-                </>
-              )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
 
-              {data.structure.ordersWithoutPayment > 0 && (
-                <div className="mt-3 rounded-xl bg-neutral-100 px-4 py-2 text-xs text-neutral-500">
-                  {t('adminReports.noPaymentNote', {
-                    n: data.structure.ordersWithoutPayment,
-                  })}
-                </div>
-              )}
-            </>
+          {o && (
+            <div className="flex flex-wrap gap-2">
+              <a href={reportExportUrl({ format: 'xlsx', range, from: range === 'custom' ? customFrom : undefined, to: range === 'custom' ? customTo : undefined, grain, content: ['summary', 'items'], locale })}
+                className="flex-1 rounded-xl bg-primary-700 py-3 text-center text-sm font-semibold text-white">⬇ {t('adminReports.exportExcel')}</a>
+              <a href={reportExportUrl({ format: 'csv', range, from: range === 'custom' ? customFrom : undefined, to: range === 'custom' ? customTo : undefined, grain, content: ['items'], sheet: 'items', locale })}
+                className="flex-1 rounded-xl border border-primary-200 bg-white py-3 text-center text-sm font-semibold text-primary-700">⬇ {t('adminReports.exportCsv')}</a>
+            </div>
           )}
 
-          {/* ============ MARGIN ============ */}
-          {segment === 'margin' && (
-            <>
-              <div className="mb-3 grid grid-cols-3 gap-2">
-                <div className="rounded-xl bg-white p-3 text-center shadow-sm">
-                  <div className="text-lg font-bold text-success-600">
-                    {pctText(o.marginRate)}
-                  </div>
-                  <div className="mt-0.5 text-xs text-neutral-500">
-                    {t('adminReports.overallMargin')}
-                  </div>
-                </div>
-                <div className="rounded-xl bg-white p-3 text-center shadow-sm">
-                  <div className="text-lg font-bold text-accent-600">
-                    {data.margins.filter((m) => m.belowTarget).length}
-                  </div>
-                  <div className="mt-0.5 text-xs text-neutral-500">
-                    {t('adminReports.belowTarget')}
-                  </div>
-                </div>
-                <div className="rounded-xl bg-white p-3 text-center shadow-sm">
-                  <div className="text-lg font-bold text-error-600">
-                    {data.margins.filter((m) => m.costPrice == null).length}
-                  </div>
-                  <div className="mt-0.5 text-xs text-neutral-500">
-                    {t('adminReports.noCost')}
-                  </div>
-                </div>
+          <div className="rounded-xl bg-white p-4 shadow-sm">
+            <button onClick={() => { setShowLedger((v) => !v); if (!txData) loadTransactions(); }}
+              className="flex w-full items-center justify-between text-sm font-bold text-neutral-700">
+              <span>{t('adminReports.segTransaction')}</span>
+              <span className="text-xs text-neutral-400">{showLedger ? '▲' : '▼'}</span>
+            </button>
+            {showLedger && (
+              <div className="mt-4">
+                <TransactionLedger t={t} txData={txData} txLoading={txLoading} txError={txError} txStart={txStart} txEnd={txEnd}
+                  onFilter={(s, e) => { setTxStart(s); setTxEnd(e); }} onRetry={loadTransactions} onOpenDetail={openOrderDetail}
+                  detailOrder={detailOrder} detailLoading={detailLoading} onCloseDetail={() => setDetailOrder(null)} itemName={itemName} />
               </div>
-
-              <div className="mb-3 flex rounded-xl bg-neutral-100 p-1">
-                {(
-                  [
-                    ['all', 'adminReports.filterAll'],
-                    ['below', 'adminReports.filterBelow'],
-                    ['noCost', 'adminReports.filterNoCost'],
-                    ['top', 'adminReports.filterTop'],
-                  ] as [MarginFilter, string][]
-                ).map(([k, labelKey]) => (
-                  <button
-                    key={k}
-                    onClick={() => setMarginFilter(k)}
-                    className={segBtn(marginFilter === k)}
-                  >
-                    {t(labelKey)}
-                  </button>
-                ))}
-              </div>
-
-              {data.margins.filter((m) => m.costPrice == null).length > 0 && (
-                <Link
-                  href="/admin/menu"
-                  className="mb-3 flex w-full items-center gap-2 rounded-xl bg-accent-50 px-4 py-2.5 text-left text-xs text-accent-700 hover:bg-accent-100"
-                >
-                  <span className="font-semibold">{t('adminReports.batchCost')}</span>
-                  <span className="text-accent-600/80">{t('adminReports.costImportHint')}</span>
-                </Link>
-              )}
-
-              {marginRows.length === 0 ? (
-                <div className="py-14 text-center text-sm text-neutral-400">
-                  {t('common.noData')}
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {marginRows.map((m) => (
-                    <div
-                      key={m.id}
-                      className="rounded-xl bg-white p-3 shadow-sm"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate text-sm font-semibold text-neutral-900">
-                            {itemName(m)}
-                          </div>
-                          <div className="mt-0.5 text-xs text-neutral-500">
-                            {t('adminReports.priceLabel')} ฿{m.price}
-                            {m.costPrice != null &&
-                              ` · ${t('adminReports.costLabel')} ฿${m.costPrice}`}
-                          </div>
-                        </div>
-                        <div className="shrink-0 text-right">
-                          {m.marginRate == null ? (
-                            <span className="rounded bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-500">
-                              {t('adminReports.noCost')}
-                            </span>
-                          ) : (
-                            <span
-                              className={`rounded px-2 py-0.5 text-xs font-bold ${
-                                m.belowTarget
-                                  ? 'bg-accent-50 text-accent-600'
-                                  : 'bg-success-50 text-success-700'
-                              }`}
-                            >
-                              {(m.marginRate * 100).toFixed(0)}%
-                            </span>
-                          )}
-                          {m.profit != null && (
-                            <div className="mt-0.5 text-xs text-neutral-500">
-                              {money2(m.profit)}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {m.qty > 0 && (
-                        <div className="mt-1.5 text-xs text-neutral-400">
-                          {t('adminReports.soldInPeriod', {
-                            qty: m.qty,
-                            revenue: money(m.revenue),
-                          })}
-                        </div>
-                      )}
-
-                      {editingId === m.id ? (
-                        <div className="mt-2 flex items-center gap-2">
-                          <input
-                            type="number"
-                            min={0}
-                            step="0.01"
-                            placeholder={t('adminReports.costLabel')}
-                            value={costInput}
-                            onChange={(e) => setCostInput(e.target.value)}
-                            className="flex-1 rounded-lg border border-neutral-200 px-2 py-1.5 text-xs"
-                          />
-                          <input
-                            type="number"
-                            min={0}
-                            max={100}
-                            placeholder={t('adminReports.targetMarginShort')}
-                            value={marginInput}
-                            onChange={(e) => setMarginInput(e.target.value)}
-                            className="w-20 rounded-lg border border-neutral-200 px-2 py-1.5 text-xs"
-                          />
-                          <button
-                            onClick={() => saveCost(m.id)}
-                            disabled={saving}
-                            className="rounded-lg bg-primary-700 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
-                          >
-                            {t('common.save')}
-                          </button>
-                          <button
-                            onClick={() => setEditingId(null)}
-                            className="rounded-lg bg-neutral-100 px-3 py-1.5 text-xs text-neutral-600"
-                          >
-                            {t('common.cancel')}
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => startEdit(m)}
-                          className="mt-2 text-xs font-medium text-primary-700 underline"
-                        >
-                          {m.costPrice == null
-                            ? t('adminReports.setCost')
-                            : t('adminReports.editCost')}
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <div className="mt-3 rounded-xl bg-primary-50 px-4 py-3 text-xs text-primary-700">
-                {t('adminReports.marginFootnote')}
-              </div>
-            </>
-          )}
-
-          {/* ============ EXPORT ============ */}
-          {segment === 'export' && (
-            <>
-              <div className="mb-2 text-sm font-bold text-neutral-700">
-                {t('adminReports.exportContent')}
-              </div>
-              <div className="mb-4 space-y-2">
-                {(
-                  [
-                    ['summary', 'adminReports.contentSummary'],
-                    ['items', 'adminReports.contentItems'],
-                    ['orders', 'adminReports.contentOrders'],
-                    ['stock', 'adminReports.contentStock'],
-                  ] as [string, string][]
-                ).map(([key, labelKey]) => {
-                  const on = exportContent.includes(key);
-                  return (
-                    <button
-                      key={key}
-                      onClick={() =>
-                        setExportContent((prev) =>
-                          prev.includes(key)
-                            ? prev.filter((k) => k !== key)
-                            : [...prev, key],
-                        )
-                      }
-                      className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left text-sm ${
-                        on
-                          ? 'border-primary-200 bg-white text-neutral-900'
-                          : 'border-neutral-200 bg-white text-neutral-500'
-                      }`}
-                    >
-                      <span
-                        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] ${
-                          on
-                            ? 'border-primary-700 bg-primary-700 text-white'
-                            : 'border-neutral-300 bg-white text-transparent'
-                        }`}
-                      >
-                        ✓
-                      </span>
-                      {t(labelKey)}
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="mb-4 flex rounded-xl bg-neutral-100 p-1">
-                <button
-                  onClick={() => setExportFormat('xlsx')}
-                  className={segBtn(exportFormat === 'xlsx')}
-                >
-                  Excel (.xlsx)
-                </button>
-                <button
-                  onClick={() => setExportFormat('csv')}
-                  className={segBtn(exportFormat === 'csv')}
-                >
-                  CSV (.csv)
-                </button>
-              </div>
-
-              <div className="mb-4 rounded-xl bg-primary-50 px-4 py-3 text-xs text-primary-700">
-                {t('adminReports.exportRangeNote')} {o.period.fromDate}
-                {o.period.fromDate !== o.period.toDate && ` → ${o.period.toDate}`}
-                <br />
-                {exportFormat === 'csv'
-                  ? t('adminReports.csvNote')
-                  : t('adminReports.xlsxNote')}
-              </div>
-
-              {exportContent.length === 0 ? (
-                <div className="rounded-xl bg-neutral-100 px-4 py-3 text-center text-xs text-neutral-500">
-                  {t('adminReports.pickContent')}
-                </div>
-              ) : (
-                <a
-                  href={reportExportUrl({
-                    format: exportFormat,
-                    range,
-                    from: range === 'custom' ? customFrom : undefined,
-                    to: range === 'custom' ? customTo : undefined,
-                    grain,
-                    content: exportContent,
-                    sheet: exportFormat === 'csv' ? exportContent[0] : undefined,
-                    // 导出物的语言必须与当前页面一致，否则英文页导出的是中文表头
-                    locale,
-                  })}
-                  className="block w-full rounded-xl bg-primary-700 py-3 text-center text-sm font-semibold text-white"
-                >
-                  ⬇ {t('adminReports.generateDownload')}
-                </a>
-              )}
-
-              <div className="mt-4 rounded-xl border border-dashed border-neutral-300 px-4 py-3 text-xs text-neutral-500">
-                <b className="text-neutral-600">
-                  {t('adminReports.comingSoon')}
-                </b>
-                <br />☑ {t('adminReports.autoDaily')}
-                <br />☐ {t('adminReports.autoMonthly')}
-              </div>
-            </>
-          )}
-
-          {/* ============ LINE 日报 ============ */}
-          {segment === 'line' && (
-            <>
-              <div className="mb-4 rounded-xl bg-primary-50 px-4 py-3 text-xs leading-relaxed text-primary-700">
-                {t('adminReports.lineIntro')}
-              </div>
-
-              {/* 配置状态 */}
-              <div className="mb-4 space-y-2">
-                {(
-                  [
-                    ['hasToken', 'adminReports.lineToken'],
-                    ['hasSecret', 'adminReports.lineSecret'],
-                    ['cronSecret', 'adminReports.lineCronSecret'],
-                  ] as [keyof LineConfigStatus, string][]
-                ).map(([key, labelKey]) => {
-                  const on = Boolean(lineConfig?.[key]);
-                  return (
-                    <div
-                      key={key}
-                      className="flex items-center gap-3 rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm"
-                    >
-                      <span
-                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
-                          on
-                            ? 'bg-success-50 text-success-600'
-                            : 'bg-neutral-100 text-neutral-400'
-                        }`}
-                      >
-                        {on ? '✓' : '!'}
-                      </span>
-                      <span className="flex-1 text-neutral-700">
-                        {t(labelKey)}
-                      </span>
-                      <span
-                        className={`text-xs font-semibold ${
-                          on ? 'text-success-600' : 'text-error-600'
-                        }`}
-                      >
-                        {on
-                          ? t('adminReports.lineReady')
-                          : t('adminReports.lineMissing')}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* 接收人 */}
-              <div className="mb-2 flex items-center justify-between">
-                <div className="text-sm font-bold text-neutral-700">
-                  {t('adminReports.lineTargets')}
-                </div>
-                <button
-                  onClick={loadLine}
-                  className="text-xs font-medium text-primary-700"
-                >
-                  ⟳ {t('common.refresh')}
-                </button>
-              </div>
-
-              {lineTargets.length === 0 ? (
-                <div className="mb-4 rounded-xl border border-dashed border-neutral-300 px-4 py-3 text-xs leading-relaxed text-neutral-500">
-                  {t('adminReports.lineNoTarget')}
-                </div>
-              ) : (
-                <div className="mb-4 space-y-2">
-                  {lineTargets.map((tg) => (
-                    <div
-                      key={tg.id}
-                      className="flex items-center gap-3 rounded-xl border border-neutral-200 bg-white px-3 py-2.5"
-                    >
-                      <span className="text-lg">
-                        {tg.targetType === 'USER' ? '👤' : '👥'}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm font-medium text-neutral-800">
-                          {tg.displayName || tg.targetId.slice(0, 12)}
-                        </div>
-                        <div className="truncate text-[11px] text-neutral-400">
-                          {tg.targetId}
-                          {tg.lastSentAt
-                            ? ` · ${t('adminReports.lineLastSent')} ${new Date(
-                                tg.lastSentAt,
-                              ).toLocaleString()}` 
-                            : ''}
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => removeLineTarget(tg.id)}
-                        disabled={lineBusy}
-                        className="shrink-0 rounded-lg px-2 py-1 text-xs text-error-600 disabled:opacity-40"
-                      >
-                        {t('adminReports.lineUnbind')}
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* 发送 */}
-              <div className="mb-3 grid grid-cols-2 gap-2">
-                <button
-                  onClick={() => sendLine('real')}
-                  disabled={lineBusy || !lineTargets.length}
-                  className="rounded-xl bg-primary-700 py-3 text-sm font-semibold text-white disabled:opacity-40"
-                >
-                  {lineBusy ? t('common.saving') : t('adminReports.lineSendReal')}
-                </button>
-                <button
-                  onClick={() => sendLine('demo')}
-                  disabled={lineBusy || !lineTargets.length}
-                  className="rounded-xl border border-primary-200 bg-white py-3 text-sm font-semibold text-primary-700 disabled:opacity-40"
-                >
-                  {t('adminReports.lineSendDemo')}
-                </button>
-              </div>
-
-              {lineTargets.length === 0 && (
-                <div className="mb-3 text-xs text-neutral-500">
-                  {t('adminReports.lineBindHint')}
-                </div>
-              )}
-
-              {/* 结果 */}
-              {lineResult && (
-                <div className="mb-4 space-y-3">
-                  <div
-                    className={`rounded-xl px-4 py-3 text-xs ${
-                      lineResult.ok
-                        ? 'bg-success-50 text-success-700'
-                        : 'bg-error-50 text-error-700'
-                    }`}
-                  >
-                    {lineResult.ok
-                      ? `${t('adminReports.lineSentOk')} ${lineResult.sent}/${lineResult.total}`
-                      : lineResult.message ||
-                        t('adminReports.lineSendFailed')}
-                  </div>
-                  {lineResult.results.length > 0 && (
-                    <div className="space-y-1">
-                      {lineResult.results.map((r) => (
-                        <div
-                          key={r.targetId}
-                          className="rounded-lg bg-neutral-100 px-3 py-2 text-[11px] text-neutral-600"
-                        >
-                          {r.ok ? '✓' : `✗ ${r.status}`}{' '}
-                          {r.displayName || r.targetId.slice(0, 12)}
-                          {!r.ok && ` — ${r.detail}`}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {lineResult.preview && (
-                    <>
-                      <div className="text-xs font-bold text-neutral-700">
-                        {t('adminReports.linePreview')}
-                      </div>
-                      <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-xl bg-neutral-900 px-4 py-3 text-[11px] leading-relaxed text-neutral-100">
-                        {lineResult.preview}
-                      </pre>
-                    </>
-                  )}
-                </div>
-              )}
-
-              {/* 排程说明 */}
-              <div className="rounded-xl border border-dashed border-neutral-300 px-4 py-3 text-xs leading-relaxed text-neutral-500">
-                {t('adminReports.lineScheduleNote')}
-              </div>
-            </>
-          )}
-        </>
-      )}
+            )}
+          </div>
+        </div>
+      </div>
     </>
   );
 }
