@@ -718,6 +718,85 @@ schtasks /create /tn HookFishpondBridgeWatchdog /tr "wscript.exe //nologo <vbs>"
 按时间戳 grep 会拿到历史记录 —— 判断"今天打了什么"要**用启动 banner 行号定位**：
 `Select-String 'v1.1.0'` 找最后一次启动的行号，`Get-Content | Select-Object -Skip <行号>` 取之后的全部。
 
+### 6.12 jsPDF 依赖在 Turbopack 下构建失败（2026-11-17 踩）
+
+**症状**：装 `jspdf` 后 `npx next build` 报
+`Module not found: Can't resolve <dynamic>` 定位到 `node_modules/fflate/lib/node.cjs` 里的 `new Worker(...)`。
+
+**根因**：jsPDF 的打包依赖 `fflate` 有 node / browser 两套构建。
+Turbopack 在解析客户端 chunk 时**默认也 resolve 到 node.cjs**（那个版本用了 `Worker`），
+而 Turbopack 不认它的 `browser` 字段映射 → 构建挂。
+
+**处置**：`next.config.mjs` 加 alias 强制走浏览器版：
+
+```js
+const nextConfig = {
+  turbopack: {
+    resolveAlias: {
+      fflate: './node_modules/fflate/lib/browser.cjs',
+    },
+  },
+};
+```
+
+**教训**：给这个项目装任何**带 Worker / node 专用构建**的客户端库（PDF、图片处理、zip 之类），
+构建挂了先怀疑「库的多套构建没被 Turbopack 正确分流」，加 `turbopack.resolveAlias` 强制浏览器版，
+**别去改库源码**。
+
+### 6.13 客户手机上没有打印桥 —— 客户侧打印必然失败（2026-11-17 定案）
+
+**踩过**：`orders/[id]` 客户详情页放了「打印后厨票/账单」按钮，走 `submitPrint` → 桥。
+但客户扫 QR 用手机打开这个页 → 浏览器调的是**手机本地的 `127.0.0.1:17777`**（没有桥）→ 必失败。
+
+**关键认知**：`getBridgeUrl()` 默认 `http://127.0.0.1:17777`，
+**只有浏览器跑在 POS80 那台机上**才连得到桥。手机/别的电脑访问网站，永远连不到桥。
+
+**定案**：客户侧页面**不做打印**，改成「生成 PDF 存证下载」：
+离屏渲染小票 HTML → `html2canvas` 截图 → `jsPDF` 打包 → `pdf.save()` 下载到手机。
+真实打印仍由 **POS80 桥 `--watch` 自动完成**，客户侧只负责存证/转发。
+
+**判断口诀**：给某个页面加打印前，先问「**这个页面的访问者手里有没有桥？**」
+只有**收银机/POS80 本机**上的 admin 页面能走桥；任何**客户手机能访问**的页面一律别走桥，
+要出证就出 PDF/图片下载。
+
+### 6.14 桥的调用方边界（2026-11-17 梳理）
+
+桥（监听 POS80 机 `127.0.0.1:17777`）有两种角色，调用方式完全不同：
+
+**A. 桥是被动服务端**（浏览器显式发打印命令）
+`submitPrint` / `printViaBridge` / `probeBridge` 打 `${bridgeUrl}/print` 和 `/health`。
+这些**只有跑在 POS80 机上的浏览器才打得通**。当前调用方：
+`admin/orders`（后厨票/账单/收款小票/结算打印）、`admin/tables`（单桌 QR）、`admin/print`（测试打印）。
+
+**B. 桥是主动客户端**（桥自己轮询服务端，不需要浏览器）
+桥 `--watch` 主动调 `GET /api/admin/print/watch`（拉单）+ `POST /api/admin/print/mark`（回写）。
+这条**与浏览器无关**，POS80 机开机就在跑。
+
+**别混淆**：网站里所有 `submitPrint` 调用都要保证**只在 admin（收银机）页面**；
+客户可访问页面（`orders/[id]`、`menu` 等）**禁止**出现 `submitPrint`。
+
+### 6.15 ⚠️ 同一文件里混着别人的半成品时，只提交自己的部分
+
+**场景**：这个仓库常被多个会话并行改。`git status` 看到某文件既含**自己的改动**，
+又含**别的会话未提交的半成品**（如 `messages/*.json` 里自己加了 pdf* key，
+别人加了 footer address）。
+
+**错误做法**：整文件 `git add` → **把别人的半成品一起提交了**（可能还没写完）。
+
+**正确做法**（临时摘除别人的部分 → 暂存自己的 → 恢复回去）：
+1. 用脚本临时删掉**不属于自己**的行（注意连带处理**行尾逗号**——JSON 里删了最后一项，
+   倒数第二项的逗号要去掉，否则 JSON 不合法）
+2. 校验 `python -c "import json; json.load(...)"` 确认摘除后仍合法
+3. `git add <文件>` 暂存**只有自己**改动的版本
+4. 提交后**立刻把别人的部分恢复回工作区**（`git restore` 不行，那会连自己的也丢；
+   用脚本把删掉的行加回去，保持工作区原样）
+
+**教训**：多会话并行是这个项目的常态，**每次提交前 `git diff <file>` 逐行看**，
+混了别人的东西就按上面流程只提交自己的。看到陌生改动：不代为提交、不 revert、不 stash。
+
+**顺带**：`messages/*.json` 是高频冲突区（每个功能都要加三语文案）。
+加泰文文案**别手打**（声调符号易丢/易错），用 Python 脚本按锚点插入并正则校验。
+
 ---
 
 ## 七、改动前的自检清单
@@ -753,3 +832,18 @@ schtasks /create /tn HookFishpondBridgeWatchdog /tr "wscript.exe //nologo <vbs>"
 - [ ] `config.json`：`widthDots=464`、`watchUrl`、`watchToken`（DATABASE_URL 派生）、`authToken` 空
 - [ ] 查错先看 `C:\hookfishpond-bridge\print.log`（结构化：时间|单号|动作|结果），再看 `bridge.log`
 - [ ] 桥跑在 **Session 0（SYSTEM）**：能打印，**不能播报**（SAPI 无音频设备）→ 播报靠 AudioNotify 委托
+
+### 7.3 📱 客户侧页面（新增）
+
+- [ ] **这个页面的访问者手里有没有桥？** 客户手机能访问的页面（`orders/[id]`、`menu` 等）
+      **禁止**出现 `submitPrint` —— 客户手机没桥，点了必失败
+- [ ] 客户侧要出凭证 → 走 **PDF/图片下载存证**（html2canvas + jsPDF），打印交给桥 `--watch`
+- [ ] 装了带 Worker / node 专用构建的客户端库（PDF/图片/zip）→ 构建挂了先加
+      `turbopack.resolveAlias` 强制浏览器版，别改库源码（见 §6.12）
+
+### 7.4 📦 提交（新增）
+
+- [ ] 改动文件里混了**别人的半成品**了吗？→ 用脚本临时摘除→暂存自己的→恢复回去，
+      **只提交自己的部分**（见 §6.15），别整文件 `git add` 把别人的未完成改动一起带上
+- [ ] 摘除 JSON 里某项后，**倒数第二项的行尾逗号**去掉了没？→ `json.load` 校验合法性
+- [ ] 加泰文文案 → **用 Python 脚本按锚点插入**，别手打（声调符号易丢/易错）
