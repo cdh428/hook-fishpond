@@ -1,0 +1,84 @@
+# gitleaks 配置 —— Hook Fishpond
+#
+# 由用户级 skill `secret-hygiene` 统一管理，规则说明见：
+#   ~/.workbuddy/skills/secret-hygiene/templates/gitleaks.toml
+# 跨项目方案对照见：
+#   ~/.workbuddy/skills/secret-hygiene/reference/comparison.md
+#
+# 本文件只放「本项目特有的白名单与自定义规则」；通用规则由 [extend] 继承。
+
+title = "hook-fishpond"
+
+[extend]
+useDefault = true
+
+# ══════════════════════════════════════════════════════════════════════
+# 白名单 1：构建产物 / 本地配置 / 依赖 / 封存子项目
+# 这些目录已被 .gitignore，但 gitleaks 的 dir 模式仍会扫到，属噪音。
+# ══════════════════════════════════════════════════════════════════════
+[[allowlists]]
+description = "构建产物、本地环境文件、依赖、封存子项目、备份"
+paths = [
+  '''^\.next/''',
+  '''^node_modules/''',
+  '''^\.env''',
+  '''^backups/''',
+  '''^fishpond-flood-ad/''',
+  '''^fishpond-end-card/''',
+  # 每台收银机各自的打印桥配置（已 gitignore，含真实 authToken）
+  # ⚠️ gitleaks 的 dir 模式不读 .gitignore，必须在此显式排除
+  '''^tools/print-bridge/.*config\.json$''',
+]
+
+# ══════════════════════════════════════════════════════════════════════
+# 白名单 2：扫描器自身（文件里写着凭据正则，不是真凭据）
+# 每新增一个扫描脚本，必须同步加到这里，否则体检恒红。
+# ══════════════════════════════════════════════════════════════════════
+[[allowlists]]
+description = "扫描器自身及其模板"
+paths = [
+  '''^scripts/check-secrets\.sh$''',
+  '''^scripts/scan-secrets-fast\.mjs$''',
+  '''^\.workbuddy/skills/''',
+]
+
+# ══════════════════════════════════════════════════════════════════════
+# 白名单 3：本机密钥仓（这是「该在的地方」，且已被 gitignore）
+# 体检时忽略，避免每天都被同一批噪音淹没。
+# ⚠️ 前提：必须已确认 .workbuddy/ 被 gitignore（用 git ls-files 复核）
+# ══════════════════════════════════════════════════════════════════════
+[[allowlists]]
+description = "本机密钥与记忆目录（已被 gitignore，仅忽略体噪音）"
+paths = [
+  '''^\.workbuddy/secrets/''',
+  '''^\.workbuddy/memory/''',
+]
+
+# ══════════════════════════════════════════════════════════════════════
+# 白名单 4：历史里的已知非机密（逐条注明依据，不许成片放行）
+# 加之前必须确认「这个值确实不需要轮换」，依据写在这里，供以后复核。
+# ══════════════════════════════════════════════════════════════════════
+[[allowlists]]
+description = "历史 commit 46ea5c93 的 Supabase publishable key（公开级，文件已删除）"
+# 依据：值为 sb_publishable_* 前缀 —— Supabase 的**可公开**密钥，
+#       设计上就是给浏览器端用的，不是 service_role / secret key。
+#       该文件 src/lib/supabase-server.ts 早已从当前树删除（Supabase 已弃用）。
+# 若将来发现它是 sb_secret_* 或 service_role JWT，必须立即轮换并撤掉本条。
+paths = [
+  '''^src/lib/supabase-server\.ts$''',
+]
+
+# ══════════════════════════════════════════════════════════════════════
+# 自定义规则：本项目特有形态（社区规则认不出的）
+# ══════════════════════════════════════════════════════════════════════
+
+# 打印桥通信密钥：后台「打印设置 → 通信访问密钥」↔ config.json authToken
+[[rules]]
+id = "print-bridge-auth-token"
+description = "打印桥 authToken（须与后台设置一致，泄漏=任何人可让打印机出纸）"
+regex = '''(?i)"?authToken"?\s*[:=]\s*"([A-Za-z0-9_\-]{16,})"'''
+secretGroup = 1
+keywords = ["authtoken"]
+[rules.allowlists]
+description = "占位符与文档示例"
+regexes = ['''(?i)^(<|\$|\{|\*|example|your|xxx)''']

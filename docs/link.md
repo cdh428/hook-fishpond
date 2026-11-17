@@ -29,7 +29,11 @@
 | LINE / Meta / Omise 令牌 | `.env.local` | ❌ | `dotenv` |
 | LINE Login 两把钥匙 | `.workbuddy/secrets/line-login.env` + `.env.local` | ❌ | `dotenv` / 复制到 Vercel |
 | GitHub 推送 | `~/.ssh/hook_fishpond_deploy`（ed25519） | ❌ | SSH 别名 `github-hookfishpond` |
-| 打印机桥通信密钥 | `tools/print-bridge/config.json` → `authToken` **+** 浏览器 localStorage | ⚠️ 见 §4 | 后台「打印设置 → 通信访问密钥」 |
+| 打印机桥通信密钥 | `tools/print-bridge/*config.json` → `authToken` **+** 浏览器 localStorage | ❌（已 gitignore） | 后台「打印设置 → 通信访问密钥」 |
+| **轮换状态 / 待办** | `.workbuddy/secrets/ROTATION.md` | ❌ | 直接看 |
+
+> **通用标准**：跨项目的密钥存放规范、分级判据、方案取舍见用户级 skill
+> `~/.workbuddy/skills/secret-hygiene/`（`SKILL.md` 是正文，`reference/comparison.md` 是对照）。
 
 **已实测确认被 gitignore（2026-11-17）**：`.env.local` · `.env.vercel` · `.workbuddy/` 整目录
 （含 `secrets/`、`memory/`、`backups/`）。`git ls-files | grep '^\.env'` 只应返回 `.env.example`。
@@ -95,23 +99,28 @@ bash scripts/push-main.sh                 # 三级凭据链，第一级成功即
 | 开机自启 | `HookFishpond-PrintBridge.vbs`（无黑框）；**开机自启只能放 Startup 文件夹**，本机 schtasks/wscript 被沙箱拦 |
 | 鉴权 | `config.json` 的 `authToken` ↔ 后台「打印设置 → 通信访问密钥」**必须完全一致**；带上 `X-Print-Key` 头，缺失/不符 → **401** |
 | 公共 Wi-Fi 时 | 加 `--host 127.0.0.1` 只开本机，别裸奔 |
+| 配置不入库 | `config.json` 与 `_deploy_config.json` 均含真实 `authToken`，已被 `.gitignore` 的 `tools/print-bridge/*config.json` 挡住 |
 
 **硬规则**
 - `authToken` 为空 = 不校验 = 任何能访问 17777 的人都能让打印机出纸。**跨网部署必须配。**
 - 密钥**两处必须同步改**，只改一边会静默 401（症状：后台显示「未启动」/「未授权」）。
 - CSP **故意不含** `connect-src` —— 加了会断打印桥的 `127.0.0.1` 调用。
 - 打印机端口**不要暴露到公网**；跨网只走 Tailscale 私有网络。
-- `config.json` 里的 `authToken` 若填了真实值，**不要提交**（该文件虽在库里，但填值前请确认；
-  建议改填后立即 `git update-index --skip-worktree`，或改用环境变量注入）。
+- `config.json` / `_deploy_config.json` 里的 `authToken` **已 gitignore**
+  （`.gitignore` 规则 `tools/print-bridge/*config.json`），但仍要确认没被 `git add -f` 强制加进来。
 
 ---
 
 ## 3. 闸门（自动拦截，不许绕过）
 
+> **通用标准见用户级 skill `secret-hygiene`**（`~/.workbuddy/skills/secret-hygiene/`）。
+> 本节是本项目的**具体落地**；跨项目复用、分级判据、方案取舍都在那个 skill 里。
+
 | 闸门 | 触发点 | 规则 |
 |---|---|---|
-| **密文闸门** | pre-commit → `scripts/check-secrets.sh` | 扫**暂存区新增行**里的明文凭据，扫到就拦。**不要 `--no-verify`**；确需提交示例值用 `ALLOW_SECRETS=1 git commit` |
-| **快速体检** | `node scripts/scan-secrets-fast.mjs [--workbuddy]` | 全量/含 `.workbuddy` 的只读扫描，几秒出结果（替代卡住的 `check-secrets.sh --all`） |
+| **密文闸门 ①** | pre-commit → `gitleaks protect --staged` | 社区 150+ 规则 + 熵检测，秒级离线。配置在 `gitleaks.toml` |
+| **密文闸门 ②** | pre-commit → `scripts/check-secrets.sh` | 项目特有形态（自研 token、中文口令）；gitleaks 缺失时它单独扛 |
+| **快速体检** | `node scripts/scan-secrets-fast.mjs [--workbuddy]` | 全量/含 `.workbuddy` 的只读扫描（gitleaks 不扫被 ignore 的目录） |
 | **三语闸门** | `npm run check:i18n` / `check:i18n:live` | 改任何页面/文案后必跑，`--live` 打生产域名 |
 | **类型闸门** | `npx tsc --noEmit` | 0 错才推 |
 | **构建闸门** | `CODEBUDDY_SAFE_DELETE_ENABLED=0 npx next build` | 不带前缀会「编译全过但退出码 1」（safe-delete 上限） |
@@ -119,12 +128,24 @@ bash scripts/push-main.sh                 # 三级凭据链，第一级成功即
 | **安全响应头** | `next.config.mjs` | CSP 故意不含 `script-src`/`style-src`（内联水合会白屏）、不含 `connect-src`（断打印桥） |
 | **API 错误体** | 各 `route.ts` | 不回 `error.message`（Prisma message 常含 host/库名/参数） |
 
-**扫描器自检**（只读命令，安全）：
+**四层为什么缺一不可**
+
+| 层 | 抓什么 | 抓不到什么 |
+|---|---|---|
+| gitleaks | 已知服务商格式 + 熵检测 | 项目自定口令、无前缀随机串 |
+| check-secrets.sh | 项目特有形态 | 没写进规则的新形态 |
+| scan-secrets-fast | `.workbuddy/` 雷区（被 gitignore，gitleaks 默认不扫） | 实时性（靠手动跑） |
+| CI 扫描（L3 待装） | 绕过本机钩子的提交 | 已 push 很久的历史 |
+
+**扫描命令**（只读，安全）
 ```bash
-bash scripts/check-secrets.sh           # 只看暂存区（pre-commit 同款，秒回）
-node scripts/scan-secrets-fast.mjs      # 全量体检：已跟踪文件，几秒出结果
-node scripts/scan-secrets-fast.mjs --workbuddy   # 额外扫 .workbuddy/（被 gitignore 的雷区）
+~/.workbuddy/bin/gitleaks.exe dir . --config gitleaks.toml --redact   # 当前树
+~/.workbuddy/bin/gitleaks.exe git . --config gitleaks.toml --redact   # 全历史（166 commits，约 0.5 秒）
+node scripts/scan-secrets-fast.mjs --workbuddy                        # 含 .workbuddy 雷区
 ```
+
+> ⚠️ **gitleaks 的 `dir` 模式不读 `.gitignore`** —— 被忽略的目录（`.next/`、`*.config.json`）
+> 仍会被扫到。所以 `gitleaks.toml` 里必须用 `[[allowlists]]` 的 `paths` 显式排除，否则体检恒红。
 
 > ⚠️ **不要用 `bash scripts/check-secrets.sh --all` 做全量体检**：它把每个文件 `cat` 进
 > shell 变量再 grep，本机在 1.7 万文件（含封存子项目）的仓库里会**卡住/超时**（2026-11-17 实测）。
@@ -135,7 +156,8 @@ node scripts/scan-secrets-fast.mjs --workbuddy   # 额外扫 .workbuddy/（被 g
 |---|---|---|
 | `postgresql://<user>:<pass>@...` | ❌ 占位符 | 不管 |
 | 脚本里的 `github_pat_[A-Za-z0-9_]{50,}` | ❌ 是扫描正则 | 不管 |
-| 真实 `npg_xxxx` / `Fishpond@2026` / `ghp_xxx` | ✅ | 先轮换 → 再替换 → 再扫 → 才算完 |
+| `sb_publishable_*` / `NEXT_PUBLIC_*` / `pk_live_*` | ⚠️ **公开级**，不用轮换 | 但不该硬编码进代码 |
+| 真实 `npg_xxxx` / `ghp_xxx` / 带口令连接串 | ✅ | 先轮换 → 再替换 → 再扫 → 才算完 |
 
 ---
 

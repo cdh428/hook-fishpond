@@ -58,7 +58,9 @@ scripts/_*
 __pycache__/
 *.pyc
 # 每台收银机各自的打印桥配置，不入库
-tools/print-bridge/config.json
+# 通配形式：config.json 是工作配置，_deploy_config.json 是部署副本，
+# 两者都含 authToken（泄漏 = 任何人可让打印机出纸）
+tools/print-bridge/*config.json
 
 # 影像素材：只入库「网页真正用到的成品」
 # 中间产物 / 过程帧一律排除（都能由 _media-derive.py 重新生成）
