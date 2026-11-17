@@ -83,6 +83,15 @@ level1() {
     echo "   ✅ 成功（无需任何口令）"
     return 0
   fi
+  # 被服务器规则拒绝 ≠ 凭据有问题。换成 ②③ 的凭据推，照样同一条规则会拦，
+  # 降级只会让排查方向跑偏（误判成「密钥失效」）。这里直接认作终局失败。
+  if echo "$out" | grep -qiE 'GH013|Repository rule violations|push declined due to repository rule|protected branch'; then
+    echo "   ⛔ 被分支规则拦下（不是凭据问题，换凭据也没用）"
+    echo "$out" | sanitize | grep -iE 'rule violation|Required status check|GH013|protected branch' | head -4 | sed 's/^/      /'
+    echo "      处理：到 GitHub → Settings → Rules → 该规则集的 Bypass list 加上自己，"
+    echo "            或改用 PR 流程（推送新分支 → 开 PR → 检查通过再合并）。"
+    return 2
+  fi
   note "$(echo "$out" | sanitize | tail -2)"
   echo "   ✗ 失败 —— 检查 ~/.ssh/config 里有没有 github-hookfishpond 段，或仓库 Deploy keys 是否还在"
   return 1
@@ -133,7 +142,10 @@ echo "推送 $OWNER/$REPO → $BRANCH ${DRY:+（dry-run）}"
 echo "───────────────────────────────────────────────"
 for L in $LEVELS; do
   case "$L" in
-    1) level1 && { echo "───────────────────────────────────────────────"; echo "结果：✅ 第 ① 级成功"; exit 0; } ;;
+    1) level1; rc=$?
+       [ $rc -eq 0 ] && { echo "───────────────────────────────────────────────"; echo "结果：✅ 第 ① 级成功"; exit 0; }
+       # rc=2 是「被仓库规则拒绝」，属于终局：不降级，直接退出（见 level1 注释）
+       [ $rc -eq 2 ] && { echo "───────────────────────────────────────────────"; echo "结果：⛔ 被仓库规则拒绝（凭据本身正常，未降级重试）"; exit 3; } ;;
     2) level2 && { echo "───────────────────────────────────────────────"; echo "结果：✅ 第 ② 级成功"; exit 0; } ;;
     3) level3 && { echo "───────────────────────────────────────────────"; echo "结果：✅ 第 ③ 级成功"; exit 0; } ;;
     *) echo "未知级别: $L" >&2; exit 2 ;;
