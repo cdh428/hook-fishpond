@@ -50,10 +50,12 @@ function weekdayShort(locale: string, dayIndex: number): string {
 const STATE_CLASS: Record<DayState, string> = {
   available:
     'bg-primary-100 text-primary-800 ring-1 ring-primary-300 hover:bg-primary-200 hover:ring-primary-400',
+  // ⚠️ 2026-11-17：周一/法定假日保留颜色提示（通知客户「常规休息」），
+  // 但不再禁用、不划线 —— 实际有客户来仍可预订/营业。
   monday:
-    'cursor-not-allowed bg-neutral-100 text-neutral-500 ring-1 ring-neutral-200',
+    'bg-neutral-100 text-neutral-600 ring-1 ring-neutral-200 hover:bg-neutral-200',
   holiday:
-    'cursor-not-allowed bg-error-100 text-error-700 ring-1 ring-error-500/30',
+    'bg-error-100 text-error-700 ring-1 ring-error-500/30 hover:bg-error-200/60',
   cutoff:
     'cursor-not-allowed bg-accent-100 text-accent-700 ring-1 ring-accent-500/40',
   past: 'cursor-not-allowed bg-white text-neutral-300 ring-1 ring-neutral-100',
@@ -178,10 +180,12 @@ export default function DatePicker({
             return <div key={`b-${i}`} className="h-11 w-full" />;
           }
           const state = getDayState(dateStr);
-          const disabled = state !== 'available';
+          // ⚠️ 2026-11-17：只有「过去」和「当日 17:00 后」才真正禁用。
+          // 周一/法定假日保留颜色提示但**可选**（实际有客户来仍可预订）。
+          const disabled = state === 'past' || state === 'cutoff';
           const selected = dateStr === value;
           const closed = state === 'monday' || state === 'holiday';
-          const struck = closed || state === 'cutoff';
+          const struck = state === 'cutoff';
           const tag = state === 'cutoff' ? cutoffTag : closed ? restTag : '';
           const note = getDayNote?.(dateStr);
 

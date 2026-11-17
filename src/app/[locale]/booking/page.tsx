@@ -100,6 +100,7 @@ export default function BookingPage() {
   /** Single source of truth for both the picker's colours and the submit guard. */
   const getDayState = (s: string): DayState => {
     if (s < todayStr) return 'past';
+    // 周一/法定假日**保留**颜色与标签提示（通知客户「常规休息」）。
     if (isMonday(s)) return 'monday';
     if (holidays.has(s)) return 'holiday';
     // Same-day bookings stop at 17:00 — today is only blocked, never other days.
@@ -116,7 +117,11 @@ export default function BookingPage() {
     return undefined;
   };
 
-  const isDateDisabled = (s: string) => getDayState(s) !== 'available';
+  // ⚠️ 2026-11-17：只有「过去」和「当日 17:00 后」禁用。
+  // 周一/法定假日返回 'monday'/'holiday' 仅用于颜色+标签提示（通知客户），
+  // 但**可点可选可提交**——实际有客户来仍可预订。
+  const isDateDisabled = (s: string) =>
+    getDayState(s) === 'past' || getDayState(s) === 'cutoff';
 
   /** True when the venue has already closed today's same-day booking window. */
   const todayCutoff = isTodayCutoff(todayStr, now);

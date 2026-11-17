@@ -4,8 +4,6 @@ import { serverT } from "@/lib/server-t";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { runTx } from "@/lib/tx";
-import { bangkokDateString } from "@/lib/date-utils";
-import { isClosedDate } from "@/lib/closed-days";
 import { reserveStock, InsufficientStockError } from "@/lib/stock";
 import { generateOrderNumber, recalcOrderTotals } from "@/lib/orders";
 import { resolveOrderLines, OptionError } from "@/lib/menu-options-server";
@@ -56,13 +54,9 @@ export async function POST(request: NextRequest) {
     // 规则见 docs/playbooks/print-language.md
     const ticketLocale = resolveTicketLocale(body.locale, request);
 
-    // Block same-day (on-site) ordering when the venue is closed today
-    if (await isClosedDate(bangkokDateString())) {
-      return NextResponse.json(
-        { error: "The venue is closed today" },
-        { status: 400 },
-      );
-    }
+    // ⚠️ 2026-11-17：闭店日（周一/法定假日）不再阻止下单。
+    // 用户明确「实际有客户来还是会营业」，闭店日只是通知，不阻止任何操作。
+    // isClosedDate 仍保留给通知用途（页脚/日历/日报标注）。
 
     // Resolve dining table. Dine-in orders REQUIRE a valid, active table so
     // staff can serve and settle them; takeaway orders carry no table.

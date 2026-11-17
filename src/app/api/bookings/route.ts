@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { isClosedDate } from "@/lib/closed-days";
 import { isTodayCutoff, SAME_DAY_CUTOFF_HOUR } from "@/lib/date-utils";
 import { requireAdmin, getUserFromRequest } from "@/lib/auth";
 
@@ -39,15 +38,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid date" }, { status: 400 });
     }
 
-    // Reject bookings on any closed day (Monday or statutory holiday)
+    // ⚠️ 2026-11-17：闭店日（周一/法定假日）不再阻止预订。
+    // 用户确认「预订也放开」——闭店日只是通知，不阻止任何操作。
     const dateStr = String(date).slice(0, 10);
-    const closed = await isClosedDate(dateStr);
-    if (closed) {
-      return NextResponse.json(
-        { error: "The venue is closed on this date" },
-        { status: 400 },
-      );
-    }
 
     // Same-day cut-off: from SAME_DAY_CUTOFF_HOUR (venue time) onward, online
     // booking for *today* is closed — walk-ins / phone only. Other dates are

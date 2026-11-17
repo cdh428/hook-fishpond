@@ -1,8 +1,6 @@
 import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { prisma } from '@/lib/prisma';
-import { bangkokDateString } from '@/lib/date-utils';
-import { isClosedDate } from '@/lib/closed-days';
 import { detectRequestLocale } from '@/i18n/detect-locale';
 
 /**
@@ -72,38 +70,8 @@ export default async function TableLandingPage({
     );
   }
 
-  // 今日休息（周一或法定休息日）→ 不进入点单
-  if (await isClosedDate(bangkokDateString())) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-bg-page px-6">
-        <div className="w-full max-w-md rounded-2xl bg-white p-8 text-center shadow-lg">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-error-50">
-            <svg
-              className="h-8 w-8 text-error-500"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-          </div>
-          <h1 className="text-lg font-bold text-neutral-900">{t('closedTitle')}</h1>
-          <p className="mt-2 text-sm text-neutral-500">{t('closedBody')}</p>
-          <a
-            href={`/${locale}`}
-            className="mt-6 inline-block rounded-xl bg-primary-700 px-6 py-3 text-sm font-semibold text-white"
-          >
-            {t('continue')}
-          </a>
-        </div>
-      </div>
-    );
-  }
+  // ⚠️ 2026-11-17：闭店日（周一/法定假日）不再阻止进入点单。
+  // 用户明确「实际有客户来还是会营业」，闭店日只是通知，不阻止任何操作。
 
   redirect(`/${locale}/menu?table=${table.code}`);
 }
