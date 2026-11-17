@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslations, useLocale } from 'next-intl';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { Link } from '@/i18n/routing';
 import { fetchOrder } from '@/lib/api-client';
@@ -9,25 +9,16 @@ import {
   ORDER_STATUS_COLOR,
   ORDER_STATUS_I18N,
   pickName,
-  toReceiptOrder,
 } from '@/lib/order-view';
-import {
-  buildKitchenTicketHtml,
-  buildBillHtml,
-  type PrintLabels,
-} from '@/lib/print-receipt';
-import { loadPreferences } from '@/lib/print-agent';
 import { formatLineOptions } from '@/lib/menu-options';
-import html2canvas from 'html2canvas';
-import { jsPDF } from 'jspdf';
 
 /**
  * 顾客订单详情 —— 下单成功后落地页，也是「我的订单」点进来的详情页。
  * 显示客户下单的内容、当前进度与结算状态。
  *
- * ⚠️ 2026-11-17：客户侧不再直接调打印桥（客户手机上没有桥，点了必然失败）。
- * 改为**生成 PDF 下载存证**到客户手机，客户可保存/转发。
- * 真实打印由 POS80 那台机的打印桥 --watch 自动拉单完成，客户侧只负责存证。
+ * ⚠️ 2026-11-17：客户侧**不提供任何打印 / PDF 存证**，只有 admin 能打印。
+ * 原因：客户手机上没有打印桥，`submitPrint` 点了必然失败；PDF 存证方案也已弃用。
+ * 真实打印由 POS80 那台机的打印桥 `--watch` 自动拉单完成，客户侧不做任何出纸动作。
  */
 export default function OrderDetailPage() {
   const t = useTranslations();
@@ -38,98 +29,6 @@ export default function OrderDetailPage() {
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [printing, setPrinting] = useState<'kitchen' | 'bill' | null>(null);
-  const [printMsg, setPrintMsg] = useState('');
-
-  const printLabels: PrintLabels = useMemo(
-    () => ({
-      brand: t('common.siteName'),
-      brandSub: t('printLabels.brandSub'),
-      kitchenTicket: t('printLabels.kitchenTicket'),
-      bill: t('printLabels.bill'),
-      receipt: t('printLabels.receipt'),
-      orderNo: t('orders.orderNumber'),
-      table: t('printLabels.table'),
-      takeaway: t('orderType.takeaway'),
-      dineIn: t('orderType.dineIn'),
-      customer: t('admin.customer'),
-      time: t('printLabels.time'),
-      item: t('printLabels.item'),
-      qty: t('printLabels.qty'),
-      amount: t('admin.amount'),
-      subtotal: t('adminOrders.subtotal'),
-      fishCharge: t('adminOrders.fishCharge'),
-      fishWeight: t('adminOrders.weightKg'),
-      discount: t('adminOrders.discount'),
-      total: t('payment.total'),
-      note: t('cart.orderNote'),
-      status: t('orders.status'),
-      settlementMode: t('adminOrders.settlementMode'),
-      prepaid: t('adminOrders.prepaid'),
-      postpaid: t('adminOrders.postpaid'),
-      scanToPay: t('adminOrders.scanToPay'),
-      paidAt: t('adminOrders.settledAt'),
-      pickupAt: t('cart.pickupTime'),
-      thanks: t('printLabels.thanks'),
-      // 行级送餐状态与分批标题（必须按 locale 传入，渲染库不硬编码中文）
-      served: t('printLabels.served'),
-      notServed: t('printLabels.notServed'),
-      batchAt: t('printLabels.batchAt'),
-      itemCount: t('printLabels.itemCount'),
-      paidStamp: t('printLabels.paidStamp'),
-    }),
-    [t],
-  );
-
-  const doPrint = async (purpose: 'kitchen' | 'bill') => {
-    if (!order) return;
-    setPrinting(purpose);
-    setPrintMsg('');
-    try {
-      const ro = toReceiptOrder(order, locale);
-      // ⚠️ 2026-11-05：纸宽（50/80mm）从偏好读取，决定 HTML 渲染宽度
-      const prefs = await loadPreferences();
-      const pw = Number(prefs.paperWidth) || 80;
-      const html =
-        purpose === 'kitchen'
-          ? buildKitchenTicketHtml(ro, printLabels, undefined, pw)
-          : buildBillHtml(ro, { qrDataUrl: null, labels: printLabels, paperWidthMm: pw });
-
-      // 客户侧存证：把小票 HTML 离屏渲染成 PNG，再用 jsPDF 打包成 PDF 下载。
-      // （客户手机上没有打印桥，点了打印必然失败；改成 PDF 让客户存证/转发。）
-      const wrap = document.createElement('div');
-      wrap.style.cssText = `position:fixed;left:-10000px;top:0;width:${pw}mm;background:#fff;`;
-      wrap.innerHTML = html;
-      document.body.appendChild(wrap);
-      let pdf: jsPDF;
-      try {
-        const canvas = await html2canvas(wrap, {
-          scale: 2,
-          backgroundColor: '#ffffff',
-          useCORS: true,
-          windowWidth: wrap.scrollWidth,
-        });
-        const imgData = canvas.toDataURL('image/jpeg', 0.92);
-        const pwMm = wrap.scrollWidth * 25.4 / 96;
-        const phMm = canvas.height * pwMm / canvas.width;
-        pdf = new jsPDF({
-          orientation: phMm > pwMm ? 'portrait' : 'landscape',
-          unit: 'mm',
-          format: [pwMm, phMm],
-        });
-        pdf.addImage(imgData, 'JPEG', 0, 0, pwMm, phMm);
-      } finally {
-        document.body.removeChild(wrap);
-      }
-      const fileName = `${ro.orderNumber || 'order'}-${purpose}.pdf`;
-      pdf.save(fileName);
-      setPrintMsg(t('orderDetail.pdfSaved'));
-    } catch (e: any) {
-      setPrintMsg(e?.message || t('common.error'));
-    } finally {
-      setPrinting(null);
-    }
-  };
 
   useEffect(() => {
     let cancelled = false;
@@ -354,32 +253,8 @@ export default function OrderDetailPage() {
         )}
       </div>
 
-      {/* 存证 PDF（客户手机无打印桥，改下载 PDF 存证；真实打印由 POS80 桥 --watch 完成） */}
-      <div className="mb-4 rounded-xl bg-white p-4 shadow-md">
-        <h3 className="mb-3 text-sm font-semibold text-neutral-700">
-          📄 {t('orderDetail.pdfTitle')}
-        </h3>
-        <p className="mb-3 text-xs text-neutral-500">{t('orderDetail.pdfHint')}</p>
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            onClick={() => void doPrint('kitchen')}
-            disabled={printing !== null}
-            className="rounded-xl bg-primary-700 py-2.5 text-xs font-semibold text-white transition hover:bg-primary-800 disabled:opacity-50"
-          >
-            {printing === 'kitchen' ? t('adminPrint.testing') : t('adminPrint.kitchen')}
-          </button>
-          <button
-            onClick={() => void doPrint('bill')}
-            disabled={printing !== null}
-            className="rounded-xl bg-neutral-100 py-2.5 text-xs font-semibold text-neutral-700 transition hover:bg-neutral-200 disabled:opacity-50"
-          >
-            {printing === 'bill' ? t('adminPrint.testing') : t('adminPrint.bill')}
-          </button>
-        </div>
-        {printMsg && (
-          <p className="mt-2 text-xs text-neutral-500">{printMsg}</p>
-        )}
-      </div>
+      {/* ⚠️ 2026-11-17：客户侧不提供任何打印 / PDF 存证，只有 admin 能打印。
+          真实打印由 POS80 桥 --watch 自动完成，这里不放任何出纸/存证按钮。 */}
 
       {/* 操作 */}
       <div className="grid grid-cols-2 gap-3">
