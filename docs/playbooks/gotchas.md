@@ -860,6 +860,39 @@ for (let i = 0; i < list.length; i++) {
 
 ---
 
+### 6.20 `check-secrets.sh --all` 在本机会卡死 / 超时（2026-11-17 实测）
+
+**症状**：`bash scripts/check-secrets.sh --all` 跑几分钟没输出，最后被 SIGTERM / 超时杀掉。
+
+**根因**：`--all` 的实现是
+```bash
+DIFF="$(while read f; do cat -- "$f"; done < <(git ls-files ...))"
+```
+即**把所有被跟踪文件全文灌进一个 shell 变量**再 grep。本仓库还挂着
+`fishpond-flood-ad/`、`fishpond-end-card/` 两个上万文件的封存子项目，体量直接压垮。
+
+**处置**：
+- 体检用 **`node scripts/scan-secrets-fast.mjs`**（纯 Node 逐文件读，几秒出结果）
+  加 `--workbuddy` 可扫被 gitignore 的雷区
+- **pre-commit 不受影响**（只扫暂存区新增行，很快），照常依赖它拦
+- 别为了跑通去改 `--all` 的实现细节 —— 用新脚本，`check-secrets.sh` 留给 pre-commit
+
+---
+
+### 6.21 密文闸门会拦「文档里提到的私钥头字面串」（2026-11-17）
+
+**踩过**：在新脚本注释里写了一句「例如（五个连字符）BEGIN OPENSSH PRIVATE KEY（五个连字符）
+是规则文本」，commit 时被 pre-commit 拦下，报「私钥头 / OpenSSH 私钥」。
+
+**这是闸门行为正确**（它无法区分「注释里提到」和「真的私钥」）。
+
+**处置**：**改措辞**，不要把 PEM 头完整写进任何会进 git 的文本
+（连本文档都只描述「五个连字符 + BEGIN … PRIVATE KEY」，绝不写完整字面量，
+否则本文件自己就会被扫描器判成私钥 —— 2026-11-17 实际发生过两次）。
+**绝不要** `--no-verify` 或 `ALLOW_SECRETS=1` 绕过去 —— 那等于自己拆掉闸门。
+
+---
+
 ## 七、改动前的自检清单
 
 - [ ] 涉及泰文？→ 用的是原文吗？人工看过吗？
