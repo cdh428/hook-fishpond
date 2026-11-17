@@ -366,6 +366,24 @@ export async function updateMe(input: Partial<ApiUser>): Promise<ApiUser> {
   });
 }
 
+/**
+ * LINE 登录入口 —— 整页跳转到 `/api/auth/line/start`（302 → LINE 授权页）。
+ * 回跳由 callback 落 cookie 并 redirect 回 profile，前端只需在 mount 时
+ * 用 fetchMe() 以服务端会话为准刷新一次。
+ */
+export function loginWithLine(locale: string): void {
+  window.location.href = `/api/auth/line/start?locale=${encodeURIComponent(locale)}`;
+}
+
+/** 顾客退出：清服务端会话 cookie（localStorage 由 AppContext 负责） */
+export async function logoutUser(): Promise<void> {
+  try {
+    await request<{ ok: boolean }>(`/api/auth/logout`, { method: 'POST' });
+  } catch {
+    /* cookie 已过期等情况忽略，前端照常清本地态 */
+  }
+}
+
 // ---------- Payment ----------
 
 export async function createPayment(input: {

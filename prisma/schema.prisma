@@ -55,7 +55,11 @@ model Spot {
 // ===== USER =====
 model User {
   id               String     @id @default(cuid())
-  phone            String     @unique
+  // LINE Login 登录拿不到手机号（需要 Certified Provider 才有 OC_PHONE_NUMBER 权限），
+  // phone 降级为「自愿填写的联系方式」，可空；LINE 用户此列为 null。
+  phone            String?    @unique
+  // LINE 签发的用户 id（Provider 维度唯一、不可伪造），登录身份的唯一可信来源。
+  lineUserId       String?    @unique
   name             String
   language         String     @default("zh")
   marketingConsent Boolean    @default(false)

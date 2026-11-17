@@ -1,19 +1,21 @@
 import { NextRequest } from "next/server";
 import { createHmac, timingSafeEqual, randomUUID } from "crypto";
-import type { AdminUser } from "@prisma/client";
+import type { AdminUser, User } from "@prisma/client";
 import { prisma } from "./prisma";
 
 /**
- * Simple header-based user auth.
- * Client sends `x-user-id` header (set after login/register).
- * Returns the User record or null.
+ * 顾客身份解析。
  *
- * ⚠️ 这不是鉴权，只是识别：`x-user-id` 是客户端自己填的，任何知道 cuid 的人都能冒充。
- * 之所以暂时保留，是因为顾客端目前没有可用的第二因素（没有 OTP 通道）。
- * 已知限制见 `docs/` 安全说明与项目记忆「安全待办」。
+ * 优先级：
+ *  1. **HMAC 签名 cookie**（LINE Login / 手机号登录后下发，见 `signCustomerSession`）
+ *  2. `x-user-id` 请求头 —— **兼容期保留**，2026-11-17 起被 LINE 会话逐步取代：
+ *     它是客户端自己填的，任何知道 cuid 的人都能冒充。兼容期结束后删除这条回退。
  */
 export async function getUserFromRequest(request: NextRequest) {
-  const userId = request.headers.get("x-user-id");
+  const cookieId = verifyCustomerSession(
+    request.cookies.get(CUSTOMER_COOKIE)?.value,
+  );
+  const userId = cookieId ?? request.headers.get("x-user-id");
   if (!userId) return null;
 
   try {
@@ -67,16 +69,37 @@ function sign(payload: string): string {
   return b64url(createHmac("sha256", sessionSecret()).update(payload).digest());
 }
 
-/** 生成管理员会话 token：`<base64url({id,iat,nonce})>.<hmac>` */
-export function signAdminSession(adminId: string): string {
+/** 供其他模块（如 LINE Login state）复用同一把密钥做 HMAC 签名 */
+export function signRaw(payload: string): string {
+  return sign(payload);
+}
+
+/** 与 signRaw 对称的验签（只验签名，不含时效；时效由调用方 payload 里的 iat 自行判断） */
+export function verifyRaw(payload: string, mac: string): boolean {
+  if (!payload || !mac) return false;
+  const expected = sign(payload);
+  if (expected.length !== mac.length) return false;
+  return timingSafeEqual(Buffer.from(expected), Buffer.from(mac));
+}
+
+/**
+ * 会话 payload 统一带 `k`（kind）：`admin` / `cust`。
+ * 验签时按期望 kind 校验 —— 拿顾客 token 冒充管理员（或反过来）直接失败。
+ * ⚠️ 2026-11-17 起旧的无 `k` token 一律失效（管理员需重新登录一次，TTL 7 天，影响可控）。
+ */
+type SessionKind = "admin" | "cust";
+
+function signSession(id: string, kind: SessionKind): string {
   const payload = b64url(
-    JSON.stringify({ id: adminId, iat: Date.now(), n: randomUUID() }),
+    JSON.stringify({ id, iat: Date.now(), n: randomUUID(), k: kind }),
   );
   return `${payload}.${sign(payload)}`;
 }
 
-/** 验签并取出 adminId；失败或过期返回 null */
-export function verifyAdminSession(token: string | undefined | null): string | null {
+function verifySession(
+  token: string | undefined | null,
+  kind: SessionKind,
+): string | null {
   if (!token || !token.includes(".")) return null;
   const idx = token.lastIndexOf(".");
   const payload = token.slice(0, idx);
@@ -93,13 +116,27 @@ export function verifyAdminSession(token: string | undefined | null): string | n
       payload.replace(/-/g, "+").replace(/_/g, "/"),
       "base64",
     ).toString("utf8");
-    const data = JSON.parse(raw) as { id?: string; iat?: number };
-    if (!data.id || typeof data.iat !== "number") return null;
+    const data = JSON.parse(raw) as {
+      id?: string;
+      iat?: number;
+      k?: string;
+    };
+    if (!data.id || typeof data.iat !== "number" || data.k !== kind) return null;
     if (Date.now() - data.iat > SESSION_TTL_SECONDS * 1000) return null;
     return data.id;
   } catch {
     return null;
   }
+}
+
+/** 生成管理员会话 token：`<base64url({id,iat,nonce,k})>.<hmac>` */
+export function signAdminSession(adminId: string): string {
+  return signSession(adminId, "admin");
+}
+
+/** 验签并取出 adminId；失败、过期或 kind 不符返回 null */
+export function verifyAdminSession(token: string | undefined | null): string | null {
+  return verifySession(token, "admin");
 }
 
 /** 写入会话 cookie 的选项（单一真相，登录/续期都用它） */
@@ -142,6 +179,36 @@ export async function requireAdmin(request: NextRequest) {
   }
   return admin;
 }
+
+// ─────────────────────────────────────────────────────────────
+// 顾客会话：与 admin 同一套 HMAC 机制，kind=cust 隔离
+// ─────────────────────────────────────────────────────────────
+//
+// 2026-11-17 随 LINE Login（方案②）引入。cookie httpOnly，前端拿不到值，
+// 改不了 payload；`x-user-id` 回退仅作兼容期，见 getUserFromRequest 注释。
+
+const CUSTOMER_COOKIE = "hf-user-session";
+
+/** 顾客会话 token（LINE 登录 / 手机号登录成功后下发） */
+export function signCustomerSession(userId: string): string {
+  return signSession(userId, "cust");
+}
+
+/** 验顾客会话；失败返回 null */
+export function verifyCustomerSession(
+  token: string | undefined | null,
+): string | null {
+  return verifySession(token, "cust");
+}
+
+export const CUSTOMER_COOKIE_NAME = CUSTOMER_COOKIE;
+export const CUSTOMER_COOKIE_OPTIONS = {
+  httpOnly: true,
+  sameSite: "lax" as const,
+  secure: process.env.NODE_ENV === "production",
+  maxAge: SESSION_TTL_SECONDS,
+  path: "/",
+};
 
 /**
  * Require **super admin** — for destructive / book-correcting operations.

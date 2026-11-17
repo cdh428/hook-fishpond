@@ -39,7 +39,7 @@ const orderStatusI18n: Record<string, string> = {
 export default function ProfilePage() {
   const t = useTranslations();
   const locale = useLocale() as Locale;
-  const { user, registerUser, setUser, logout } = useApp();
+  const { user, registerUser, setUser, logout, loginWithLine } = useApp();
 
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -54,6 +54,31 @@ export default function ProfilePage() {
   const [loginError, setLoginError] = useState('');
   const [loggingIn, setLoggingIn] = useState(false);
   const [activeTab, setActiveTab] = useState<'bookings' | 'orders'>('bookings');
+
+  // LINE Login 回跳提示（?lineError=... / ?lineLogin=1）。
+  // 用 window.location 而不是 useSearchParams：避免静态页 CSR bailout 的 Suspense 约束。
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const q = new URLSearchParams(window.location.search);
+    const err = q.get('lineError');
+    const ok = q.get('lineLogin');
+    if (!err && !ok) return;
+    if (err) {
+      const key = {
+        notConfigured: 'authLine.errNotConfigured',
+        expired: 'authLine.errExpired',
+        invalidState: 'authLine.errInvalidState',
+        tokenFailed: 'authLine.errTokenFailed',
+        profileFailed: 'authLine.errProfileFailed',
+        tooMany: 'authLine.errTooMany',
+      }[err as string];
+      setLoginError(t(key || 'authLine.errGeneric'));
+      setShowLogin(true);
+    }
+    // 清掉 URL 里的回跳参数，刷新时不会重复弹
+    window.history.replaceState(null, '', window.location.pathname);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [bookings, setBookings] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
@@ -178,10 +203,19 @@ export default function ProfilePage() {
             {t('profile.registerDesc')}
           </p>
           <button
-            onClick={() => setShowLogin(true)}
-            className="rounded-xl bg-primary-700 px-6 py-3 text-sm font-semibold text-white shadow-brand transition hover:bg-primary-800"
+            onClick={() => loginWithLine(locale)}
+            className="mb-3 flex w-full items-center justify-center gap-2 rounded-xl bg-[#06C755] px-6 py-3 text-sm font-semibold text-white shadow-brand transition hover:brightness-95"
           >
-            {t('common.login')} / {t('common.register')}
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+              <path d="M19.365 9.845c0 4.11-3.676 7.44-8.203 7.44-.976 0-1.913-.154-2.787-.435a.5.5 0 00-.348-.014l-2.06.663a.5.5 0 01-.65-.607l.517-1.83a.5.5 0 00-.115-.49C4.016 13.6 3.34 11.79 3.34 9.845c0-4.11 3.676-7.44 8.203-7.44s7.822 3.33 7.822 7.44zM8.06 7.61h-1.1a.28.28 0 00-.28.28v4.44c0 .155.125.28.28.28h1.1a.28.28 0 00.28-.28V7.89a.28.28 0 00-.28-.28zm5.856 0h-1.1a.28.28 0 00-.28.28v2.638L10.53 7.7a.28.28 0 00-.233-.125l-1.13.005a.28.28 0 00-.28.28v4.47c0 .155.125.28.28.28h1.1a.28.28 0 00.28-.28V9.69l2.008 2.55a.28.28 0 00.221.107h.04l1.117-.005a.28.28 0 00.28-.28V7.89a.28.28 0 00-.28-.28zm3.006 3.097h-1.928V7.89a.28.28 0 00-.28-.28h-1.1a.28.28 0 00-.28.28v4.44c0 .077.03.146.08.198a.279.279 0 00.2.082h3.308a.28.28 0 00.28-.28v-1.345a.28.28 0 00-.28-.28z" />
+            </svg>
+            {t('authLine.continueWithLine')}
+          </button>
+          <button
+            onClick={() => setShowLogin(true)}
+            className="rounded-xl px-6 py-3 text-sm font-medium text-neutral-500 underline-offset-2 transition hover:text-neutral-700 hover:underline"
+          >
+            {t('authLine.orPhone')}
           </button>
         </div>
       ) : (
@@ -528,6 +562,22 @@ export default function ProfilePage() {
               {loginError && (
                 <p className="text-xs text-error-600">{loginError}</p>
               )}
+
+              <button
+                onClick={() => loginWithLine(locale)}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#06C755] py-3 text-sm font-semibold text-white transition hover:brightness-95"
+              >
+                <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                  <path d="M19.365 9.845c0 4.11-3.676 7.44-8.203 7.44-.976 0-1.913-.154-2.787-.435a.5.5 0 00-.348-.014l-2.06.663a.5.5 0 01-.65-.607l.517-1.83a.5.5 0 00-.115-.49C4.016 13.6 3.34 11.79 3.34 9.845c0-4.11 3.676-7.44 8.203-7.44s7.822 3.33 7.822 7.44zM8.06 7.61h-1.1a.28.28 0 00-.28.28v4.44c0 .155.125.28.28.28h1.1a.28.28 0 00.28-.28V7.89a.28.28 0 00-.28-.28zm5.856 0h-1.1a.28.28 0 00-.28.28v2.638L10.53 7.7a.28.28 0 00-.233-.125l-1.13.005a.28.28 0 00-.28.28v4.47c0 .155.125.28.28.28h1.1a.28.28 0 00.28-.28V9.69l2.008 2.55a.28.28 0 00.221.107h.04l1.117-.005a.28.28 0 00.28-.28V7.89a.28.28 0 00-.28-.28zm3.006 3.097h-1.928V7.89a.28.28 0 00-.28-.28h-1.1a.28.28 0 00-.28.28v4.44c0 .077.03.146.08.198a.279.279 0 00.2.082h3.308a.28.28 0 00.28-.28v-1.345a.28.28 0 00-.28-.28z" />
+                </svg>
+                {t('authLine.continueWithLine')}
+              </button>
+
+              <div className="flex items-center gap-3 text-xs text-neutral-400">
+                <span className="h-px flex-1 bg-neutral-200" />
+                {t('authLine.orPhone')}
+                <span className="h-px flex-1 bg-neutral-200" />
+              </div>
 
               <button
                 onClick={handleLogin}

@@ -10,8 +10,10 @@ const LINE_URL = 'https://line.me/R/ti/p/@300bsham';
 /**
  * 站内页脚。
  *
- * ⚠️ 这里**只放已经确认过的信息**（营业时间来自业务规则、FB / LINE 来自品牌资料）。
- *    地址与电话尚未确认，故意留空 —— 拿到准确信息再补，别填占位符。
+ * ⚠️ 这里**只放已经确认过的信息**（营业时间来自业务规则、FB / LINE 来自品牌资料、
+ *    地址来自 Google Maps 真身「บ่อตกปลา ฮุค คลองสี่」，门牌号未颁发故不含 street number）。
+ *    电话尚未确定，故意留空 —— 拿到号码再补，别填占位符。
+ *    地址三处（Google / 网站 / Facebook）必须逐字一致（NAP 对齐，见 docs/OPERATIONS.md）。
  */
 export default function Footer() {
   const t = useTranslations();
@@ -47,6 +49,10 @@ export default function Footer() {
           <div className="flex gap-2">
             <dt className="w-20 shrink-0 text-primary-300/80">{t('footer.closedLabel')}</dt>
             <dd>{t('footer.closed')}</dd>
+          </div>
+          <div className="flex gap-2">
+            <dt className="w-20 shrink-0 text-primary-300/80">{t('footer.addressLabel')}</dt>
+            <dd>{t('footer.address')}</dd>
           </div>
           <div className="flex gap-2">
             <dt className="w-20 shrink-0 text-primary-300/80">{t('footer.followLabel')}</dt>

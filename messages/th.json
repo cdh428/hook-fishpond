@@ -1212,7 +1212,9 @@
     "closedLabel": "หยุดประจำ",
     "closed": "ทุกวันจันทร์",
     "followLabel": "ติดตามเรา",
-    "rights": "© {year} Hook Happyness สงวนลิขสิทธิ์"
+    "rights": "© {year} Hook Happyness สงวนลิขสิทธิ์",
+    "addressLabel": "ที่อยู่",
+    "address": "คลองสี่ อำเภอธัญบุรี ปทุมธานี 12130"
   },
   "about": {
     "title": "เรื่องราวของบ่อ",
@@ -1465,5 +1467,17 @@
   "cronErr": {
     "secretMissing": "ยังไม่ได้ตั้งค่า CRON_SECRET และคำขอนี้ไม่ได้เข้าสู่ระบบผู้ดูแล",
     "unauthorized": "ไม่มีสิทธิ์เข้าถึง"
+  },
+  "authLine": {
+    "continueWithLine": "ดำเนินการต่อด้วย LINE",
+    "orPhone": "หรือเข้าสู่ระบบด้วยเบอร์โทร",
+    "lineLoginOk": "เข้าสู่ระบบด้วย LINE สำเร็จ",
+    "errNotConfigured": "ยังไม่เปิดใช้เข้าสู่ระบบด้วย LINE กรุณาใช้เบอร์โทรก่อน",
+    "errExpired": "หมดเวลาเข้าสู่ระบบ กรุณาลองใหม่",
+    "errInvalidState": "คำขอเข้าสู่ระบบไม่ถูกต้อง กรุณาลองใหม่",
+    "errTokenFailed": "การอนุญาต LINE ล้มเหลว กรุณาลองใหม่",
+    "errProfileFailed": "ไม่สามารถดึงข้อมูล LINE ได้ กรุณาลองใหม่",
+    "errTooMany": "พยายามบ่อยเกินไป กรุณาลองใหม่ภายหลัง",
+    "errGeneric": "เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่"
   }
 }

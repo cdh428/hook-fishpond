@@ -1212,7 +1212,9 @@
     "closedLabel": "Closed",
     "closed": "Every Monday",
     "followLabel": "Follow",
-    "rights": "© {year} Hook Happyness. All rights reserved."
+    "rights": "© {year} Hook Happyness. All rights reserved.",
+    "addressLabel": "Address",
+    "address": "Khlong Si, Thanyaburi, Pathum Thani 12130, Thailand"
   },
   "about": {
     "title": "Our Story",
@@ -1465,5 +1467,17 @@
   "cronErr": {
     "secretMissing": "CRON_SECRET is not configured and this request has no admin session",
     "unauthorized": "Unauthorized"
+  },
+  "authLine": {
+    "continueWithLine": "Continue with LINE",
+    "orPhone": "or sign in with phone number",
+    "lineLoginOk": "Signed in with LINE",
+    "errNotConfigured": "LINE sign-in is not available yet — please use your phone number for now",
+    "errExpired": "Sign-in timed out — please try again",
+    "errInvalidState": "Invalid sign-in request — please try again",
+    "errTokenFailed": "LINE authorization failed — please try again",
+    "errProfileFailed": "Could not get your LINE profile — please try again",
+    "errTooMany": "Too many attempts — please try again later",
+    "errGeneric": "Sign-in failed — please try again"
   }
 }

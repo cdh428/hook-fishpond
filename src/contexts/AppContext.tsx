@@ -14,6 +14,9 @@ import {
   setStoredUser,
   loginUser as apiLoginUser,
   registerUser as apiRegisterUser,
+  fetchMe as apiFetchMe,
+  logoutUser as apiLogoutUser,
+  loginWithLine as loginWithLineRedirect,
 } from '@/lib/api-client';
 import type { OrderLineOption } from '@/lib/menu-options';
 
@@ -138,6 +141,8 @@ interface AppContextValue {
     language?: string;
   }) => Promise<ApiUser>;
   logout: () => void;
+  /** LINE Login：整页跳转授权（callback 回来后自动刷新会话） */
+  loginWithLine: (locale: string) => void;
   setUser: (user: ApiUser | null) => void;
 
   // cart
@@ -184,6 +189,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setHydrated(true);
   }, []);
 
+  // 以服务端会话为准刷新一次（LINE Login 回跳只落 httpOnly cookie，
+  // localStorage 里没东西；反过来手机号登录后 cookie 也在，两边并不冲突）。
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const u = await apiFetchMe();
+        if (!cancelled) setUserState(u);
+      } catch {
+        /* 未登录：保留 localStorage 态（兼容期 x-user-id 用户） */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Persist cart
   useEffect(() => {
     if (!hydrated) return;
@@ -219,7 +241,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(() => {
     setUser(null);
+    void apiLogoutUser();
   }, [setUser]);
+
+  /** LINE 登录：整页跳转授权，回跳后由上方 fetchMe 刷新会话 */
+  const loginWithLine = useCallback((locale: string) => {
+    loginWithLineRedirect(locale);
+  }, []);
 
   // ----- Cart operations -----
 
@@ -350,6 +378,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     loginUser,
     registerUser,
     logout,
+    loginWithLine,
     setUser,
     cart,
     foodCart,

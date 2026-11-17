@@ -1212,7 +1212,9 @@
     "closedLabel": "固定公休",
     "closed": "每周一",
     "followLabel": "关注我们",
-    "rights": "© {year} Hook Happyness · 乐钓鱼塘 版权所有"
+    "rights": "© {year} Hook Happyness · 乐钓鱼塘 版权所有",
+    "addressLabel": "地址",
+    "address": "空四（Khlong Si），探耶武里县，巴吞他尼府 12130，泰国"
   },
   "about": {
     "title": "开塘故事",
@@ -1465,5 +1467,17 @@
   "cronErr": {
     "secretMissing": "CRON_SECRET 未配置，且当前请求不是管理员会话（无法鉴权）",
     "unauthorized": "无权访问该接口"
+  },
+  "authLine": {
+    "continueWithLine": "用 LINE 继续",
+    "orPhone": "或用手机号登录",
+    "lineLoginOk": "LINE 登录成功",
+    "errNotConfigured": "LINE 登录暂未开放，请先用手机号登录",
+    "errExpired": "登录已超时，请重新点击",
+    "errInvalidState": "登录请求无效，请重新点击",
+    "errTokenFailed": "LINE 授权失败，请重试",
+    "errProfileFailed": "无法获取 LINE 资料，请重试",
+    "errTooMany": "尝试太频繁，请稍后再试",
+    "errGeneric": "登录失败，请重试"
   }
 }
