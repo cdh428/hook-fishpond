@@ -1,5 +1,7 @@
 # 凭据管理手册（Secrets Handling）
 
+> 📌 **总索引见 [`docs/link.md`](../link.md)**（连接 · 闸门 · 安全）。本文只讲「怎么读、怎么消敏」。
+>
 > 权威版本 · 更新日期 2026-10-09 · 适用 `C:\Users\dnlct\WorkBuddy\hook-fishpond`
 >
 > **一条铁律：秘密只存本机，绝不出现在任何进 git 的文件里（仓库是 public）。**

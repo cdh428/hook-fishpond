@@ -3,6 +3,8 @@
 > **接手这个项目，先读这一份。**
 > 它回答「这是什么 / 谁在用 / 边界在哪 / 为什么现在是这个样子」。
 >
+> - 🔐 **连不上 / 要改 Vercel 变量 / 要连另一台电脑 / 怀疑密钥泄露 → 先读 [`docs/link.md`](docs/link.md)**
+>   （连接·闸门·安全 统一知识库，所有会话必读）
 > - 日常要做什么 → [`docs/OPERATIONS.md`](docs/OPERATIONS.md)
 > - 账号与密钥在哪 → [`docs/CREDENTIALS.md`](docs/CREDENTIALS.md)
 > - 改完怎么发上去 → [`docs/playbooks/push-checklist.md`](docs/playbooks/push-checklist.md)
