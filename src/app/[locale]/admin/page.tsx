@@ -51,6 +51,8 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState({
     todayBookings: 0,
     todayRevenue: 0,
+    yesterdayRevenue: 0,
+    yesterdayBookings: 0,
     openOutstanding: 0,
     openOutstandingCount: 0,
     todayProjected: 0,
@@ -83,6 +85,8 @@ export default function AdminDashboard() {
       setStats({
         todayBookings: statsRes.todayBookings ?? 0,
         todayRevenue: statsRes.todayRevenue ?? 0,
+        yesterdayRevenue: statsRes.yesterdayRevenue ?? 0,
+        yesterdayBookings: statsRes.yesterdayBookings ?? 0,
         openOutstanding: statsRes.openOutstanding ?? 0,
         openOutstandingCount: statsRes.openOutstandingCount ?? 0,
         todayProjected: statsRes.todayProjected ?? 0,
@@ -115,10 +119,41 @@ export default function AdminDashboard() {
     }
   };
 
+  // 环比计算工具
+  const pctChange = (today: number, yesterday: number): { pct: number; dir: 'up' | 'down' | 'flat' } => {
+    if (yesterday === 0) return { pct: 0, dir: 'flat' };
+    const pct = Math.round(((today - yesterday) / yesterday) * 1000) / 10;
+    if (pct > 0) return { pct, dir: 'up' };
+    if (pct < 0) return { pct: Math.abs(pct), dir: 'down' };
+    return { pct: 0, dir: 'flat' };
+  };
+
+  const revenueChange = pctChange(stats.todayRevenue, stats.yesterdayRevenue);
+  const bookingsChange = pctChange(stats.todayBookings, stats.yesterdayBookings);
+  const avgTicketToday = stats.todayBookings > 0 ? stats.todayRevenue / stats.todayBookings : 0;
+  const avgTicketYesterday = stats.yesterdayBookings > 0 ? stats.yesterdayRevenue / stats.yesterdayBookings : 0;
+  const avgTicketChange = pctChange(avgTicketToday, avgTicketYesterday);
+
+  const arrowIcon = (dir: 'up' | 'down' | 'flat') => dir === 'up' ? '▲' : dir === 'down' ? '▼' : '—';
+
   const statCards = [
+    {
+      labelKey: 'admin.todayRevenue',
+      value: `฿${Math.round(stats.todayRevenue).toLocaleString()}`,
+      sub: `${arrowIcon(revenueChange.dir)} ${Math.abs(revenueChange.pct)}% vs 昨日`,
+      subDir: revenueChange.dir,
+      icon: (
+        <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      ),
+      color: 'bg-success-50 text-success-700',
+    },
     {
       labelKey: 'admin.todayBookings',
       value: String(stats.todayBookings),
+      sub: `${arrowIcon(bookingsChange.dir)} ${Math.abs(bookingsChange.pct)}% vs 昨日`,
+      subDir: bookingsChange.dir,
       icon: (
         <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -127,45 +162,30 @@ export default function AdminDashboard() {
       color: 'bg-primary-50 text-primary-700',
     },
     {
-      labelKey: 'admin.todayRevenue',
-      value: `฿${stats.todayRevenue.toLocaleString()}`,
+      labelKey: 'admin.avgTicket',
+      value: `฿${Math.round(avgTicketToday).toLocaleString()}`,
+      sub: `${arrowIcon(avgTicketChange.dir)} ${Math.abs(avgTicketChange.pct)}% vs 昨日`,
+      subDir: avgTicketChange.dir,
       icon: (
         <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m-7 4h8m-9 4h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
         </svg>
       ),
-      color: 'bg-success-50 text-success-600',
-    },
-    {
-      labelKey: 'admin.todayProjected',
-      value: `฿${stats.todayProjected.toLocaleString()}`,
-      sub: `+ ฿${stats.openOutstanding.toLocaleString()} (${stats.openOutstandingCount})`,
-      icon: (
-        <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0l-4 4-4-4m4 4V3M5 7h8m-4-4v4M3 3l4 4" transform="translate(0 6)" />
-        </svg>
-      ),
-      color: 'bg-success-50 text-success-600',
+      color: 'bg-teal-50 text-teal-700',
     },
     {
       labelKey: 'admin.pendingOrders',
       value: String(stats.pendingOrders),
+      sub: stats.awaitingSettlementCount > 0
+        ? `+${stats.awaitingSettlementCount} 待收款`
+        : '全部已处理',
+      subDir: 'flat' as const,
       icon: (
         <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
       ),
-      color: 'bg-accent-50 text-accent-700',
-    },
-    {
-      labelKey: 'admin.activeSpots',
-      value: String(stats.activeSpots),
-      icon: (
-        <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z" />
-        </svg>
-      ),
-      color: 'bg-neutral-100 text-neutral-700',
+      color: stats.pendingOrders > 0 ? 'bg-amber-50 text-amber-700' : 'bg-neutral-100 text-neutral-500',
     },
   ];
 
@@ -187,16 +207,18 @@ export default function AdminDashboard() {
         <>
           {/* KPI Cards */}
           <div className="mb-4 grid grid-cols-2 gap-3">
-            {statCards.map((stat) => (
-              <div key={stat.labelKey} className={`rounded-xl p-4 ${stat.color}`}>
-                <div className="mb-2">{stat.icon}</div>
-                <p className="text-xs opacity-70">{t(stat.labelKey)}</p>
-                <p className="mt-1 text-2xl font-bold">{stat.value}</p>
-                {stat.sub && (
-                  <p className="mt-0.5 text-[11px] font-medium opacity-70">{stat.sub}</p>
-                )}
-              </div>
-            ))}
+            {statCards.map((stat) => {
+              const subColor = stat.subDir === 'up' ? 'text-success-600' : stat.subDir === 'down' ? 'text-error-600' : 'text-neutral-400';
+              return (
+                <div key={stat.labelKey} className={`rounded-xl p-4 ${stat.color}`}>
+                  <p className="text-xs opacity-70">{t(stat.labelKey)}</p>
+                  <p className="mt-1 text-2xl font-bold">{stat.value}</p>
+                  {stat.sub && (
+                    <p className={`mt-0.5 text-[11px] font-medium ${subColor}`}>{stat.sub}</p>
+                  )}
+                </div>
+              );
+            })}
           </div>
 
           {/* 待收款提醒 —— 后付订单还没结清 */}

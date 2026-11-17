@@ -14,10 +14,22 @@ export async function GET(request: NextRequest) {
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
 
+    // 昨日（用于环比对比）
+    const yesterdayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+    const yesterdayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
     // Today's bookings count (non-cancelled)
     const todayBookings = await prisma.booking.count({
       where: {
         createdAt: { gte: todayStart, lt: todayEnd },
+        status: { not: "CANCELLED" },
+      },
+    });
+
+    // 昨日预订数（用于环比）
+    const yesterdayBookings = await prisma.booking.count({
+      where: {
+        createdAt: { gte: yesterdayStart, lt: yesterdayEnd },
         status: { not: "CANCELLED" },
       },
     });
@@ -34,6 +46,16 @@ export async function GET(request: NextRequest) {
       _sum: { amount: true },
     });
     const todayCollected = Math.round((todayCollectedAgg._sum.amount ?? 0) * 100) / 100;
+
+    // 昨日实收（用于环比）
+    const yesterdayCollectedAgg = await prisma.paymentRecord.aggregate({
+      where: {
+        voidedAt: null,
+        paidAt: { gte: yesterdayStart, lt: yesterdayEnd },
+      },
+      _sum: { amount: true },
+    });
+    const yesterdayCollected = Math.round((yesterdayCollectedAgg._sum.amount ?? 0) * 100) / 100;
 
     // 「进行中订单金额」= 未结清订单的「还需付」差额（总应付 − 已付实收）求和。
     // 这是"还没到手、但预计会收到"的部分。已付靠流水实收（sumCollected）扣减。
@@ -103,8 +125,10 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       todayBookings: todayBookings || 0,
+      yesterdayBookings: yesterdayBookings || 0,
       // todayRevenue 现语义 = 「今天进入收款」= 今日实际收到（Σ 有效流水），保留字段名避免前端断
       todayRevenue: todayCollected,
+      yesterdayRevenue: yesterdayCollected,
       todayCollected,
       // 进行中订单的「还需付」差额（未结清单：总应付 − 已付）
       openOutstanding,
