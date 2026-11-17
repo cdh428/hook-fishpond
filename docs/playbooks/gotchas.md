@@ -826,7 +826,7 @@ message 正确，直接推送即可。
 **顺带**：`messages/*.json` 是高频冲突区（每个功能都要加三语文案）。
 加泰文文案**别手打**（声调符号易丢/易错），用 Python 脚本按锚点插入并正则校验。
 
-### 6.16 Prisma/pg 裸 SQL 的列名必须带双引号（2026-11-17 踩）
+### 6.18 Prisma/pg 裸 SQL 的列名必须带双引号（2026-11-17 踩）
 
 **踩过**：直接写 SQL 查询，用 `orderNumber` / `customerName` 报
 `column "ordernumber" does not exist` —— 查不到列，整条查询静默失败（只看到 exit 1）。
@@ -844,7 +844,7 @@ SELECT "orderNumber", "customerName" FROM "Order" WHERE "printState" IS NULL
 **排查口诀**：查询"静默失败/exit 1 无输出"，八成是列名没加引号，不是数据问题。
 先 `console.error` 把 SQL 报错打出来，别只看退出码。
 
-### 6.17 热敏机批量打印要加张间间隔（2026-11-17）
+### 6.19 热敏机批量打印要加张间间隔（2026-11-17）
 
 **踩过**：批量打印桌号 QR（`admin/tables` 的 `printAll`）一次 `Promise.all` 并发几十张，
 热敏机连续进纸会**错位/截断/串行**。
