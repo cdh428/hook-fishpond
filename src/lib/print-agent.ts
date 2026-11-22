@@ -121,12 +121,25 @@ export function getLastProbeReason(): BridgeOfflineReason {
   return lastProbeReason;
 }
 
+/**
+ * 从 localStorage 读取桥鉴权 Key。
+ *
+ * ⚠️ 2026-11-22：用户反馈错误 `Failed to execute 'fetch': Failed to read 'headers'
+ * property from 'RequestInit': String contains non ISO-8859-1 code point.`
+ * 这是 HTTP 头值的硬限制：只能包含 Latin-1（ASCII 0x20-0xFF）字符。
+ * 用户粘贴 token 时剪贴板可能带入不可见的全角空格/零宽字符，导致 fetch 直接抛异常。
+ *
+ * 修法：读取时过滤所有非 ASCII 可打印字符（0x20-0x7E）。
+ */
 export function getBridgeKey(): string {
-  return (safeLocalStorage()?.getItem(LS_BRIDGE_KEY) || '').trim();
+  const raw = safeLocalStorage()?.getItem(LS_BRIDGE_KEY) || '';
+  // 只保留 ASCII 可打印字符（空格到波浪号），去掉全角空格/零宽字符等
+  return raw.replace(/[^\x20-\x7E]/g, '').trim();
 }
 
+/** 保存桥鉴权 Key 时同步过滤非 ASCII 字符，避免后续 fetch 报错。 */
 export function setBridgeKey(key: string): void {
-  safeLocalStorage()?.setItem(LS_BRIDGE_KEY, key.trim());
+  safeLocalStorage()?.setItem(LS_BRIDGE_KEY, key.replace(/[^\x20-\x7E]/g, '').trim());
 }
 
 /** 远端（数据库）配置的本地缓存，避免每次打印都多一次网络往返 */
