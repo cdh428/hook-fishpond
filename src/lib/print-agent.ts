@@ -80,7 +80,11 @@ export interface PrintOutcome {
   ms?: number;
 }
 
-const DEFAULT_BRIDGE_URL = 'http://127.0.0.1:17777';
+/**
+ * 默认打印桥地址 = POS80 收银机（Tailscale 静态 IP）。
+ * Tailscale IP 不随 DHCP 变，比局域网 IP 稳定，管理员浏览器直接填这个就能用。
+ */
+const DEFAULT_BRIDGE_URL = 'http://100.85.92.120:17777';
 
 const LS_BRIDGE_URL = 'hf.print.bridgeUrl';
 const LS_BRIDGE_KEY = 'hf.print.bridgeKey';
