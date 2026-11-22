@@ -81,21 +81,20 @@ export interface PrintOutcome {
 }
 
 /**
- * 默认打印桥地址 = POS80 收银机的 Tailscale HTTPS 域名。
+ * 默认打印桥地址 = 本机 127.0.0.1。
  *
- * 为什么必须是 https：管理后台是 https 页面，浏览器**禁止** https 页面 fetch
- * http:// 地址（混合内容拦截，且静默失败——报出来只是「桥离线」）。
- * 127.0.0.1/localhost 有豁免；100.85.92.120 这类 http 地址会被直接拦。
+ * 打印桥跑在 POS80 收银机上，admin 也在那台机上操作，桥就在本机 → 127.0.0.1 最稳。
+ * 而且必须用 127.0.0.1（不是局域网/Tailscale IP）：管理后台是 https 页面，浏览器只对
+ * localhost/127.0.0.1 的 http 资源有 mixed-content 豁免；改成 100.85.92.120 这类
+ * http 地址会被 Chrome 静默拦截，表现为「打印服务未启动」。
  *
- * 域名来自 Tailscale MagicDNS（收银机跑 `tailscale serve --bg --https=443
- * http://127.0.0.1:17777` 后生效）。IP 漂移不影响它。
+ * ⚠️ 曾尝试改成 Tailscale HTTPS 域名，但收银机没跑 `tailscale serve`，域名无反代 →
+ * 死地址。跨设备打印才需要域名/局域网 IP，本机场景一律 127.0.0.1。
  */
-const DEFAULT_BRIDGE_URL = 'https://desktop-h9c31c4.tailf74d0b.ts.net';
+const DEFAULT_BRIDGE_URL = 'http://127.0.0.1:17777';
 
-/** 探测候选（按序尝试，跳过会被浏览器拦的）：
- *  - https 页面下 http://100.85… 会被混合内容拦 → 跳过
- *  - http://127.0.0.1 任何页面都放行（浏览器视为可信源）→ 桥就在本机时兜底 */
-const FALLBACK_BRIDGE_URLS = ['http://127.0.0.1:17777'];
+/** 探测兜底候选：默认地址探测失败时按序再试（跳过会被浏览器拦的）。 */
+const FALLBACK_BRIDGE_URLS: string[] = [];
 
 const LS_BRIDGE_URL = 'hf.print.bridgeUrl';
 const LS_BRIDGE_KEY = 'hf.print.bridgeKey';
