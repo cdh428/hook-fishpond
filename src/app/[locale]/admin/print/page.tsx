@@ -24,6 +24,7 @@ import {
   clearBridgeCache,
   getBridgeUrl,
   getBridgeKey,
+  getLastProbeReason,
   getPreferences,
   loadPreferences,
   paperWidthToDots,
@@ -235,6 +236,14 @@ export default function AdminPrintPage() {
                 : t('adminPrint.offline')}
           </span>
         </div>
+
+        {/* 混合内容：https 页面访问明文 http 桥，浏览器静默拦截 —— 必须给精准提示，
+            否则用户只会看到「未启动」去重启桥，永远修不好 */}
+        {probe === 'offline' && getLastProbeReason() === 'mixed-content' && (
+          <p className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700">
+            {t('adminPrint.mixedContent')}
+          </p>
+        )}
 
         {health && (
           <div className="mt-3 space-y-1 text-xs text-neutral-500">

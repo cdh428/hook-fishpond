@@ -572,7 +572,8 @@
     "leftShiftUnit": "mm",
     "leftShiftPositive": "← Left",
     "leftShiftNegative": "Right →",
-    "leftShiftZero": "Default"
+    "leftShiftZero": "Default",
+    "mixedContent": "Connection blocked by the browser: this page is HTTPS and cannot reach a plain-http print bridge (mixed content). Enable HTTPS on the bridge machine (see docs/link.md) and use the address https://desktop-h9c31c4.tailf74d0b.ts.net."
   },
   "adminStock": {
     "entry": "Inventory",

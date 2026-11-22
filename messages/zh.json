@@ -572,7 +572,8 @@
     "leftShiftUnit": "mm",
     "leftShiftPositive": "← 往左",
     "leftShiftNegative": "往右 →",
-    "leftShiftZero": "默认"
+    "leftShiftZero": "默认",
+    "mixedContent": "浏览器拦截了连接：本页面是 HTTPS，不能直接访问明文 http:// 的打印桥（混合内容限制）。请在收银机上开启桥的 HTTPS（命令见 docs/link.md），并确保地址使用 https://desktop-h9c31c4.tailf74d0b.ts.net。"
   },
   "adminStock": {
     "entry": "库存",

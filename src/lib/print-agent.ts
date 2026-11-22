@@ -81,14 +81,46 @@ export interface PrintOutcome {
 }
 
 /**
- * 默认打印桥地址 = POS80 收银机（Tailscale 静态 IP）。
- * Tailscale IP 不随 DHCP 变，比局域网 IP 稳定，管理员浏览器直接填这个就能用。
+ * 默认打印桥地址 = POS80 收银机的 Tailscale HTTPS 域名。
+ *
+ * 为什么必须是 https：管理后台是 https 页面，浏览器**禁止** https 页面 fetch
+ * http:// 地址（混合内容拦截，且静默失败——报出来只是「桥离线」）。
+ * 127.0.0.1/localhost 有豁免；100.85.92.120 这类 http 地址会被直接拦。
+ *
+ * 域名来自 Tailscale MagicDNS（收银机跑 `tailscale serve --bg --https=443
+ * http://127.0.0.1:17777` 后生效）。IP 漂移不影响它。
  */
-const DEFAULT_BRIDGE_URL = 'http://100.85.92.120:17777';
+const DEFAULT_BRIDGE_URL = 'https://desktop-h9c31c4.tailf74d0b.ts.net';
+
+/** 探测候选（按序尝试，跳过会被浏览器拦的）：
+ *  - https 页面下 http://100.85… 会被混合内容拦 → 跳过
+ *  - http://127.0.0.1 任何页面都放行（浏览器视为可信源）→ 桥就在本机时兜底 */
+const FALLBACK_BRIDGE_URLS = ['http://127.0.0.1:17777'];
 
 const LS_BRIDGE_URL = 'hf.print.bridgeUrl';
 const LS_BRIDGE_KEY = 'hf.print.bridgeKey';
 const LS_PREFS_CACHE = 'hf.print.prefs.cache';
+
+/** 混合内容：https 页面 fetch 明文 http 地址（非本机），浏览器必拦 */
+export function isMixedContentBlocked(url: string): boolean {
+  if (typeof window === 'undefined' || window.location.protocol !== 'https:') return false;
+  try {
+    const u = new URL(url, window.location.origin);
+    if (u.protocol !== 'http:') return false;
+    const h = u.hostname;
+    return h !== 'localhost' && h !== '127.0.0.1' && h !== '[::1]';
+  } catch {
+    return false;
+  }
+}
+
+/** 最近一次 probeBridge 失败的原因，供设置页给出精准提示 */
+export type BridgeOfflineReason = 'mixed-content' | 'unreachable' | null;
+let lastProbeReason: BridgeOfflineReason = null;
+
+export function getLastProbeReason(): BridgeOfflineReason {
+  return lastProbeReason;
+}
 
 export function getBridgeKey(): string {
   return (safeLocalStorage()?.getItem(LS_BRIDGE_KEY) || '').trim();
@@ -240,13 +272,16 @@ async function fetchHealth(url: string): Promise<BridgeHealth | null> {
 }
 
 /**
- * 探测本地桥。返回 `null` 表示不可用（没启动 / 被浏览器拦 / 网络不通）。
+ * 探测打印桥。返回 `null` 表示不可用（没启动 / 被浏览器拦 / 网络不通）。
  * `force` 为真时忽略缓存。
  *
- * ⚠️ 2026-11-22：桥所在收银机的 IP 可能漂移（DHCP / 掉线重连），
- * 浏览器 localStorage 里存的旧地址会失效，导致前端误判「打印服务未启动」。
- * 修复：探测当前地址失败时，自动回退尝试本机默认地址（127.0.0.1:17777），
- * 成功就把它存回去（自愈），下次直接用新地址。
+ * 失败原因记在 `lastProbeReason`（getLastProbeReason() 取）：
+ *   · mixed-content —— https 页面试图访问明文 http 桥（浏览器拦截）
+ *   · unreachable   —— 发得出请求但桥不应答
+ *
+ * 历史问题（已由候选链解决）：
+ *   2026-11-17  桥机 IP 漂移 → 存的旧地址失效，误报「未启动」→ 自愈回退
+ *   2026-11-22  换成 https 域名后不再依赖 IP；127.0.0.1 仅作同机兜底
  */
 export async function probeBridge(force = false): Promise<BridgeHealth | null> {
   if (typeof window === 'undefined') return null;
@@ -255,17 +290,30 @@ export async function probeBridge(force = false): Promise<BridgeHealth | null> {
     return healthCache.health;
   }
 
-  const currentUrl = getBridgeUrl();
-  let health = await fetchHealth(currentUrl);
+  // 候选链：当前存的地址 → 默认（Tailscale HTTPS）→ 本机。跳过必被浏览器拦的。
+  const seen = new Set<string>();
+  const candidates = [getBridgeUrl(), DEFAULT_BRIDGE_URL, ...FALLBACK_BRIDGE_URLS].filter((u) => {
+    const key = u.replace(/\/+$/, '');
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 
-  // 当前地址探测失败 → 回退本机默认地址（自愈 IP 漂移）
-  if (!health && currentUrl !== DEFAULT_BRIDGE_URL) {
-    health = await fetchHealth(DEFAULT_BRIDGE_URL);
+  let health: BridgeHealth | null = null;
+  let sawBlocked = false;
+  for (const url of candidates) {
+    if (isMixedContentBlocked(url)) {
+      sawBlocked = true;
+      continue; // fetch 都不会发出去，别浪费时间
+    }
+    health = await fetchHealth(url);
     if (health) {
-      setBridgeUrl(DEFAULT_BRIDGE_URL); // 修复存储的地址
+      if (url !== getBridgeUrl()) setBridgeUrl(url); // 自愈：把可用地址存回去
+      break;
     }
   }
 
+  lastProbeReason = health ? null : sawBlocked ? 'mixed-content' : 'unreachable';
   healthCache = { at: now, health };
   return health;
 }

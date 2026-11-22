@@ -572,7 +572,8 @@
     "leftShiftUnit": "มม.",
     "leftShiftPositive": "← ซ้าย",
     "leftShiftNegative": "ขวา →",
-    "leftShiftZero": "ค่าเริ่มต้น"
+    "leftShiftZero": "ค่าเริ่มต้น",
+    "mixedContent": "เบราว์เซอร์บล็อกการเชื่อมต่อ: หน้านี้เป็น HTTPS จึงเข้าถึง print bridge แบบ http:// ธรรมดาไม่ได้ (mixed content) โปรดเปิด HTTPS ที่เครื่องบริดจ์ (ดู docs/link.md) แล้วใช้ที่อยู่ https://desktop-h9c31c4.tailf74d0b.ts.net"
   },
   "adminStock": {
     "entry": "สต็อก",
