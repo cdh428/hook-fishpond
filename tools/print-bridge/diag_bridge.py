@@ -1,44 +1,41 @@
-"""远程诊断脚本 —— 只查目标机桥日志和进程状态，不改动任何东西。"""
-import io, paramiko, time
-
-TARGET = "100.85.92.120"
-USER = "SSHadmin"
-PWD = io.open(r"C:/Users/dnlct/.ssh/sshadmin.txt", encoding="utf-8").read().strip()
-DIR = r"C:/hookfishpond-bridge"
+"""远程诊断：查看 POS80 目标机桥日志最近活动与报错（只读，不改动）。"""
+import io
+import paramiko
 
 ssh = paramiko.SSHClient()
 ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-ssh.connect(TARGET, port=22, username=USER, password=PWD, timeout=15)
+pwd = io.open(r"C:/Users/dnlct/.ssh/sshadmin.txt", encoding="utf-8").read().strip()
+ssh.connect("100.85.92.120", port=22, username="SSHadmin", password=pwd, timeout=15)
 print("✅ 已连接目标机\n")
 
-# 1. Python 进程
-print("=== Python 进程（tasklist）===")
-_, o, _ = ssh.exec_command("tasklist | findstr /i python", timeout=10)
-print(o.read().decode("utf-8", "ignore").strip() or "(无)")
 
-# 2. 桥日志最后 40 行（用 PowerShell Get-Content -Tail）
+def run(cmd: str) -> str:
+    _, out, _ = ssh.exec_command(cmd, timeout=20)
+    return out.read().decode("utf-8", "ignore").strip()
+
+
+def tail_remote(path: str, n: int = 40) -> str:
+    """用 PowerShell -Tail 取远程文件尾部；命令不含嵌套引号，避免转义破坏。"""
+    cmd = f"powershell -NoProfile -Command Get-Content -Path {path} -Tail {n}"
+    return run(cmd)
+
+
+print("=== Python 进程 ===")
+print(run("tasklist | findstr /i python") or "(无)")
+
+print("\n=== print.log 最后 30 行 ===")
+print(tail_remote("C:/hookfishpond-bridge/print.log", 30) or "(空)")
+
 print("\n=== bridge.log 最后 40 行 ===")
-cmd = f'powershell -Command "if (Test-Path \'{DIR}\\bridge.log\') {{ Get-Content \'{DIR}\\bridge.log\' -Tail 40 }} else {{ Write-Output \'(无 bridge.log)\' }}"'
-_, o, _ = ssh.exec_command(cmd, timeout=15)
-print(o.read().decode("utf-8", "ignore").strip())
+print(tail_remote("C:/hookfishpond-bridge/bridge.log", 40) or "(空)")
 
-# 3. print.log 最后 20 行
-print("\n=== print.log 最后 20 行 ===")
-cmd = f'powershell -Command "if (Test-Path \'{DIR}\\print.log\') {{ Get-Content \'{DIR}\\print.log\' -Tail 20 }} else {{ Write-Output \'(无 print.log)\' }}"'
-_, o, _ = ssh.exec_command(cmd, timeout=15)
-print(o.read().decode("utf-8", "ignore").strip())
-
-# 4. 目录清单
-print("\n=== 目录清单 ===")
-cmd = f'powershell -Command "Get-ChildItem \'{DIR}\' | Select-Object Name, Length, LastWriteTime | Format-Table -AutoSize"'
-_, o, _ = ssh.exec_command(cmd, timeout=15)
-print(o.read().decode("utf-8", "ignore").strip())
-
-# 5. config.json 内容（检查 widthDots）
-print("=== config.json ===")
-cmd = f'powershell -Command "if (Test-Path \'{DIR}\\config.json\') {{ Get-Content \'{DIR}\\config.json\' }}"'
-_, o, _ = ssh.exec_command(cmd, timeout=15)
-print(o.read().decode("utf-8", "ignore").strip() or "(无 config.json)")
+print("\n=== config.json（widthDots / gdiLeftShiftMm / authToken 是否配置）===")
+cfg = tail_remote("C:/hookfishpond-bridge/config.json", 60)
+# 脱敏：不打印 authToken 明文
+for line in cfg.splitlines():
+    if "authToken" in line and ":" in line:
+        line = line.split(":")[0] + ': "****"'
+    print(line)
 
 ssh.close()
 print("\n=== 诊断结束 ===")

@@ -218,9 +218,31 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms: number): Pro
   }
 }
 
+async function fetchHealth(url: string): Promise<BridgeHealth | null> {
+  try {
+    const res = await fetchWithTimeout(
+      `${url}/health`,
+      { method: 'GET', cache: 'no-store', mode: 'cors' },
+      PROBE_TIMEOUT_MS,
+    );
+    if (res.ok) {
+      const j = (await res.json()) as BridgeHealth;
+      if (j?.ok && j.service === 'hook-fishpond-print-bridge') return j;
+    }
+  } catch {
+    /* 探测失败 */
+  }
+  return null;
+}
+
 /**
  * 探测本地桥。返回 `null` 表示不可用（没启动 / 被浏览器拦 / 网络不通）。
  * `force` 为真时忽略缓存。
+ *
+ * ⚠️ 2026-11-22：桥所在收银机的 IP 可能漂移（DHCP / 掉线重连），
+ * 浏览器 localStorage 里存的旧地址会失效，导致前端误判「打印服务未启动」。
+ * 修复：探测当前地址失败时，自动回退尝试本机默认地址（127.0.0.1:17777），
+ * 成功就把它存回去（自愈），下次直接用新地址。
  */
 export async function probeBridge(force = false): Promise<BridgeHealth | null> {
   if (typeof window === 'undefined') return null;
@@ -229,20 +251,17 @@ export async function probeBridge(force = false): Promise<BridgeHealth | null> {
     return healthCache.health;
   }
 
-  let health: BridgeHealth | null = null;
-  try {
-    const res = await fetchWithTimeout(
-      `${getBridgeUrl()}/health`,
-      { method: 'GET', cache: 'no-store', mode: 'cors' },
-      PROBE_TIMEOUT_MS,
-    );
-    if (res.ok) {
-      const j = (await res.json()) as BridgeHealth;
-      if (j?.ok && j.service === 'hook-fishpond-print-bridge') health = j;
+  const currentUrl = getBridgeUrl();
+  let health = await fetchHealth(currentUrl);
+
+  // 当前地址探测失败 → 回退本机默认地址（自愈 IP 漂移）
+  if (!health && currentUrl !== DEFAULT_BRIDGE_URL) {
+    health = await fetchHealth(DEFAULT_BRIDGE_URL);
+    if (health) {
+      setBridgeUrl(DEFAULT_BRIDGE_URL); // 修复存储的地址
     }
-  } catch {
-    health = null;
   }
+
   healthCache = { at: now, health };
   return health;
 }
