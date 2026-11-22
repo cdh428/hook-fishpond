@@ -103,6 +103,17 @@ CORS_HEADERS = {
     "Access-Control-Max-Age": "86400",
 }
 
+# ── Origin 白名单（防恶意网页 drive-by 打印）────────────────────────────
+# 浏览器发跨域请求时必然带 Origin 且 JS 伪造不了 —— 桥只放行自家网站，
+# 恶意网页即使知道地址也进不来（这一层不依赖 authToken，空密钥也受保护）。
+# 非浏览器客户端（curl / test_print_80.py）没有 Origin 头，仍走 authToken 校验。
+ALLOWED_ORIGINS = [
+    "https://www.hookfishpond.com",
+    "https://hookfishpond.com",
+    "http://localhost:3000",   # 本地开发
+    "http://127.0.0.1:3000",
+]
+
 
 def log(msg: str) -> None:
     stamp = datetime.now().strftime("%H:%M:%S")
@@ -403,7 +414,18 @@ class Handler(BaseHTTPRequestHandler):
                 key = auth[7:].strip()
         return key == expected
 
+    def _check_origin(self) -> bool:
+        """浏览器来源白名单：Origin 头存在时必须匹配自家网站。
+        恶意网页无法伪造 Origin；非浏览器客户端不带 Origin，走 authToken。"""
+        origin = (self.headers.get("Origin") or "").strip().rstrip("/")
+        if not origin:
+            return True  # 非浏览器客户端（curl/脚本）—— 由 _check_auth 把关
+        return origin in ALLOWED_ORIGINS
+
     def do_POST(self) -> None:  # noqa: N802
+        if not self._check_origin():
+            self._send(403, {"ok": False, "error": "来源不被允许（Origin 不在白名单）"})
+            return
         if not self._check_auth():
             self._send(401, {"ok": False, "error": "未授权：无效或缺失 X-Print-Key"})
             return
@@ -727,6 +749,10 @@ def main(argv: list[str] | None = None) -> int:
 
     server = ThreadingHTTPServer((args.host, port), Handler)
     log(f"已就绪 → http://127.0.0.1:{port}")
+    # 安全提醒：空密钥 + 对外监听 = 同网段任何人都能让打印机出纸
+    if not (CONFIG.get("authToken") or "").strip() and args.host in ("0.0.0.0", ""):
+        log("⚠️  authToken 为空且监听 0.0.0.0 —— 同网络任何人都能让打印机出纸！")
+        log("    仅本机使用：加 --host 127.0.0.1 重启；跨机使用：在 config.json 配 authToken")
     if args.host in ("0.0.0.0", ""):
         ips = _lan_ips()
         if ips:
