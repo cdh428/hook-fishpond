@@ -407,6 +407,13 @@ class Handler(BaseHTTPRequestHandler):
         expected = (CONFIG.get("authToken") or "").strip()
         if not expected:
             return True
+        # 合法浏览器请求（Origin 已在 do_POST 通过白名单）→ 免 token。
+        # 理由：Origin 头 JS 伪造不了，白名单已足以挡恶意网页；token 只重复设卡，
+        # 却逼着每台电脑都要去设置页配 key（漏配 → 401 打不出）。
+        # 这里只对「无 Origin 的非浏览器直连」（curl / 脚本）要求 token。
+        origin = (self.headers.get("Origin") or "").strip().rstrip("/")
+        if origin and origin in ALLOWED_ORIGINS:
+            return True
         key = self.headers.get("X-Print-Key", "").strip()
         if not key:
             auth = self.headers.get("Authorization", "").strip()
