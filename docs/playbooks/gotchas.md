@@ -412,29 +412,58 @@ node scripts/dup-menu-scan.mjs   # 扫全站重名 MenuItem + 每条被哪些表
 **踩过**（2026-11-28 现场）：`bash scripts/push-main.sh` 连续失败 5–6 次，每次都报
 `No such file or directory`。反复试同一个错法，白浪费十几分钟。
 
-**根因**：Bash 工具的**每条调用是独立 shell 会话，工作目录不延续**。
-上一条命令里的 `cd /c/.../hook-fishpond`，下一条命令**不会保留**。
-Bash 工具默认 cwd = 会话工作区（`WorkBuddy/2026-10-11-17-50-46`），**不是**项目根。
-`scripts/push-main.sh` 用**相对路径**，需要 cwd 在项目根 `hook-fishpond` 才能找到。
-
-**失败的错法**（单独跑，没 cd）：
-```bash
-bash scripts/push-main.sh        # ❌ 找不到脚本，因为 cwd 在会话工作区
-```
-
-**成功的对法**（cd 和命令放**同一条**）：
-```bash
-cd /c/Users/dnlct/WorkBuddy/hook-fishpond && bash scripts/push-main.sh
-```
-
 **铁律**：
-- **每条 Bash 工具调用都要先 cd 到项目根**，不能依赖上一条的 cd。相对路径脚本尤其需要。
-- **`cd` 和命令放同一条命令里**，用 `&&` 连接。不要拆成两条。
 - **同样问题失败 3 次 → 立刻停下来查知识库**（gotchas.md / 本节）。不要再反复试同一个错法。
   3 次失败是信号：要么 cd 漏了、要么命令形态错了、要么有未知前置条件。查一次就能省十几分钟。
+- 下面是这次踩坑的**完整根因 + 已落地的治本方案**，按这个理解，别再走弯路。
 
-**适用范围**：所有用相对路径的脚本（`scripts/*.sh`、`node scripts/*.cjs` 等）。
-用绝对路径或 `cd &&` 形式可避开。
+#### 根因（两层，别只记第一层）
+
+**第一层（表象）**：Bash 工具**每条调用是独立 shell 会话，工作目录不延续**。
+默认 cwd = 会话工作区（`WorkBuddy/2026-10-11-17-50-46`），**不是**项目根
+（`WorkBuddy/hook-fishpond`）。相对路径脚本因此找不到。
+
+**第二层（更隐蔽）**：`push-main.sh` 内部虽然用 `$(dirname "$0")` 定位**凭据文件**，
+但脚本里的 **git 命令依赖 cwd 在仓库内**（`git remote get-url origin` / `git push origin`
+要 cwd 在仓库内才能找到 `origin`）。所以哪怕你用**绝对路径**调脚本，git 仍静默失败。
+这就是为什么「绝对路径调脚本」也失败——不只是脚本相对路径的问题。
+
+#### 已落地的治本方案（脚本自定位，无需再记 cd）
+
+给 `scripts/push-main.sh` 顶部（`set -uo pipefail` 后）加了一行**自定位到仓库根**：
+
+```bash
+cd "$(cd "$(dirname "$0")" && pwd)/.." || { echo "✗ 无法定位仓库根（$0）" >&2; exit 1; }
+```
+
+效果：从**任何 cwd、任意路径**（相对/绝对）调脚本都有效，git 也能找到 origin。
+**已实测**：从会话工作区用绝对路径调用 `--dry-run`，第 ① 级 SSH 成功。
+`setup-push-credential.sh` / `remove-push-credential.sh` 同理，可加同一行。
+
+#### git 别名兜底（可选，立即生效）
+
+配一个全局 git 别名，提交推送一键完成，连 cd 都不用敲：
+
+```bash
+git config --global alias.hfpush '!cd /c/Users/dnlct/WorkBuddy/hook-fishpond && bash scripts/push-main.sh'
+# 用法：git hfpush                 # 真推
+#       git hfpush --dry-run --verbose  # 先验凭据
+```
+
+#### 通用解法（适用于任何相对路径脚本）
+
+| 场景 | 做法 |
+|---|---|
+| 脚本内 git/相对路径依赖 cwd | **给脚本加自定位 cd**（治本，上面那行） |
+| 不想改脚本 | cd + 命令放**同一条**用 `&&` 连接（治标，靠自觉易漏） |
+| 推送高频 | 配 `git hfpush` 别名（一键） |
+
+**不推荐**：手动 cd 前缀（靠自觉）、Windows junction（会话工作区每次会话动态生成，
+不长效且易混 git 仓库状态）、GitHub connector 替代推送（走 Contents API，
+**不能推本地 commit**，需逐文件喂内容，且会让本地/远端历史分叉——只适合单文件直写或 PR 流程）。
+
+**可安装 skill 结论**：市场 git skill（`git-safe-workflow`/`github-push`/`git-push-diagnostics`
+等）都**不解决 cwd 结构性问题**，无需安装。本项目已有 `windows-git-push-fallback` skill 更贴合。
 
 ---
 

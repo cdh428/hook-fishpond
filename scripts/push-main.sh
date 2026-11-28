@@ -23,6 +23,12 @@
 # ═══════════════════════════════════════════════════════════════════════
 set -uo pipefail
 
+# 自定位到仓库根：从任何 cwd / 任意路径调用都有效。
+# 根因：本脚本的 git 命令依赖 cwd 在仓库内（才能找到 origin）；脚本内的凭据文件
+# 定位用 $(dirname "$0") 已自足，但 git 命令不行。加这行让 cwd 恒等于仓库根，
+# 无论从会话工作区、任意目录、任意路径调用都能成功（见 gotchas §4.7）。
+cd "$(cd "$(dirname "$0")" && pwd)/.." || { echo "✗ 无法定位仓库根（$0）" >&2; exit 1; }
+
 OWNER="${PUSH_OWNER:-cdh428}"
 REPO="${PUSH_REPO:-hook-fishpond}"
 BRANCH="main"
