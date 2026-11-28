@@ -407,6 +407,35 @@ node scripts/dup-menu-scan.mjs   # 扫全站重名 MenuItem + 每条被哪些表
 - **铁律**：`git add <具体文件>`，**绝不** `git add -A` / `git add .` / `git commit -a`。
   提交前 `git diff --cached --stat` 逐个确认。看到陌生改动不要去提交、revert 或 stash。
 
+### 4.7 🔄 **3 次同样失败先查知识库**（Bash 工具每条独立会话，cd 不延续）
+
+**踩过**（2026-11-28 现场）：`bash scripts/push-main.sh` 连续失败 5–6 次，每次都报
+`No such file or directory`。反复试同一个错法，白浪费十几分钟。
+
+**根因**：Bash 工具的**每条调用是独立 shell 会话，工作目录不延续**。
+上一条命令里的 `cd /c/.../hook-fishpond`，下一条命令**不会保留**。
+Bash 工具默认 cwd = 会话工作区（`WorkBuddy/2026-10-11-17-50-46`），**不是**项目根。
+`scripts/push-main.sh` 用**相对路径**，需要 cwd 在项目根 `hook-fishpond` 才能找到。
+
+**失败的错法**（单独跑，没 cd）：
+```bash
+bash scripts/push-main.sh        # ❌ 找不到脚本，因为 cwd 在会话工作区
+```
+
+**成功的对法**（cd 和命令放**同一条**）：
+```bash
+cd /c/Users/dnlct/WorkBuddy/hook-fishpond && bash scripts/push-main.sh
+```
+
+**铁律**：
+- **每条 Bash 工具调用都要先 cd 到项目根**，不能依赖上一条的 cd。相对路径脚本尤其需要。
+- **`cd` 和命令放同一条命令里**，用 `&&` 连接。不要拆成两条。
+- **同样问题失败 3 次 → 立刻停下来查知识库**（gotchas.md / 本节）。不要再反复试同一个错法。
+  3 次失败是信号：要么 cd 漏了、要么命令形态错了、要么有未知前置条件。查一次就能省十几分钟。
+
+**适用范围**：所有用相对路径的脚本（`scripts/*.sh`、`node scripts/*.cjs` 等）。
+用绝对路径或 `cd &&` 形式可避开。
+
 ---
 
 ## 五、部署与验证
