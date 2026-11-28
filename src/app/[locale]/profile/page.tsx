@@ -1,10 +1,11 @@
 'use client';
 
 import { useTranslations, useLocale } from 'next-intl';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { locales, localeNames, type Locale } from '@/i18n/config';
 import { useApp } from '@/contexts/AppContext';
-import { fetchBookings, fetchOrders, updateMe } from '@/lib/api-client';
+import { fetchBookings, fetchOrders, updateMe, fetchMe, sendOtp, verifyOtp } from '@/lib/api-client';
+import { OTPInput, type SlotProps } from 'input-otp';
 
 const statusColors: Record<string, string> = {
   PENDING: 'bg-warning-100 text-warning-600',
@@ -54,6 +55,14 @@ export default function ProfilePage() {
   const [loginError, setLoginError] = useState('');
   const [loggingIn, setLoggingIn] = useState(false);
   const [activeTab, setActiveTab] = useState<'bookings' | 'orders'>('bookings');
+
+  // 手机号 OTP 两步流程（方案 A P2/P3）：步骤 phone=输手机号 / otp=输验证码 / done=登录完成
+  const [otpStep, setOtpStep] = useState<'phone' | 'otp'>('phone');
+  const [otpCode, setOtpCode] = useState('');
+  const [otpBusy, setOtpBusy] = useState(false);
+  const [otpResendIn, setOtpResendIn] = useState(0);
+  const endTimeRef = useRef<number>(0);
+  const sentToPhone = loginPhone; // 进入 otp 步骤前冻结的手机号
 
   // LINE Login 回跳提示（?lineError=... / ?lineLogin=1）。
   // 用 window.location 而不是 useSearchParams：避免静态页 CSR bailout 的 Suspense 约束。
@@ -120,31 +129,58 @@ export default function ProfilePage() {
     };
   }, [user]);
 
-  const handleLogin = async () => {
+  // 倒计时（时间戳计算，切后台回来校正；不用 setInterval 递减，见调研）
+  const tick = useCallback(() => {
+    if (!endTimeRef.current) return;
+    const remain = Math.max(0, endTimeRef.current - Date.now());
+    setOtpResendIn(Math.ceil(remain / 1000));
+    if (remain > 0) requestAnimationFrame(tick);
+    else endTimeRef.current = 0;
+  }, []);
+
+  // 发送 OTP：先校手机号，成功进入 otp 步骤 + 启动 60s 倒计时
+  const handleSendOtp = async () => {
     if (loginPhone.trim().length < 8) {
       setLoginError(t('profile.phoneRequired'));
       return;
     }
-    if (!loginName.trim()) {
-      setLoginError(t('profile.name'));
+    setLoginError('');
+    setOtpBusy(true);
+    try {
+      const res = await sendOtp(loginPhone.trim());
+      setOtpStep('otp');
+      endTimeRef.current = Date.now() + 60_000;
+      setOtpResendIn(60);
+      requestAnimationFrame(tick);
+      // mock 模式：devCode 自动填入 OTP 输入框（仅测试，方便跑通）
+      if (res.devCode) setOtpCode(res.devCode);
+    } catch (e: any) {
+      setLoginError(e.message || t('common.error'));
+    } finally {
+      setOtpBusy(false);
+    }
+  };
+
+  // 验证 OTP：校验成功 → 服务端下发会话 cookie → 刷新会话 → 关弹窗
+  const handleVerifyOtp = async () => {
+    if (otpCode.trim().length !== 6) {
+      setLoginError(t('authOtp.errorWrongCode'));
       return;
     }
-    setLoggingIn(true);
     setLoginError('');
+    setOtpBusy(true);
     try {
-      // register is idempotent — returns the existing user or creates one
-      await registerUser({
-        phone: loginPhone.trim(),
-        name: loginName.trim(),
-        language: locale,
-      });
+      await verifyOtp(loginPhone.trim(), otpCode.trim());
+      // 用服务端会话为准刷新一次（登录成功落 cookie）， setUser 更新本地
+      setUser(await fetchMe());
       setShowLogin(false);
+      setOtpStep('phone');
+      setOtpCode('');
       setLoginPhone('');
-      setLoginName('');
     } catch (e: any) {
-      setLoginError(e.message || 'Login failed');
+      setLoginError(e.message || t('common.error'));
     } finally {
-      setLoggingIn(false);
+      setOtpBusy(false);
     }
   };
 
@@ -514,6 +550,10 @@ export default function ProfilePage() {
                   setLoginPhone('');
                   setLoginName('');
                   setLoginError('');
+                  setOtpStep('phone');
+                  setOtpCode('');
+                  setOtpResendIn(0);
+                  endTimeRef.current = 0;
                 }}
                 className="rounded-lg p-1 text-neutral-400 hover:text-neutral-600"
               >
@@ -537,58 +577,128 @@ export default function ProfilePage() {
               {t('profile.registerDesc')}
             </p>
 
-            <div className="space-y-3">
-              <input
-                type="text"
-                placeholder={t('profile.name')}
-                value={loginName}
-                onChange={(e) => {
-                  setLoginName(e.target.value);
-                  setLoginError('');
-                }}
-                className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-              />
-              <input
-                type="tel"
-                placeholder={t('profile.phone')}
-                value={loginPhone}
-                onChange={(e) => {
-                  setLoginPhone(e.target.value);
-                  setLoginError('');
-                }}
-                className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-              />
+            {/* OTP 步骤 1：输手机号（泰国 10 位，09/06/08 开头） */}
+            {otpStep === 'phone' && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 rounded-xl border border-neutral-200 px-3 py-2.5 focus-within:border-primary-500 focus-within:ring-1 focus-within:ring-primary-500">
+                  <span className="shrink-0 text-sm text-neutral-500">+66</span>
+                  <input
+                    type="tel"
+                    inputMode="numeric"
+                    placeholder={t('authOtp.phonePlaceholder')}
+                    value={loginPhone}
+                    onChange={(e) => {
+                      setLoginPhone(e.target.value);
+                      setLoginError('');
+                    }}
+                    maxLength={10}
+                    className="w-full bg-transparent text-sm outline-none"
+                  />
+                </div>
 
-              {loginError && (
-                <p className="text-xs text-error-600">{loginError}</p>
-              )}
+                {loginError && (
+                  <p className="text-xs text-error-600">{loginError}</p>
+                )}
 
-              <button
-                onClick={() => loginWithLine(locale)}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#06C755] py-3 text-sm font-semibold text-white transition hover:brightness-95"
-              >
-                <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                  <path d="M19.365 9.845c0 4.11-3.676 7.44-8.203 7.44-.976 0-1.913-.154-2.787-.435a.5.5 0 00-.348-.014l-2.06.663a.5.5 0 01-.65-.607l.517-1.83a.5.5 0 00-.115-.49C4.016 13.6 3.34 11.79 3.34 9.845c0-4.11 3.676-7.44 8.203-7.44s7.822 3.33 7.822 7.44zM8.06 7.61h-1.1a.28.28 0 00-.28.28v4.44c0 .155.125.28.28.28h1.1a.28.28 0 00.28-.28V7.89a.28.28 0 00-.28-.28zm5.856 0h-1.1a.28.28 0 00-.28.28v2.638L10.53 7.7a.28.28 0 00-.233-.125l-1.13.005a.28.28 0 00-.28.28v4.47c0 .155.125.28.28.28h1.1a.28.28 0 00.28-.28V9.69l2.008 2.55a.28.28 0 00.221.107h.04l1.117-.005a.28.28 0 00.28-.28V7.89a.28.28 0 00-.28-.28zm3.006 3.097h-1.928V7.89a.28.28 0 00-.28-.28h-1.1a.28.28 0 00-.28.28v4.44c0 .077.03.146.08.198a.279.279 0 00.2.082h3.308a.28.28 0 00.28-.28v-1.345a.28.28 0 00-.28-.28z" />
-                </svg>
-                {t('authLine.continueWithLine')}
-              </button>
+                <button
+                  onClick={handleSendOtp}
+                  disabled={otpBusy}
+                  className="w-full rounded-xl bg-primary-700 py-3 text-sm font-semibold text-white shadow-brand transition hover:bg-primary-800 disabled:bg-neutral-300"
+                >
+                  {otpBusy ? t('common.loading') : t('authOtp.getOtp')}
+                </button>
 
-              <div className="flex items-center gap-3 text-xs text-neutral-400">
-                <span className="h-px flex-1 bg-neutral-200" />
-                {t('authLine.orPhone')}
-                <span className="h-px flex-1 bg-neutral-200" />
+                <div className="flex items-center gap-3 text-xs text-neutral-400">
+                  <span className="h-px flex-1 bg-neutral-200" />
+                  {t('authLine.orPhone')}
+                  <span className="h-px flex-1 bg-neutral-200" />
+                </div>
+
+                <button
+                  onClick={() => loginWithLine(locale)}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#06C755] py-3 text-sm font-semibold text-white transition hover:brightness-95"
+                >
+                  <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                    <path d="M19.365 9.845c0 4.11-3.676 7.44-8.203 7.44-.976 0-1.913-.154-2.787-.435a.5.5 0 00-.348-.014l-2.06.663a.5.5 0 01-.65-.607l.517-1.83a.5.5 0 00-.115-.49C4.016 13.6 3.34 11.79 3.34 9.845c0-4.11 3.676-7.44 8.203-7.44s7.822 3.33 7.822 7.44zM8.06 7.61h-1.1a.28.28 0 00-.28.28v4.44c0 .155.125.28.28.28h1.1a.28.28 0 00.28-.28V7.89a.28.28 0 00-.28-.28zm5.856 0h-1.1a.28.28 0 00-.28.28v2.638L10.53 7.7a.28.28 0 00-.233-.125l-1.13.005a.28.28 0 00-.28.28v4.47c0 .155.125.28.28.28h1.1a.28.28 0 00.28-.28V9.69l2.008 2.55a.28.28 0 00.221.107h.04l1.117-.005a.28.28 0 00.28-.28V7.89a.28.28 0 00-.28-.28zm3.006 3.097h-1.928V7.89a.28.28 0 00-.28-.28h-1.1a.28.28 0 00-.28.28v4.44c0 .077.03.146.08.198a.279.279 0 00.2.082h3.308a.28.28 0 00.28-.28v-1.345a.28.28 0 00-.28-.28z" />
+                  </svg>
+                  {t('authLine.continueWithLine')}
+                </button>
               </div>
+            )}
 
-              <button
-                onClick={handleLogin}
-                disabled={loggingIn}
-                className="w-full rounded-xl bg-primary-700 py-3 text-sm font-semibold text-white shadow-brand transition hover:bg-primary-800 disabled:bg-neutral-300"
-              >
-                {loggingIn
-                  ? t('common.loading')
-                  : `${t('common.login')} / ${t('common.register')}`}
-              </button>
-            </div>
+            {/* OTP 步骤 2：输验证码（6 位分格） */}
+            {otpStep === 'otp' && (
+              <div className="space-y-4">
+                <p className="text-sm text-neutral-500">
+                  {t('authOtp.otpSentTo', { phone: `+66 ${loginPhone}` })}
+                </p>
+
+                <div className="flex justify-center">
+                  <OTPInput
+                    maxLength={6}
+                    value={otpCode}
+                    onChange={(v) => setOtpCode(v)}
+                    onComplete={handleVerifyOtp}
+                    containerClassName="flex gap-2 justify-center"
+                    render={({ slots }) => (
+                      <>
+                        {slots.map((slot: SlotProps, i: number) => (
+                          <div
+                            key={i}
+                            className={`flex h-14 w-11 items-center justify-center rounded-xl border-2 bg-white text-2xl font-medium transition ${
+                              slot.isActive
+                                ? 'border-primary-700'
+                                : 'border-neutral-200'
+                            }`}
+                          >
+                            {slot.char ?? (slot.hasFakeCaret && <div className="h-6 w-0.5 animate-pulse bg-neutral-400" />)}
+                          </div>
+                        ))}
+                      </>
+                    )}
+                  />
+                </div>
+
+                <div className="text-center">
+                  {otpResendIn > 0 ? (
+                    <p className="text-xs text-neutral-400">
+                      {t('authOtp.resendIn', { seconds: otpResendIn })}
+                    </p>
+                  ) : (
+                    <button
+                      onClick={handleSendOtp}
+                      className="text-xs font-medium text-primary-700 underline-offset-2 hover:underline"
+                    >
+                      {t('authOtp.resend')}
+                    </button>
+                  )}
+                </div>
+
+                {loginError && (
+                  <p className="text-center text-xs text-error-600">{loginError}</p>
+                )}
+
+                <button
+                  onClick={handleVerifyOtp}
+                  disabled={otpBusy}
+                  className="w-full rounded-xl bg-primary-700 py-3 text-sm font-semibold text-white shadow-brand transition hover:bg-primary-800 disabled:bg-neutral-300"
+                >
+                  {otpBusy ? t('common.loading') : t('authOtp.verify')}
+                </button>
+
+                <button
+                  onClick={() => {
+                    setOtpStep('phone');
+                    setOtpCode('');
+                    setLoginError('');
+                    endTimeRef.current = 0;
+                  }}
+                  className="w-full text-center text-xs text-neutral-500 hover:text-neutral-700"
+                >
+                  {t('authOtp.editNumber')}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -1470,5 +1470,16 @@
     "errProfileFailed": "Could not get your LINE profile — please try again",
     "errTooMany": "Too many attempts — please try again later",
     "errGeneric": "Sign-in failed — please try again"
+  },
+  "authOtp": {
+    "phoneLogin": "Phone login",
+    "phonePlaceholder": "812345678",
+    "getOtp": "Get verification code",
+    "otpSentTo": "Sent to {phone}",
+    "resendIn": "Resend in {seconds}s",
+    "resend": "Resend",
+    "verify": "Verify",
+    "editNumber": "Change number",
+    "errorWrongCode": "Invalid code, please try again"
   }
 }

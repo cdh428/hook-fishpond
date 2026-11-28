@@ -1470,5 +1470,16 @@
     "errProfileFailed": "ไม่สามารถดึงข้อมูล LINE ได้ กรุณาลองใหม่",
     "errTooMany": "พยายามบ่อยเกินไป กรุณาลองใหม่ภายหลัง",
     "errGeneric": "เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่"
+  },
+  "authOtp": {
+    "phoneLogin": "เข้าสู่ระบบด้วยโทรศัพท์",
+    "phonePlaceholder": "812345678",
+    "getOtp": "รับรหัสยืนยัน",
+    "otpSentTo": "ส่งไปที่ {phone}",
+    "resendIn": "ส่งซ้ำใน {seconds}s",
+    "resend": "ส่งซ้ำ",
+    "verify": "ยืนยัน",
+    "editNumber": "เปลี่ยนเบอร์",
+    "errorWrongCode": "รหัสไม่ถูกต้อง กรุณาลองใหม่"
   }
 }

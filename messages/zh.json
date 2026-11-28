@@ -1470,5 +1470,16 @@
     "errProfileFailed": "无法获取 LINE 资料，请重试",
     "errTooMany": "尝试太频繁，请稍后再试",
     "errGeneric": "登录失败，请重试"
+  },
+  "authOtp": {
+    "phoneLogin": "手机号登录",
+    "phonePlaceholder": "812345678",
+    "getOtp": "获取验证码",
+    "otpSentTo": "已发送到 {phone}",
+    "resendIn": "{seconds}s 后重发",
+    "resend": "重新发送",
+    "verify": "验证",
+    "editNumber": "修改手机号",
+    "errorWrongCode": "验证码不正确，请重新输入"
   }
 }

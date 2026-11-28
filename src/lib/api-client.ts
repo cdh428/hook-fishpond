@@ -355,6 +355,28 @@ export async function registerUser(input: {
   });
 }
 
+/** 发送 OTP 验证码（方案 A P3）。mock 模式会回传 devCode（仅测试）。 */
+export async function sendOtp(
+  phone: string,
+): Promise<{ ok: boolean; devCode?: string; provider?: string }> {
+  return request<{ ok: boolean; devCode?: string; provider?: string }>(
+    `/api/auth/otp/send`,
+    { method: 'POST', body: JSON.stringify({ phone }) },
+  );
+}
+
+/** 校验 OTP 并登录（成功后服务端下发 HMAC 会话 cookie，再刷新会话）。 */
+export async function verifyOtp(
+  phone: string,
+  code: string,
+): Promise<ApiUser> {
+  const res = await request<{ ok: boolean; user: ApiUser }>(
+    `/api/auth/otp/verify`,
+    { method: 'POST', body: JSON.stringify({ phone, code }) },
+  );
+  return res.user;
+}
+
 export async function fetchMe(): Promise<ApiUser> {
   return request<ApiUser>(`/api/auth/me`);
 }
