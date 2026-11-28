@@ -450,6 +450,40 @@ git config --global alias.hfpush '!cd /c/Users/dnlct/WorkBuddy/hook-fishpond && 
 #       git hfpush --dry-run --verbose  # 先验凭据
 ```
 
+#### 🎯 git 命令用 `-C <仓库绝对路径>`（最可靠，实测最省心）
+
+**踩坑**（同现场）：我连续 **6 次**漏 cd 前缀，每条 git 命令都报 `fatal: not a git repository`。
+每次都"记得这次加 cd"，但发出去的命令**cd 部分总是被截掉**（只保留 `git ...`）。
+
+**最终可靠解法**：git 命令用 `-C <仓库绝对路径>` 指定仓库目录，**完全绕开 cd**：
+
+```bash
+# ❌ 依赖 cd（cd 不延续，前缀总被截掉）
+cd /c/Users/dnlct/WorkBuddy/hook-fishpond && git add ... && git commit ...
+# ✅ git -C 直接指定仓库（不依赖 cwd，怎么调都不出错）
+git -C /c/Users/dnlct/WorkBuddy/hook-fishpond add scripts/push-main.sh
+git -C /c/Users/dnlct/WorkBuddy/hook-fishpond commit -m "..."
+git -C /c/Users/dnlct/WorkBuddy/hook-fishpond log --oneline -3
+```
+
+**为什么 `-C` 最稳**：它把"切目录"这个动作**内联进 git 命令本身**，不依赖 shell 的 cwd 状态，
+也就不受"Bash 工具 cd 不延续"影响。实测连续多条 git 命令全部成功。
+
+**规则**：
+- **git 查询/提交类命令** → 一律 `git -C <绝对路径>`（`status`/`add`/`commit`/`log`/`diff`/`show`）。
+- **推送** → 用 `bash /c/.../scripts/push-main.sh`（脚本已自定位，见上）。
+- **相对路径脚本** → 给脚本加自定位 cd（治本），或绝对路径调用。
+- **3 次同样失败** → 停下来查知识库（本节），别再反复试同一个错法。
+
+**不推荐**：手动 cd 前缀（靠自觉、cd 前缀易被截掉，我这次就是栽在这）、
+Windows junction（会话工作区每次会话动态生成，不长效且易混 git 仓库状态）、
+GitHub connector 替代推送（走 Contents API，**不能推本地 commit**，需逐文件喂内容，
+且会让本地/远端历史分叉——只适合单文件直写或 PR 流程）。
+
+**可安装 skill 结论**：市场 git skill（`git-safe-workflow`/`github-push`/`git-push-diagnostics`
+等）都**不解决 cwd 结构性问题**，无需安装。本项目已有 `windows-git-push-fallback` skill 更贴合。
+```
+
 #### 通用解法（适用于任何相对路径脚本）
 
 | 场景 | 做法 |
