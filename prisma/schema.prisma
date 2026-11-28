@@ -65,8 +65,39 @@ model User {
   marketingConsent Boolean    @default(false)
   bookings         Booking[]
   orders           Order[]
+  // 多社媒身份映射（P1 骨架：LINE 走 SocialAccount，兼容期 lineUserId 双写）
+  socialAccounts   SocialAccount[]
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
+}
+
+// ===== 社媒身份映射（方案 A P1 骨架）=====
+// 一个真人 = 一个 User（稳定锚点，永不改 id）；所有社媒身份走 SocialAccount 关联，
+// 加新社媒只加枚举值，不动 User 表结构。Booking/Order 等业务表仍指向 User.id，零影响。
+model SocialAccount {
+  id          String     @id @default(cuid())
+  userId      String
+  provider    Provider
+  // Provider 侧用户ID（LINE=U开头32位hex；OTP=手机号；微信=openid/unionid）。Provider 维度唯一。
+  providerUid String
+  displayName String?
+  avatarUrl   String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerUid])
+  @@index([userId])
+}
+
+enum Provider {
+  LINE
+  PHONE_OTP
+  WECHAT
+  FACEBOOK
+  INSTAGRAM
+  TIKTOK
 }
 
 // ===== ADMIN USER =====

@@ -65,18 +65,46 @@ export async function GET(request: NextRequest) {
     return back("profileFailed");
   }
 
-  // 按 LINE userId 建/找（幂等登录）。LINE 注册没有手机号 → phone=null、name 用昵称或兜底
+  // 按 Provider 建/找（幂等登录）。先 upsert SocialAccount（身份映射）→
+  // 若找不到对应 User 则建新 User。用户锚点永不改 id，多社媒绑同一 User。
+  // 兼容：老用户仍用 User.lineUserId 字段判断（双写过渡期）。
   let user;
   try {
-    user = await prisma.user.upsert({
-      where: { lineUserId: profile.profile.sub },
-      create: {
-        lineUserId: profile.profile.sub,
-        name: profile.profile.name?.slice(0, 60) || "LINE 用户",
-        language: locale,
+    const social = await prisma.socialAccount.findUnique({
+      where: {
+        provider_providerUid: {
+          provider: "LINE",
+          providerUid: profile.profile.sub,
+        },
       },
-      update: { language: locale },
+      include: { user: true },
     });
+
+    if (social) {
+      user = social.user;
+    } else {
+      // 找不到身份映射 → 检查是否有老用户用 lineUserId 建过（兼容期）
+      const legacy = await prisma.user.findUnique({
+        where: { lineUserId: profile.profile.sub },
+      });
+      user = legacy ?? (await prisma.user.create({
+        data: {
+          name: profile.profile.name?.slice(0, 60) || "LINE 用户",
+          language: locale,
+        },
+      }));
+
+      // 建 SocialAccount 身份映射（老用户兼容期也写入）
+      await prisma.socialAccount.create({
+        data: {
+          userId: user.id,
+          provider: "LINE",
+          providerUid: profile.profile.sub,
+          displayName: profile.profile.name?.slice(0, 60),
+          avatarUrl: profile.profile.picture,
+        },
+      });
+    }
   } catch (e: any) {
     console.error("[line-login] upsert user:", e?.message || e);
     return back("serverError");
